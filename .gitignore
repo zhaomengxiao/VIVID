@@ -1,0 +1,51 @@
+# Build output
+vendor/
+build/
+build-debug/
+build-release/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.user
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.log
+*.cache
+*.cmake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Executables and DLLs
+*.exe
+*.dll
+*.lib
+*.so
+*.a
+*.app
+*.dylib
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Others
+*.bak
+*.tmp
+*.swp
+*.suo
+*.ncb
+*.aps
+*.pch
+*.idb
+*.ipch
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
