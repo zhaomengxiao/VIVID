@@ -2,12 +2,16 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "PxPhysicsAPI.h"
+#include "optick.h"
 #include <vector>
 #include <limits>
 
 int main()
 {
+    OPTICK_THREAD("MainThread");
+
     // 初始化PhysX
+    OPTICK_EVENT("InitPhysX");
     static physx::PxDefaultAllocator gAllocator;
     static physx::PxDefaultErrorCallback gErrorCallback;
     physx::PxFoundation *foundation = PxCreateFoundation(PX_PHYSICS_VERSION, gAllocator, gErrorCallback);
@@ -76,7 +80,7 @@ int main()
     int screenWidth = 1280;
     int screenHeight = 800;
     InitWindow(screenWidth, screenHeight, "PhysX + Raylib 3D 多球体坠落演示");
-    SetTargetFPS(120);
+    SetTargetFPS(60);
 
     Camera3D camera = {0};
     camera.position = Vector3{10.0f, 10.0f, 20.0f};
@@ -90,14 +94,26 @@ int main()
     bool draggingY = false;
     float dragYStart = 0.0f;
     float dragYOrigin = 0.0f;
+    double lastFrameTime = GetTime(); // 添加时间跟踪变量
 
     while (!WindowShouldClose())
     {
+        OPTICK_FRAME("MainThread");
         Vector3 dragTarget = {0};
+
+        // 计算实际的时间间隔
+        double currentTime = GetTime();
+        float deltaTime = (float)(currentTime - lastFrameTime);
+        lastFrameTime = currentTime;
+
+        // 限制最大时间间隔，防止物理模拟不稳定
+        if (deltaTime > 0.1f)
+            deltaTime = 0.1f;
 
         // 鼠标左键单击空白处添加新球体
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
+            OPTICK_EVENT("AddNewBall");
             Ray ray = GetMouseRay(GetMousePosition(), camera);
             // 检查是否点中已有球体
             int hitBall = -1;
@@ -136,21 +152,25 @@ int main()
         int hoveredBall = -1;
         float minDist = std::numeric_limits<float>::max();
         Ray ray = GetMouseRay(GetMousePosition(), camera);
-        for (int i = 0; i < (int)balls.size(); ++i)
         {
-            physx::PxTransform pose = balls[i]->getGlobalPose();
-            Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
-            RayCollision col = GetRayCollisionSphere(ray, pos, sphereRadius);
-            if (col.hit && col.distance < minDist)
+            OPTICK_EVENT("DetectHoveredBall");
+            for (int i = 0; i < (int)balls.size(); ++i)
             {
-                minDist = col.distance;
-                hoveredBall = i;
+                physx::PxTransform pose = balls[i]->getGlobalPose();
+                Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
+                RayCollision col = GetRayCollisionSphere(ray, pos, sphereRadius);
+                if (col.hit && col.distance < minDist)
+                {
+                    minDist = col.distance;
+                    hoveredBall = i;
+                }
             }
         }
 
         // 左键XZ平面拖动
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && hoveredBall != -1)
         {
+            OPTICK_EVENT("StartDragXZ");
             draggingBall = hoveredBall;
             draggingXZ = true;
             balls[draggingBall]->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, true);
@@ -184,6 +204,7 @@ int main()
         // 右键Y轴拖动
         if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && hoveredBall != -1)
         {
+            OPTICK_EVENT("StartDragY");
             draggingBall = hoveredBall;
             draggingY = true;
             dragYStart = GetMousePosition().y;
@@ -210,74 +231,94 @@ int main()
         }
 
         // 推进物理模拟
-        scene->simulate(1.0f / 120.0f);
-        scene->fetchResults(true);
+        {
+            OPTICK_EVENT("PhysicsSimulation");
+            scene->simulate(deltaTime);
+            scene->fetchResults(true);
+        }
 
         // 绘制
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        BeginMode3D(camera);
-
-        DrawCube(Vector3{0, -0.5f, 0}, 40, 1, 40, LIGHTGRAY);
-
-        // 绘制围栏
-        DrawCube(Vector3{20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
-        DrawCube(Vector3{-20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
-        DrawCube(Vector3{0, 5.0f, 20.5f}, 40, 10, 1, GRAY);
-        DrawCube(Vector3{0, 5.0f, -20.5f}, 40, 10, 1, GRAY);
-
-        // 绘制所有球体
-        for (int i = 0; i < (int)balls.size(); ++i)
         {
-            physx::PxTransform pose = balls[i]->getGlobalPose();
-            Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
-            Color color = (i == draggingBall) ? ORANGE : ballColors[i];
-            DrawSphere(pos, sphereRadius, color);
+            OPTICK_EVENT("Rendering");
+            OPTICK_EVENT("BeginDrawing");
+            BeginDrawing();
+            OPTICK_EVENT("ClearBackground");
+            ClearBackground(RAYWHITE);
 
-            // 拖动时显示gizmo
-            if (i == draggingBall && (draggingXZ || draggingY))
+            OPTICK_EVENT("BeginMode3D");
+            BeginMode3D(camera);
+
+            OPTICK_EVENT("DrawGround");
+            DrawCube(Vector3{0, -0.5f, 0}, 40, 1, 40, LIGHTGRAY);
+
+            OPTICK_EVENT("DrawFences");
+            DrawCube(Vector3{20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
+            DrawCube(Vector3{-20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
+            DrawCube(Vector3{0, 5.0f, 20.5f}, 40, 10, 1, GRAY);
+            DrawCube(Vector3{0, 5.0f, -20.5f}, 40, 10, 1, GRAY);
+
+            // 绘制所有球体
             {
-                float axisLen = 2.0f;
-                DrawLine3D(pos, Vector3Add(pos, Vector3{axisLen, 0, 0}), RED);
-                DrawLine3D(pos, Vector3Add(pos, Vector3{0, axisLen, 0}), GREEN);
-                DrawLine3D(pos, Vector3Add(pos, Vector3{0, 0, axisLen}), BLUE);
+                OPTICK_EVENT("DrawBalls");
+                for (int i = 0; i < (int)balls.size(); ++i)
+                {
+                    OPTICK_EVENT("DrawSphere");
+                    physx::PxTransform pose = balls[i]->getGlobalPose();
+                    Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
+                    Color color = (i == draggingBall) ? ORANGE : ballColors[i];
+                    DrawSphere(pos, sphereRadius, color);
+
+                    // 拖动时显示gizmo
+                    if (i == draggingBall && (draggingXZ || draggingY))
+                    {
+                        OPTICK_EVENT("DrawGizmo");
+                        float axisLen = 2.0f;
+                        DrawLine3D(pos, Vector3Add(pos, Vector3{axisLen, 0, 0}), RED);
+                        DrawLine3D(pos, Vector3Add(pos, Vector3{0, axisLen, 0}), GREEN);
+                        DrawLine3D(pos, Vector3Add(pos, Vector3{0, 0, axisLen}), BLUE);
+                    }
+                }
             }
+
+            OPTICK_EVENT("DrawGrid");
+            DrawGrid(20, 1.0f);
+
+            OPTICK_EVENT("EndMode3D");
+            EndMode3D();
+
+            OPTICK_EVENT("DrawText");
+            DrawText("PhysX + Raylib 3D 多球体坠落演示", 10, 10, 20, DARKGRAY);
+            if (draggingBall != -1)
+            {
+                DrawText(TextFormat("拖动球体: %d", draggingBall), 10, 40, 20, ORANGE);
+                if (draggingXZ)
+                    DrawText("XZ平面拖动", 10, 70, 20, ORANGE);
+                if (draggingY)
+                    DrawText("Y轴拖动", 10, 100, 20, ORANGE);
+            }
+
+            OPTICK_EVENT("EndDrawing");
+            EndDrawing();
         }
-
-        DrawGrid(20, 1.0f);
-
-        EndMode3D();
-
-        DrawText("PhysX + Raylib 3D 多球体坠落演示", 10, 10, 20, DARKGRAY);
-        if (draggingBall != -1)
-        {
-            DrawText(TextFormat("拖动球体: %d", draggingBall), 10, 40, 20, ORANGE);
-            if (draggingXZ)
-                DrawText("XZ平面拖动", 10, 70, 20, ORANGE);
-            if (draggingY)
-                DrawText("Y轴拖动", 10, 100, 20, ORANGE);
-        }
-
-        EndDrawing();
     }
 
     // 释放资源
-    for (int i = 0; i < (int)balls.size(); ++i)
     {
-        balls[i]->release();
-        // PxShape由PhysX自动管理，无需手动释放
+        OPTICK_EVENT("Cleanup");
+        for (int i = 0; i < (int)balls.size(); ++i)
+        {
+            balls[i]->release();
+        }
+        ground->release();
+        planeShape->release();
+        for (auto *fence : fences)
+            fence->release();
+        material->release();
+        scene->release();
+        dispatcher->release();
+        physics->release();
+        foundation->release();
     }
-    ground->release();
-    planeShape->release();
-    // 释放围栏
-    for (auto *fence : fences)
-        fence->release();
-    material->release();
-    scene->release();
-    dispatcher->release();
-    physics->release();
-    foundation->release();
 
     CloseWindow();
     return 0;

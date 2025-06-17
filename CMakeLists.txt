@@ -12,6 +12,11 @@ set(PHYSX_DLL_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/${PHYSX_BUILD_TYPE}")
 set(PHYSX_LIB_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/${PHYSX_BUILD_TYPE}")
 set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
 
+# Optick配置
+set(OPTICK_ROOT "${VENDOR_DIR}/optick")
+set(OPTICK_INCLUDE_DIR "${OPTICK_ROOT}/src")
+set(OPTICK_LIB_DIR "${OPTICK_ROOT}/lib")
+
 # 定义源代码目录
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -25,6 +30,13 @@ include_directories(
     ${VENDOR_DIR}/imgui-docking
     ${VENDOR_DIR}/imgui-docking/backends
     ${PHYSX_INCLUDE_DIR}
+    ${OPTICK_INCLUDE_DIR}
+)
+
+# 添加库文件搜索路径
+link_directories(
+    ${PHYSX_LIB_DIR}
+    ${OPTICK_LIB_DIR}
 )
 
 # 查找依赖包
@@ -61,6 +73,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     PhysXTask_static_64
     PhysXVehicle2_static_64
     PVDRuntime_64
+    OptickCore
 )
 
 # 构建后自动拷贝PhysX DLL到可执行文件目录
@@ -73,10 +86,25 @@ set(PHYSX_DLLS
     PVDRuntime_64.dll
 )
 
+# 添加 Optick DLL
+set(OPTICK_DLLS
+    OptickCore.dll
+)
+
+# 复制 PhysX DLLs
 foreach(dll ${PHYSX_DLLS})
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${PHYSX_DLL_DIR}/${dll}
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    )
+endforeach()
+
+# 复制 Optick DLLs
+foreach(dll ${OPTICK_DLLS})
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${OPTICK_ROOT}/build/Release/${dll}
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
 endforeach()

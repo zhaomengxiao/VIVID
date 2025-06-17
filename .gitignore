@@ -1,4 +1,5 @@
 # Build output
+tools/
 vendor/
 build/
 build-debug/
@@ -49,3 +50,7 @@ Thumbs.db
 *.sdf
 *.VC.db
 *.VC.VC.opendb
+*.ps1
+
+#Cursor
+.cursor/
