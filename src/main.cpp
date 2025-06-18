@@ -1,325 +1,166 @@
-// PhysX + Raylib 3D 多球体坠落演示
-#include "raylib.h"
-#include "raymath.h"
-#include "PxPhysicsAPI.h"
-#include "optick.h"
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <iostream>
+#include <memory>
 #include <vector>
-#include <limits>
+
+#include <entt/entt.hpp>
+#include "components/rendering_components.h"
+#include "systems/renderer_system.h"
+
+// The RendererSystem now handles all OpenGL details.
+// We no longer need to include these low-level files here.
+// #include "opengl/buffer/VertexBuffer.h"
+// #include "opengl/buffer/VertexBufferLayout.h"
+// #include "opengl/buffer/IndexBuffer.h"
+// #include "opengl/buffer/VertexArray.h"
+// #include "opengl/shader/Shader.h"
+#include "opengl/GLErrorHandler.h"
+
+// Helper function to create a cube mesh component
+MeshComponent CreateCubeMesh()
+{
+    std::vector<float> vertices = {
+        // positions          // normals
+        -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+        0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+        0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+        -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+
+        -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+        0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+        0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+        -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+
+        -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f,
+        -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f,
+        -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f,
+
+        0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+        0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+        0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+        0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+
+        -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,
+        0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,
+        0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,
+        -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,
+
+        -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+        0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+        0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
+        -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f};
+    std::vector<unsigned int> indices = {
+        0, 1, 2, 2, 3, 0,
+        4, 5, 6, 6, 7, 4,
+        8, 9, 10, 10, 11, 8,
+        12, 13, 14, 14, 15, 12,
+        16, 17, 18, 18, 19, 16,
+        20, 21, 22, 22, 23, 20};
+
+    return {vertices, indices, indices.size()};
+}
 
 int main()
 {
-    OPTICK_THREAD("MainThread");
-
-    // 初始化PhysX
-    OPTICK_EVENT("InitPhysX");
-    static physx::PxDefaultAllocator gAllocator;
-    static physx::PxDefaultErrorCallback gErrorCallback;
-    physx::PxFoundation *foundation = PxCreateFoundation(PX_PHYSICS_VERSION, gAllocator, gErrorCallback);
-    physx::PxPhysics *physics = PxCreatePhysics(PX_PHYSICS_VERSION, *foundation, physx::PxTolerancesScale());
-    physx::PxSceneDesc sceneDesc(physics->getTolerancesScale());
-    sceneDesc.gravity = physx::PxVec3(0.0f, -9.8f, 0.0f);
-    physx::PxDefaultCpuDispatcher *dispatcher = physx::PxDefaultCpuDispatcherCreate(2);
-    sceneDesc.cpuDispatcher = dispatcher;
-    sceneDesc.filterShader = physx::PxDefaultSimulationFilterShader;
-    physx::PxScene *scene = physics->createScene(sceneDesc);
-
-    // 创建静态地面
-    physx::PxMaterial *material = physics->createMaterial(0.5f, 0.5f, 0.6f);
-    physx::PxRigidStatic *ground = physics->createRigidStatic(physx::PxTransform(physx::PxVec3(0.0f, -0.5f, 0.0f)));
-    physx::PxShape *planeShape = physics->createShape(physx::PxBoxGeometry(20.0f, 0.5f, 20.0f), *material); // 物理地面40x40
-    ground->attachShape(*planeShape);
-    scene->addActor(*ground);
-
-    // 创建四周围栏
-    float fenceHeight = 10.0f;
-    float fenceThickness = 1.0f;
-    float fenceLength = 40.0f;
-    std::vector<physx::PxRigidStatic *> fences;
-    // +X
-    physx::PxRigidStatic *fencePX = physics->createRigidStatic(physx::PxTransform(physx::PxVec3(20.0f + fenceThickness / 2, fenceHeight / 2, 0.0f)));
-    fencePX->attachShape(*physics->createShape(physx::PxBoxGeometry(fenceThickness / 2, fenceHeight / 2, fenceLength / 2), *material));
-    scene->addActor(*fencePX);
-    fences.push_back(fencePX);
-    // -X
-    physx::PxRigidStatic *fenceNX = physics->createRigidStatic(physx::PxTransform(physx::PxVec3(-20.0f - fenceThickness / 2, fenceHeight / 2, 0.0f)));
-    fenceNX->attachShape(*physics->createShape(physx::PxBoxGeometry(fenceThickness / 2, fenceHeight / 2, fenceLength / 2), *material));
-    scene->addActor(*fenceNX);
-    fences.push_back(fenceNX);
-    // +Z
-    physx::PxRigidStatic *fencePZ = physics->createRigidStatic(physx::PxTransform(physx::PxVec3(0.0f, fenceHeight / 2, 20.0f + fenceThickness / 2)));
-    fencePZ->attachShape(*physics->createShape(physx::PxBoxGeometry(fenceLength / 2, fenceHeight / 2, fenceThickness / 2), *material));
-    scene->addActor(*fencePZ);
-    fences.push_back(fencePZ);
-    // -Z
-    physx::PxRigidStatic *fenceNZ = physics->createRigidStatic(physx::PxTransform(physx::PxVec3(0.0f, fenceHeight / 2, -20.0f - fenceThickness / 2)));
-    fenceNZ->attachShape(*physics->createShape(physx::PxBoxGeometry(fenceLength / 2, fenceHeight / 2, fenceThickness / 2), *material));
-    scene->addActor(*fenceNZ);
-    fences.push_back(fenceNZ);
-
-    // 创建10个动态球体
-    float sphereRadius = 1.0f;
-    int ballCount = 10;
-    std::vector<physx::PxRigidDynamic *> balls;
-    std::vector<Color> ballColors;
-    float spacing = 3.0f; // 增大间距，避免初始重叠
-    float startX = -((ballCount - 1) * spacing) / 2.0f;
-    for (int i = 0; i < ballCount; ++i)
+    // --- GLFW/GLEW Initialization ---
+    if (!glfwInit())
     {
-        float x = startX + i * spacing;
-        physx::PxShape *sphereShape = physics->createShape(physx::PxSphereGeometry(sphereRadius), *material);
-        physx::PxTransform startTransform(physx::PxVec3(x, 10.0f, 0.0f));
-        physx::PxRigidDynamic *dynamic = physics->createRigidDynamic(startTransform);
-        dynamic->attachShape(*sphereShape);
-        physx::PxRigidBodyExt::updateMassAndInertia(*dynamic, 1.0f);
-        scene->addActor(*dynamic);
-        balls.push_back(dynamic);
-        ballColors.push_back(Color{(unsigned char)(100 + i * 15), (unsigned char)(50 + i * 20), (unsigned char)(200 - i * 10), 255});
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
     }
 
-    // Raylib窗口和摄像机
-    int screenWidth = 1280;
-    int screenHeight = 800;
-    InitWindow(screenWidth, screenHeight, "PhysX + Raylib 3D 多球体坠落演示");
-    SetTargetFPS(60);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    Camera3D camera = {0};
-    camera.position = Vector3{10.0f, 10.0f, 20.0f};
-    camera.target = Vector3{0.0f, 2.0f, 0.0f};
-    camera.up = Vector3{0.0f, 1.0f, 0.0f};
-    camera.fovy = 45.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-
-    int draggingBall = -1; // 当前被拖动的球体索引
-    bool draggingXZ = false;
-    bool draggingY = false;
-    float dragYStart = 0.0f;
-    float dragYOrigin = 0.0f;
-    double lastFrameTime = GetTime(); // 添加时间跟踪变量
-
-    while (!WindowShouldClose())
+    GLFWwindow *window = glfwCreateWindow(800, 600, "VIVID ECS Renderer", nullptr, nullptr);
+    if (!window)
     {
-        OPTICK_FRAME("MainThread");
-        Vector3 dragTarget = {0};
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
 
-        // 计算实际的时间间隔
-        double currentTime = GetTime();
-        float deltaTime = (float)(currentTime - lastFrameTime);
-        lastFrameTime = currentTime;
-
-        // 限制最大时间间隔，防止物理模拟不稳定
-        if (deltaTime > 0.1f)
-            deltaTime = 0.1f;
-
-        // 鼠标左键单击空白处添加新球体
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            OPTICK_EVENT("AddNewBall");
-            Ray ray = GetMouseRay(GetMousePosition(), camera);
-            // 检查是否点中已有球体
-            int hitBall = -1;
-            for (int i = 0; i < (int)balls.size(); ++i)
-            {
-                physx::PxTransform pose = balls[i]->getGlobalPose();
-                Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
-                if (GetRayCollisionSphere(ray, pos, sphereRadius).hit)
-                {
-                    hitBall = i;
-                    break;
-                }
-            }
-            // 没有点中球体，添加新球
-            if (hitBall == -1)
-            {
-                RayCollision col = GetRayCollisionQuad(ray, Vector3{-20, 0, -20}, Vector3{20, 0, -20}, Vector3{20, 0, 20}, Vector3{-20, 0, 20});
-                if (col.hit)
-                {
-                    Vector3 pos = col.point;
-                    float y = 10.0f; // 新球体初始高度
-                    physx::PxShape *sphereShape = physics->createShape(physx::PxSphereGeometry(sphereRadius), *material);
-                    physx::PxTransform startTransform(physx::PxVec3(pos.x, y, pos.z));
-                    physx::PxRigidDynamic *dynamic = physics->createRigidDynamic(startTransform);
-                    dynamic->attachShape(*sphereShape);
-                    physx::PxRigidBodyExt::updateMassAndInertia(*dynamic, 1.0f);
-                    scene->addActor(*dynamic);
-                    balls.push_back(dynamic);
-                    int i = (int)balls.size() - 1;
-                    ballColors.push_back(Color{(unsigned char)(100 + i * 15), (unsigned char)(50 + i * 20), (unsigned char)(200 - i * 10), 255});
-                }
-            }
-        }
-
-        // 鼠标检测最近球体
-        int hoveredBall = -1;
-        float minDist = std::numeric_limits<float>::max();
-        Ray ray = GetMouseRay(GetMousePosition(), camera);
-        {
-            OPTICK_EVENT("DetectHoveredBall");
-            for (int i = 0; i < (int)balls.size(); ++i)
-            {
-                physx::PxTransform pose = balls[i]->getGlobalPose();
-                Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
-                RayCollision col = GetRayCollisionSphere(ray, pos, sphereRadius);
-                if (col.hit && col.distance < minDist)
-                {
-                    minDist = col.distance;
-                    hoveredBall = i;
-                }
-            }
-        }
-
-        // 左键XZ平面拖动
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && hoveredBall != -1)
-        {
-            OPTICK_EVENT("StartDragXZ");
-            draggingBall = hoveredBall;
-            draggingXZ = true;
-            balls[draggingBall]->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, true);
-        }
-        if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && draggingXZ && draggingBall != -1)
-        {
-            draggingXZ = false;
-            balls[draggingBall]->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, false);
-            balls[draggingBall]->setLinearVelocity(physx::PxVec3(0, 0, 0));
-            balls[draggingBall]->setAngularVelocity(physx::PxVec3(0, 0, 0));
-            draggingBall = -1;
-        }
-        if (draggingXZ && draggingBall != -1)
-        {
-            physx::PxTransform pose = balls[draggingBall]->getGlobalPose();
-            float planeY = pose.p.y;
-            Vector3 planeNormal = {0, 1, 0};
-            float denom = Vector3DotProduct(planeNormal, ray.direction);
-            if (fabsf(denom) > 1e-6f)
-            {
-                float t = (planeY - Vector3DotProduct(planeNormal, ray.position)) / denom;
-                if (t > 0)
-                {
-                    dragTarget = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
-                    dragTarget.y = planeY;
-                    balls[draggingBall]->setKinematicTarget(physx::PxTransform(physx::PxVec3(dragTarget.x, dragTarget.y, dragTarget.z)));
-                }
-            }
-        }
-
-        // 右键Y轴拖动
-        if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && hoveredBall != -1)
-        {
-            OPTICK_EVENT("StartDragY");
-            draggingBall = hoveredBall;
-            draggingY = true;
-            dragYStart = GetMousePosition().y;
-            dragYOrigin = balls[draggingBall]->getGlobalPose().p.y;
-            balls[draggingBall]->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, true);
-        }
-        if (IsMouseButtonReleased(MOUSE_RIGHT_BUTTON) && draggingY && draggingBall != -1)
-        {
-            draggingY = false;
-            balls[draggingBall]->setRigidBodyFlag(physx::PxRigidBodyFlag::eKINEMATIC, false);
-            balls[draggingBall]->setLinearVelocity(physx::PxVec3(0, 0, 0));
-            balls[draggingBall]->setAngularVelocity(physx::PxVec3(0, 0, 0));
-            draggingBall = -1;
-        }
-        if (draggingY && draggingBall != -1)
-        {
-            float mouseDelta = GetMousePosition().y - dragYStart;
-            float sensitivity = 0.03f;
-            float newY = dragYOrigin - mouseDelta * sensitivity;
-            if (newY < sphereRadius)
-                newY = sphereRadius;
-            physx::PxVec3 cur = balls[draggingBall]->getGlobalPose().p;
-            balls[draggingBall]->setKinematicTarget(physx::PxTransform(physx::PxVec3(cur.x, newY, cur.z)));
-        }
-
-        // 推进物理模拟
-        {
-            OPTICK_EVENT("PhysicsSimulation");
-            scene->simulate(deltaTime);
-            scene->fetchResults(true);
-        }
-
-        // 绘制
-        {
-            OPTICK_EVENT("Rendering");
-            OPTICK_EVENT("BeginDrawing");
-            BeginDrawing();
-            OPTICK_EVENT("ClearBackground");
-            ClearBackground(RAYWHITE);
-
-            OPTICK_EVENT("BeginMode3D");
-            BeginMode3D(camera);
-
-            OPTICK_EVENT("DrawGround");
-            DrawCube(Vector3{0, -0.5f, 0}, 40, 1, 40, LIGHTGRAY);
-
-            OPTICK_EVENT("DrawFences");
-            DrawCube(Vector3{20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
-            DrawCube(Vector3{-20.5f, 5.0f, 0}, 1, 10, 40, GRAY);
-            DrawCube(Vector3{0, 5.0f, 20.5f}, 40, 10, 1, GRAY);
-            DrawCube(Vector3{0, 5.0f, -20.5f}, 40, 10, 1, GRAY);
-
-            // 绘制所有球体
-            {
-                OPTICK_EVENT("DrawBalls");
-                for (int i = 0; i < (int)balls.size(); ++i)
-                {
-                    OPTICK_EVENT("DrawSphere");
-                    physx::PxTransform pose = balls[i]->getGlobalPose();
-                    Vector3 pos = {pose.p.x, pose.p.y, pose.p.z};
-                    Color color = (i == draggingBall) ? ORANGE : ballColors[i];
-                    DrawSphere(pos, sphereRadius, color);
-
-                    // 拖动时显示gizmo
-                    if (i == draggingBall && (draggingXZ || draggingY))
-                    {
-                        OPTICK_EVENT("DrawGizmo");
-                        float axisLen = 2.0f;
-                        DrawLine3D(pos, Vector3Add(pos, Vector3{axisLen, 0, 0}), RED);
-                        DrawLine3D(pos, Vector3Add(pos, Vector3{0, axisLen, 0}), GREEN);
-                        DrawLine3D(pos, Vector3Add(pos, Vector3{0, 0, axisLen}), BLUE);
-                    }
-                }
-            }
-
-            OPTICK_EVENT("DrawGrid");
-            DrawGrid(20, 1.0f);
-
-            OPTICK_EVENT("EndMode3D");
-            EndMode3D();
-
-            OPTICK_EVENT("DrawText");
-            DrawText("PhysX + Raylib 3D 多球体坠落演示", 10, 10, 20, DARKGRAY);
-            if (draggingBall != -1)
-            {
-                DrawText(TextFormat("拖动球体: %d", draggingBall), 10, 40, 20, ORANGE);
-                if (draggingXZ)
-                    DrawText("XZ平面拖动", 10, 70, 20, ORANGE);
-                if (draggingY)
-                    DrawText("Y轴拖动", 10, 100, 20, ORANGE);
-            }
-
-            OPTICK_EVENT("EndDrawing");
-            EndDrawing();
-        }
+    if (glewInit() != GLEW_OK)
+    {
+        std::cerr << "Failed to initialize GLEW" << std::endl;
+        return -1;
     }
 
-    // 释放资源
+    std::cout << "Using GL Version: " << glGetString(GL_VERSION) << std::endl;
+
+    glEnable(GL_DEPTH_TEST);
+
+    // --- ECS Setup ---
+    entt::registry registry;
+
+    // Create a renderable cube entity
+    auto cubeEntity = registry.create();
+    registry.emplace<TagComponent>(cubeEntity, "MyCube");
+    registry.emplace<TransformComponent>(cubeEntity);
+    registry.emplace<MeshComponent>(cubeEntity, CreateCubeMesh());
+
+    // NOTE: MaterialComponent now takes a shader path and other material properties.
+    // The RendererSystem will handle loading the shader from the path.
+    // By creating a temporary MaterialComponent with {}, we ensure compatibility
+    // across different C++ standards.
+    registry.emplace<MaterialComponent>(cubeEntity, MaterialComponent{
+                                                        "res/shaders/BlinnPhong.shader", // ShaderPath
+                                                        {1.0f, 0.5f, 0.2f}               // ObjectColor
+                                                    });
+
+    // Create a light entity
+    auto lightEntity = registry.create();
+    registry.emplace<TagComponent>(lightEntity, "PointLight");
+    auto &lightTransform = registry.emplace<TransformComponent>(lightEntity);
+    lightTransform.Position = {1.2f, 1.0f, 2.0f};
+    registry.emplace<LightComponent>(lightEntity);
+
+    // Create a camera entity
+    auto cameraEntity = registry.create();
+    registry.emplace<TagComponent>(cameraEntity, "MainCamera");
+    auto &camTransform = registry.emplace<TransformComponent>(cameraEntity);
+    camTransform.Position = {0.0f, 0.0f, 5.0f};
+    auto &camComponent = registry.emplace<CameraComponent>(cameraEntity);
+    camComponent.ProjectionMatrix = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+
+    // --- Sync ECS data to GPU ---
+    // This needs to be called once after entities are set up,
+    // to upload mesh data and compile shaders.
+    VIVID::RendererSystem::Sync(registry);
+
+    // --- Main Loop ---
+    while (!glfwWindowShouldClose(window))
     {
-        OPTICK_EVENT("Cleanup");
-        for (int i = 0; i < (int)balls.size(); ++i)
-        {
-            balls[i]->release();
-        }
-        ground->release();
-        planeShape->release();
-        for (auto *fence : fences)
-            fence->release();
-        material->release();
-        scene->release();
-        dispatcher->release();
-        physics->release();
-        foundation->release();
+        // Input processing
+        // ...
+
+        // Update cube rotation for some animation
+        auto &cubeTransform = registry.get<TransformComponent>(cubeEntity);
+        cubeTransform.Rotation.y += 0.01f;
+        cubeTransform.Rotation.x += 0.005f;
+
+        // The RendererSystem's Update function now handles clearing the screen
+        // and drawing all renderable entities.
+        // glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Call our renderer system
+        VIVID::RendererSystem::Update(registry);
+
+        // Swap buffers and poll events
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
-    CloseWindow();
+    // --- Cleanup ---
+    // EnTT registry handles component destruction automatically.
+    // Smart pointers for Shader/VAO will clean up GL resources.
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
     return 0;
 }

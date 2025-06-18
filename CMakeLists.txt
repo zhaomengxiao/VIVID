@@ -5,63 +5,88 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PHYSX_BUILD_TYPE "release" CACHE STRING "The build type of PhysX")
 
-# 统一PhysX路径变量
+# --- Dependencies ---
+# Using FetchContent to get GLM
+include(FetchContent)
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 0.9.9.8
+)
+FetchContent_MakeAvailable(glm)
+
+# Finding packages
+find_package(EnTT CONFIG REQUIRED)
+find_package(glfw3 3.3 REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(OpenGL REQUIRED)
+# find_package(raylib CONFIG REQUIRED) # Temporarily commented out, as main.cpp now uses GLFW directly.
+
+# --- Paths ---
 set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 set(PHYSX_ROOT "${VENDOR_DIR}/PhysX/physx/install/vc17win64/PhysX")
 set(PHYSX_DLL_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/${PHYSX_BUILD_TYPE}")
 set(PHYSX_LIB_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/${PHYSX_BUILD_TYPE}")
 set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
-
-# Optick配置
 set(OPTICK_ROOT "${VENDOR_DIR}/optick")
 set(OPTICK_INCLUDE_DIR "${OPTICK_ROOT}/src")
 set(OPTICK_LIB_DIR "${OPTICK_ROOT}/lib")
-
-# 定义源代码目录
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# 添加头文件搜索路径
+# --- Include Directories ---
 include_directories(
     ${SOURCE_DIR}
-    ${SOURCE_DIR}/components
-    ${SOURCE_DIR}/systems
-    ${SOURCE_DIR}/core
+    ${PHYSX_INCLUDE_DIR}
+    ${OPTICK_INCLUDE_DIR}
+    # Kept for future use
     ${VENDOR_DIR}/rlImGui
     ${VENDOR_DIR}/imgui-docking
     ${VENDOR_DIR}/imgui-docking/backends
-    ${PHYSX_INCLUDE_DIR}
-    ${OPTICK_INCLUDE_DIR}
 )
 
-# 添加库文件搜索路径
+# --- Link Directories ---
 link_directories(
     ${PHYSX_LIB_DIR}
     ${OPTICK_LIB_DIR}
 )
 
-# 查找依赖包
-find_package(raylib CONFIG REQUIRED)
-find_package(EnTT CONFIG REQUIRED)
-
-# PhysX库的查找路径
-link_directories(${PHYSX_LIB_DIR})
-
-# 添加主程序
-add_executable(${PROJECT_NAME} 
-    ${SOURCE_DIR}/main.cpp
-    ${VENDOR_DIR}/rlImGui/rlImGui.cpp
-    ${VENDOR_DIR}/imgui-docking/imgui_draw.cpp
-    ${VENDOR_DIR}/imgui-docking/imgui_tables.cpp
-    ${VENDOR_DIR}/imgui-docking/imgui_widgets.cpp
-    ${VENDOR_DIR}/imgui-docking/imgui.cpp
-    ${VENDOR_DIR}/imgui-docking/imgui_demo.cpp
-    ${VENDOR_DIR}/imgui-docking/backends/imgui_impl_opengl3.cpp
+# --- Source Files ---
+# Files for the new renderer
+set(OPENGL_WRAPPER_SOURCES
+    ${SOURCE_DIR}/opengl/GLErrorHandler.cpp
+    ${SOURCE_DIR}/opengl/buffer/IndexBuffer.cpp
+    ${SOURCE_DIR}/opengl/buffer/VertexArray.cpp
+    ${SOURCE_DIR}/opengl/buffer/VertexBuffer.cpp
+    ${SOURCE_DIR}/opengl/shader/Shader.cpp
 )
 
-# 链接库
+add_executable(${PROJECT_NAME} 
+    ${SOURCE_DIR}/main.cpp
+    ${SOURCE_DIR}/systems/renderer_system.cpp
+    ${OPENGL_WRAPPER_SOURCES}
+    # The following source files are for rlImGui with Raylib.
+    # They are temporarily commented out because main.cpp is now a GLFW application.
+    # You can add them back when you integrate ImGui with GLFW.
+    # ${VENDOR_DIR}/rlImGui/rlImGui.cpp
+    # ${VENDOR_DIR}/imgui-docking/imgui_draw.cpp
+    # ${VENDOR_DIR}/imgui-docking/imgui_tables.cpp
+    # ${VENDOR_DIR}/imgui-docking/imgui_widgets.cpp
+    # ${VENDOR_DIR}/imgui-docking/imgui.cpp
+    # ${VENDOR_DIR}/imgui-docking/imgui_demo.cpp
+    # ${VENDOR_DIR}/imgui-docking/backends/imgui_impl_opengl3.cpp
+)
+
+# --- Link Libraries ---
 target_link_libraries(${PROJECT_NAME} PRIVATE 
-    raylib
+    # New libraries for OpenGL rendering with GLFW
+    glfw
+    GLEW::glew
+    OpenGL::GL
+    glm::glm
+
+    # Existing libraries
     EnTT::EnTT
+    # raylib # Temporarily commented out, conflicts with glfw
     PhysXFoundation_64
     PhysXCommon_64
     PhysX_64
@@ -76,7 +101,23 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     OptickCore
 )
 
-# 构建后自动拷贝PhysX DLL到可执行文件目录
+# --- Set IDE Properties ---
+# This ensures that when running from Visual Studio or other IDEs,
+# the working directory is set to where the executable is, so it can find the 'res' folder.
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)
+
+# --- Post-Build Steps ---
+# Copy shader resources
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/res"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/res"
+    COMMENT "Copying resources to build directory"
+)
+
+# Copy existing DLLs
 set(PHYSX_DLLS
     PhysX_64.dll
     PhysXFoundation_64.dll
@@ -85,13 +126,9 @@ set(PHYSX_DLLS
     PhysXGpu_64.dll
     PVDRuntime_64.dll
 )
-
-# 添加 Optick DLL
 set(OPTICK_DLLS
     OptickCore.dll
 )
-
-# 复制 PhysX DLLs
 foreach(dll ${PHYSX_DLLS})
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -99,8 +136,6 @@ foreach(dll ${PHYSX_DLLS})
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
 endforeach()
-
-# 复制 Optick DLLs
 foreach(dll ${OPTICK_DLLS})
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
