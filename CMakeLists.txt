@@ -60,20 +60,20 @@ set(OPENGL_WRAPPER_SOURCES
     ${SOURCE_DIR}/opengl/shader/Shader.cpp
 )
 
+set(IMGUI_SOURCES
+    ${VENDOR_DIR}/imgui-docking/imgui.cpp
+    ${VENDOR_DIR}/imgui-docking/imgui_draw.cpp
+    ${VENDOR_DIR}/imgui-docking/imgui_tables.cpp
+    ${VENDOR_DIR}/imgui-docking/imgui_widgets.cpp
+    ${VENDOR_DIR}/imgui-docking/backends/imgui_impl_opengl3.cpp
+    ${VENDOR_DIR}/imgui-docking/backends/imgui_impl_glfw.cpp
+)
+
 add_executable(${PROJECT_NAME} 
     ${SOURCE_DIR}/main.cpp
     ${SOURCE_DIR}/systems/renderer_system.cpp
     ${OPENGL_WRAPPER_SOURCES}
-    # The following source files are for rlImGui with Raylib.
-    # They are temporarily commented out because main.cpp is now a GLFW application.
-    # You can add them back when you integrate ImGui with GLFW.
-    # ${VENDOR_DIR}/rlImGui/rlImGui.cpp
-    # ${VENDOR_DIR}/imgui-docking/imgui_draw.cpp
-    # ${VENDOR_DIR}/imgui-docking/imgui_tables.cpp
-    # ${VENDOR_DIR}/imgui-docking/imgui_widgets.cpp
-    # ${VENDOR_DIR}/imgui-docking/imgui.cpp
-    # ${VENDOR_DIR}/imgui-docking/imgui_demo.cpp
-    # ${VENDOR_DIR}/imgui-docking/backends/imgui_impl_opengl3.cpp
+    ${IMGUI_SOURCES}
 )
 
 # --- Link Libraries ---

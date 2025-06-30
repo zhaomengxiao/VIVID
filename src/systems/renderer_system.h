@@ -12,11 +12,17 @@ namespace VIVID
 
     class RendererSystem
     {
+    private:
+        class Framebuffer;
+        static std::unique_ptr<Framebuffer> s_Framebuffer;
+
     public:
         // 同步组件到GPU
         static void Sync(entt::registry &registry);
         // 主更新函数，每帧调用
         static void Update(entt::registry &registry);
+        static void Init();
+        static void Shutdown();
 
     private:
         // shader helper functions

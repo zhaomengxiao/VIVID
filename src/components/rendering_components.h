@@ -91,3 +91,13 @@ struct CameraComponent
     bool IsPrimary = true; // 标记为主相机
     // 视图矩阵由相机位置（TransformComponent）计算而来
 };
+
+struct ViewportComponent
+{
+    float Width = 1280.0f;
+    float Height = 720.0f;
+    uint32_t TextureID = 0;
+
+    bool IsFocused = false;
+    bool IsHovered = false;
+};

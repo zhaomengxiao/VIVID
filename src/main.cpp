@@ -8,14 +8,9 @@
 #include "components/rendering_components.h"
 #include "systems/renderer_system.h"
 
-// The RendererSystem now handles all OpenGL details.
-// We no longer need to include these low-level files here.
-// #include "opengl/buffer/VertexBuffer.h"
-// #include "opengl/buffer/VertexBufferLayout.h"
-// #include "opengl/buffer/IndexBuffer.h"
-// #include "opengl/buffer/VertexArray.h"
-// #include "opengl/shader/Shader.h"
-#include "opengl/GLErrorHandler.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 // Helper function to create a cube mesh component
 MeshComponent CreateCubeMesh()
@@ -94,6 +89,15 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
+    // --- ImGui Setup ---
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
     // --- ECS Setup ---
     entt::registry registry;
 
@@ -124,9 +128,11 @@ int main()
     registry.emplace<TagComponent>(cameraEntity, "MainCamera");
     auto &camTransform = registry.emplace<TransformComponent>(cameraEntity);
     camTransform.Position = {0.0f, 0.0f, 5.0f};
-    auto &camComponent = registry.emplace<CameraComponent>(cameraEntity);
-    camComponent.ProjectionMatrix = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+    registry.emplace<CameraComponent>(cameraEntity);
+    registry.emplace<ViewportComponent>(cameraEntity);
 
+    // --- Renderer System Init ---
+    VIVID::RendererSystem::Init();
     // --- Sync ECS data to GPU ---
     // This needs to be called once after entities are set up,
     // to upload mesh data and compile shaders.
@@ -138,18 +144,39 @@ int main()
         // Input processing
         // ...
 
-        // Update cube rotation for some animation
-        auto &cubeTransform = registry.get<TransformComponent>(cubeEntity);
-        cubeTransform.Rotation.y += 0.01f;
-        cubeTransform.Rotation.x += 0.005f;
+        // --- ImGui Frame Start ---
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::DockSpaceOverViewport();
 
-        // The RendererSystem's Update function now handles clearing the screen
-        // and drawing all renderable entities.
-        // glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // --- Scene Viewport ---
+        ImGui::Begin("Scene");
+
+        auto &viewport = registry.get<ViewportComponent>(cameraEntity);
+        ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+        viewport.Width = viewportPanelSize.x;
+        viewport.Height = viewportPanelSize.y;
+
+        uint32_t textureID = viewport.TextureID;
+        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(viewport.Width, viewport.Height), ImVec2(0, 1), ImVec2(1, 0));
+
+        ImGui::End();
+
+        // --- ImGui UI for Cube Transform ---
+        auto &cubeTransform = registry.get<TransformComponent>(cubeEntity);
+        ImGui::Begin("Cube Transform");
+        ImGui::DragFloat3("Position", &cubeTransform.Position.x, 0.1f);
+        ImGui::DragFloat3("Rotation", &cubeTransform.Rotation.x, 0.01f);
+        ImGui::DragFloat3("Scale", &cubeTransform.Scale.x, 0.1f);
+        ImGui::End();
 
         // Call our renderer system
         VIVID::RendererSystem::Update(registry);
+
+        // --- ImGui Render ---
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
@@ -157,8 +184,11 @@ int main()
     }
 
     // --- Cleanup ---
-    // EnTT registry handles component destruction automatically.
-    // Smart pointers for Shader/VAO will clean up GL resources.
+    VIVID::RendererSystem::Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     glfwDestroyWindow(window);
     glfwTerminate();
 

@@ -136,6 +136,96 @@ namespace VIVID
         GLCall(glUniformMatrix4fv(GetUniformLocation(program, name), 1, GL_FALSE, &matrix[0][0]));
     }
 
+    // --- Framebuffer Class Implementation ---
+    class VIVID::RendererSystem::Framebuffer
+    {
+    public:
+        Framebuffer(uint32_t width, uint32_t height)
+            : m_Width(width), m_Height(height)
+        {
+            Invalidate();
+        }
+
+        ~Framebuffer()
+        {
+            GLCall(glDeleteFramebuffers(1, &m_RendererID));
+            GLCall(glDeleteTextures(1, &m_ColorAttachment));
+            GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
+        }
+
+        void Invalidate()
+        {
+            if (m_RendererID)
+            {
+                GLCall(glDeleteFramebuffers(1, &m_RendererID));
+                GLCall(glDeleteTextures(1, &m_ColorAttachment));
+                GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
+            }
+
+            GLCall(glGenFramebuffers(1, &m_RendererID));
+            GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
+
+            GLCall(glGenTextures(1, &m_ColorAttachment));
+            GLCall(glBindTexture(GL_TEXTURE_2D, m_ColorAttachment));
+            GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_Width, m_Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr));
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+            GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+            GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ColorAttachment, 0));
+
+            GLCall(glGenRenderbuffers(1, &m_DepthAttachment));
+            GLCall(glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment));
+            GLCall(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Width, m_Height));
+            GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthAttachment));
+
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+                std::cerr << "Framebuffer is not complete!" << std::endl;
+
+            GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+        }
+
+        void Bind()
+        {
+            GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
+            GLCall(glViewport(0, 0, m_Width, m_Height));
+        }
+
+        void Unbind()
+        {
+            GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+        }
+
+        void Resize(uint32_t width, uint32_t height)
+        {
+            if (m_Width != width || m_Height != height)
+            {
+                m_Width = width;
+                m_Height = height;
+                Invalidate();
+            }
+        }
+
+        uint32_t GetColorAttachmentRendererID() const { return m_ColorAttachment; }
+
+    private:
+        uint32_t m_RendererID = 0;
+        uint32_t m_ColorAttachment = 0, m_DepthAttachment = 0;
+        uint32_t m_Width, m_Height;
+    };
+
+    // --- RendererSystem Implementation ---
+    std::unique_ptr<VIVID::RendererSystem::Framebuffer> VIVID::RendererSystem::s_Framebuffer;
+
+    void VIVID::RendererSystem::Init()
+    {
+        // Default size, will be resized by viewport component.
+        s_Framebuffer = std::make_unique<Framebuffer>(1280, 720);
+    }
+
+    void VIVID::RendererSystem::Shutdown()
+    {
+        s_Framebuffer.reset();
+    }
+
     void RendererSystem::Sync(entt::registry &registry)
     {
         // We only want to process entities that have the CPU-side data (Mesh, Material)
@@ -191,51 +281,55 @@ namespace VIVID
 
     void RendererSystem::Update(entt::registry &registry)
     {
-        // 1. 寻找主相机和其位置
         entt::entity mainCameraEntity = entt::null;
         TransformComponent *mainCameraTransform = nullptr;
         CameraComponent *mainCameraComponent = nullptr;
+        ViewportComponent *viewportComponent = nullptr;
 
-        registry.view<TransformComponent, CameraComponent>().each(
-            [&](const auto entity, auto &transform, auto &cam)
-            {
-                // 只获取第一个找到的主相机
-                if (cam.IsPrimary && mainCameraEntity == entt::null)
-                {
-                    mainCameraEntity = entity;
-                    mainCameraTransform = &transform;
-                    mainCameraComponent = &cam;
-                }
-            });
+        auto cameraView = registry.view<TransformComponent, CameraComponent, ViewportComponent>();
+        if (cameraView.size_hint() > 0)
+        {
+            mainCameraEntity = cameraView.front();
+            mainCameraTransform = &cameraView.get<TransformComponent>(mainCameraEntity);
+            mainCameraComponent = &cameraView.get<CameraComponent>(mainCameraEntity);
+            viewportComponent = &cameraView.get<ViewportComponent>(mainCameraEntity);
+        }
 
         if (mainCameraEntity == entt::null)
-            return; // 没有相机，无法渲染
+            return; // No camera with a viewport, can't render.
 
-        glm::mat4 viewMatrix = glm::inverse(mainCameraTransform->GetTransform());
+        // Resize framebuffer if viewport size changed
+        if (viewportComponent->Width > 0 && viewportComponent->Height > 0)
+        {
+            s_Framebuffer->Resize(static_cast<uint32_t>(viewportComponent->Width), static_cast<uint32_t>(viewportComponent->Height));
+            mainCameraComponent->ProjectionMatrix = glm::perspective(glm::radians(45.0f), viewportComponent->Width / viewportComponent->Height, 0.1f, 100.0f);
+        }
+
+        // Bind framebuffer and render
+        s_Framebuffer->Bind();
+
+        GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.0f));
+        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+
+        glm::mat4 viewMatrix = glm::lookAt(mainCameraTransform->Position, mainCameraTransform->Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
         glm::mat4 projectionMatrix = mainCameraComponent->ProjectionMatrix;
         glm::vec3 viewPos = mainCameraTransform->Position;
 
-        // 2. 寻找光源 (只处理第一个找到的光源)
+        // Find light
         auto lightView = registry.view<TransformComponent, LightComponent>();
         auto lightEntity = lightView.front();
         auto &lightTransform = lightView.get<TransformComponent>(lightEntity);
         auto &lightComponent = lightView.get<LightComponent>(lightEntity);
 
-        GLCall(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-
-        // 3. 遍历所有可渲染实体并绘制
-        auto renderableView = registry.view<TransformComponent, MaterialComponent, GpuMeshComponent, GpuMaterialComponent>();
-
+        // Render all entities with GPU data
+        auto renderableView = registry.view<TransformComponent, GpuMeshComponent, GpuMaterialComponent, MaterialComponent>();
         renderableView.each(
-            [&](auto entity, auto &transform, auto &material, auto &gpuMesh, auto &gpuMaterial)
+            [&](auto entity, auto &transform, auto &gpuMesh, auto &gpuMaterial, auto &material)
             {
-                // 绑定Shader、VAO、IBO
                 GLCall(glUseProgram(gpuMaterial.ShaderProgram_ID));
                 GLCall(glBindVertexArray(gpuMesh.VAO_ID));
                 GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gpuMesh.IBO_ID));
 
-                // 计算矩阵
                 glm::mat4 modelMatrix = transform.GetTransform();
                 glm::mat4 normalMatrix = glm::transpose(glm::inverse(modelMatrix));
 
@@ -264,5 +358,10 @@ namespace VIVID
                 // 绘制
                 GLCall(glDrawElements(GL_TRIANGLES, gpuMesh.IndexCount, GL_UNSIGNED_INT, nullptr));
             });
+
+        s_Framebuffer->Unbind();
+
+        // Update viewport component with the rendered texture
+        viewportComponent->TextureID = s_Framebuffer->GetColorAttachmentRendererID();
     }
 }
