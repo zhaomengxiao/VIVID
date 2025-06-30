@@ -75,6 +75,7 @@ add_executable(${PROJECT_NAME}
     ${OPENGL_WRAPPER_SOURCES}
     ${IMGUI_SOURCES}
     src/editor/SceneHierarchyPanel.cpp
+    src/editor/InspectorPanel.cpp
 )
 
 # --- Link Libraries ---
@@ -144,3 +145,13 @@ foreach(dll ${OPTICK_DLLS})
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
 endforeach()
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${SOURCE_DIR}
+    ${PHYSX_INCLUDE_DIR}
+    ${OPTICK_INCLUDE_DIR}
+    # Kept for future use
+    ${VENDOR_DIR}/rlImGui
+    ${VENDOR_DIR}/imgui-docking
+    ${VENDOR_DIR}/imgui-docking/backends
+)

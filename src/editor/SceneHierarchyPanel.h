@@ -12,7 +12,9 @@ public:
 
     void OnImGuiRender();
 
+    entt::entity GetSelectedEntity() const { return m_SelectionContext; }
+
 private:
     const entt::registry *m_Context = nullptr;
-    entt::entity m_SelectionContext;
+    entt::entity m_SelectionContext{entt::null};
 };

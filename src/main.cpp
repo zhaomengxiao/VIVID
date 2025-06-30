@@ -8,10 +8,14 @@
 #include "components/rendering_components.h"
 #include "systems/renderer_system.h"
 #include "editor/SceneHierarchyPanel.h"
+#include "editor/InspectorPanel.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+
+#include <entt/meta/factory.hpp>
+#include <entt/meta/resolve.hpp>
 
 // Helper function to create a cube mesh component
 MeshComponent CreateCubeMesh()
@@ -58,8 +62,31 @@ MeshComponent CreateCubeMesh()
     return {vertices, indices, indices.size()};
 }
 
+void RegisterComponents()
+{
+    using namespace entt;
+    using namespace entt::literals;
+
+    meta_factory<TagComponent>()
+        .type("TagComponent"_hs)
+        .data<&TagComponent::Tag>("Tag"_hs);
+
+    meta_factory<TransformComponent>()
+        .type("TransformComponent"_hs)
+        .data<&TransformComponent::Position>("Position"_hs)
+        .data<&TransformComponent::Rotation>("Rotation"_hs)
+        .data<&TransformComponent::Scale>("Scale"_hs);
+
+    meta_factory<CameraComponent>()
+        .type("CameraComponent"_hs)
+        .data<&CameraComponent::IsPrimary>("IsPrimary"_hs);
+}
+
 int main()
 {
+    // --- Register Components for reflection ---
+    RegisterComponents();
+
     // --- GLFW/GLEW Initialization ---
     if (!glfwInit())
     {
@@ -136,6 +163,10 @@ int main()
     SceneHierarchyPanel sceneHierarchyPanel;
     sceneHierarchyPanel.SetContext(&registry);
 
+    // --- Inspector Panel ---
+    InspectorPanel inspectorPanel;
+    inspectorPanel.SetContext(&registry);
+
     // --- Renderer System Init ---
     VIVID::RendererSystem::Init();
     // --- Sync ECS data to GPU ---
@@ -156,6 +187,9 @@ int main()
         ImGui::DockSpaceOverViewport();
 
         sceneHierarchyPanel.OnImGuiRender();
+
+        auto selectedEntity = sceneHierarchyPanel.GetSelectedEntity();
+        inspectorPanel.OnImGuiRender(selectedEntity);
 
         // --- Scene Viewport ---
         ImGui::Begin("Viewport");
