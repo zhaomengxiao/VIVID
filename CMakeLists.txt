@@ -74,6 +74,7 @@ add_executable(${PROJECT_NAME}
     ${SOURCE_DIR}/systems/renderer_system.cpp
     ${OPENGL_WRAPPER_SOURCES}
     ${IMGUI_SOURCES}
+    src/editor/SceneHierarchyPanel.cpp
 )
 
 # --- Link Libraries ---

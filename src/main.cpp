@@ -7,6 +7,7 @@
 #include <entt/entt.hpp>
 #include "components/rendering_components.h"
 #include "systems/renderer_system.h"
+#include "editor/SceneHierarchyPanel.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -131,6 +132,10 @@ int main()
     registry.emplace<CameraComponent>(cameraEntity);
     registry.emplace<ViewportComponent>(cameraEntity);
 
+    // --- Scene Hierarchy Panel ---
+    SceneHierarchyPanel sceneHierarchyPanel;
+    sceneHierarchyPanel.SetContext(&registry);
+
     // --- Renderer System Init ---
     VIVID::RendererSystem::Init();
     // --- Sync ECS data to GPU ---
@@ -150,8 +155,10 @@ int main()
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport();
 
+        sceneHierarchyPanel.OnImGuiRender();
+
         // --- Scene Viewport ---
-        ImGui::Begin("Scene");
+        ImGui::Begin("Viewport");
 
         auto &viewport = registry.get<ViewportComponent>(cameraEntity);
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
@@ -161,14 +168,6 @@ int main()
         uint32_t textureID = viewport.TextureID;
         ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(viewport.Width, viewport.Height), ImVec2(0, 1), ImVec2(1, 0));
 
-        ImGui::End();
-
-        // --- ImGui UI for Cube Transform ---
-        auto &cubeTransform = registry.get<TransformComponent>(cubeEntity);
-        ImGui::Begin("Cube Transform");
-        ImGui::DragFloat3("Position", &cubeTransform.Position.x, 0.1f);
-        ImGui::DragFloat3("Rotation", &cubeTransform.Rotation.x, 0.01f);
-        ImGui::DragFloat3("Scale", &cubeTransform.Scale.x, 0.1f);
         ImGui::End();
 
         // Call our renderer system
