@@ -14,9 +14,6 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include <entt/meta/factory.hpp>
-#include <entt/meta/resolve.hpp>
-
 // Helper function to create a cube mesh component
 MeshComponent CreateCubeMesh()
 {
@@ -68,18 +65,18 @@ void RegisterComponents()
     using namespace entt::literals;
 
     meta_factory<TagComponent>()
-        .type("TagComponent"_hs)
-        .data<&TagComponent::Tag>("Tag"_hs);
+        .type("TagComponent")
+        .data<&TagComponent::Tag>("Tag");
 
     meta_factory<TransformComponent>()
-        .type("TransformComponent"_hs)
-        .data<&TransformComponent::Position>("Position"_hs)
-        .data<&TransformComponent::Rotation>("Rotation"_hs)
-        .data<&TransformComponent::Scale>("Scale"_hs);
+        .type("TransformComponent")
+        .data<&TransformComponent::Position>("Position")
+        .data<&TransformComponent::Rotation>("Rotation")
+        .data<&TransformComponent::Scale>("Scale");
 
     meta_factory<CameraComponent>()
-        .type("CameraComponent"_hs)
-        .data<&CameraComponent::IsPrimary>("IsPrimary"_hs);
+        .type("CameraComponent")
+        .data<&CameraComponent::IsPrimary>("IsPrimary");
 }
 
 int main()

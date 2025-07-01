@@ -6,17 +6,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PHYSX_BUILD_TYPE "release" CACHE STRING "The build type of PhysX")
 
 # --- Dependencies ---
-# Using FetchContent to get GLM
+# Using FetchContent to get GLM and EnTT
 include(FetchContent)
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG 0.9.9.8
 )
-FetchContent_MakeAvailable(glm)
+FetchContent_Declare(
+    EnTT
+    GIT_REPOSITORY https://github.com/skypjack/entt.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(glm EnTT)
 
 # Finding packages
-find_package(EnTT CONFIG REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)

@@ -74,6 +74,107 @@ static bool DrawVec3Control(const std::string &label, glm::vec3 &values, float r
     return modified;
 }
 
+// **核心函数**: 动态渲染数据成员
+static bool DrawDataMember(const entt::meta_data &metaData, entt::meta_any &componentInstance)
+{
+    using namespace entt::literals;
+
+    // 获取成员名称 - 通过data_id哈希匹配友好名称
+    // const char* memberName = "Unknown Member";
+    // auto data_id = metaData.id();
+
+    // if (data_id == "Tag"_hs) memberName = "Tag";
+    // else if (data_id == "Position"_hs) memberName = "Position";
+    // else if (data_id == "Rotation"_hs) memberName = "Rotation";
+    // else if (data_id == "Scale"_hs) memberName = "Scale";
+    // else if (data_id == "IsPrimary"_hs) memberName = "Is Primary";
+    // // 可以继续添加更多映射...
+    // else {
+    // 后备方案：使用类型名称
+    const char *memberName = metaData.name();
+    // }
+    auto data_id = metaData.type().id();
+
+    auto getter = metaData.get(componentInstance);
+    if (!getter)
+        return false;
+
+    bool modified = false;
+    auto memberType = metaData.type();
+
+    // **类型驱动的UI生成**
+    if (memberType == entt::resolve<glm::vec3>())
+    {
+        auto vec3 = getter.cast<glm::vec3>();
+        float resetVal = (data_id == "Scale"_hs) ? 1.0f : 0.0f;
+        if (DrawVec3Control(memberName, vec3, resetVal))
+        {
+            metaData.set(componentInstance, vec3);
+            modified = true;
+        }
+    }
+    else if (memberType == entt::resolve<bool>())
+    {
+        auto value = getter.cast<bool>();
+        if (ImGui::Checkbox(memberName, &value))
+        {
+            metaData.set(componentInstance, value);
+            modified = true;
+        }
+    }
+    else if (memberType == entt::resolve<std::string>())
+    {
+        auto value = getter.cast<std::string>();
+        char buffer[256];
+        strcpy_s(buffer, sizeof(buffer), value.c_str());
+        if (ImGui::InputText(memberName, buffer, sizeof(buffer)))
+        {
+            metaData.set(componentInstance, std::string(buffer));
+            modified = true;
+        }
+    }
+    else if (memberType == entt::resolve<float>())
+    {
+        auto value = getter.cast<float>();
+        if (ImGui::DragFloat(memberName, &value, 0.1f))
+        {
+            metaData.set(componentInstance, value);
+            modified = true;
+        }
+    }
+    else if (memberType == entt::resolve<int>())
+    {
+        auto value = getter.cast<int>();
+        if (ImGui::DragInt(memberName, &value))
+        {
+            metaData.set(componentInstance, value);
+            modified = true;
+        }
+    }
+    else
+    {
+        // 对于不支持的类型，仅显示信息
+        ImGui::Text("%s: %s", memberName, memberType.info().name());
+    }
+
+    return modified;
+}
+
+static void DrawComponent(entt::meta_type &metaType, entt::meta_any &componentInstance)
+{
+    // 获取友好的组件名称
+    const char *componentName = metaType.name();
+
+    if (ImGui::CollapsingHeader(componentName, ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // 现在可以遍历所有数据成员
+        for (auto &&[data_id, meta_data] : metaType.data())
+        {
+            DrawDataMember(meta_data, componentInstance);
+        }
+    }
+}
+
 template <typename T>
 static void DrawComponentUI(const char *name, entt::registry &registry, entt::entity entity)
 {
@@ -151,12 +252,24 @@ void InspectorPanel::SetContext(entt::registry *context)
 void InspectorPanel::OnImGuiRender(entt::entity selectedEntity)
 {
     ImGui::Begin("Inspector");
-    if (selectedEntity != entt::null && m_Context->valid(selectedEntity))
+
+    for (auto &&[id, storage] : m_Context->storage())
     {
-        DrawComponentUI<TagComponent>("Tag", *m_Context, selectedEntity);
-        DrawComponentUI<TransformComponent>("Transform", *m_Context, selectedEntity);
-        DrawComponentUI<CameraComponent>("Camera", *m_Context, selectedEntity);
-        // To add more components, just add another DrawComponentUI<MyComponent>(...) line
+        if (storage.contains(selectedEntity))
+        {
+            auto metaType = entt::resolve(storage.info());
+            if (!metaType)
+                continue;
+
+            // 获取组件的原始指针
+            void *componentPtr = storage.value(selectedEntity);
+
+            // 用 meta_any 包装组件实例，这样反射系统就能操作它
+            entt::meta_any componentInstance = metaType.from_void(componentPtr);
+
+            // draw component name
+            DrawComponent(metaType, componentInstance);
+        }
     }
     ImGui::End();
 }
