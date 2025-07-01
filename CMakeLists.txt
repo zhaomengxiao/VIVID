@@ -80,6 +80,7 @@ add_executable(${PROJECT_NAME}
     ${IMGUI_SOURCES}
     src/editor/SceneHierarchyPanel.cpp
     src/editor/InspectorPanel.cpp
+    src/editor/ComponentRegistry.cpp
 )
 
 # --- Link Libraries ---

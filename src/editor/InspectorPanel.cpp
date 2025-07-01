@@ -13,7 +13,7 @@ namespace
     // Constants
     constexpr size_t INPUT_BUFFER_SIZE = 256;
     constexpr float DEFAULT_DRAG_SPEED = 0.1f;
-    constexpr float DEFAULT_COLUMN_WIDTH = 100.0f;
+    constexpr float LABEL_COLUMN_WIDTH_SCALE = 7.0f;
 
     using namespace entt::literals;
 
@@ -24,7 +24,7 @@ namespace
     }
 
     // Improved Vec3 control with error handling
-    bool DrawVec3Control(const std::string &label, glm::vec3 &values, float resetValue = 0.0f, float columnWidth = DEFAULT_COLUMN_WIDTH)
+    bool DrawVec3Control(const std::string &label, glm::vec3 &values, float resetValue = 0.0f)
     {
         if (label.empty())
             return false;
@@ -32,7 +32,10 @@ namespace
         bool modified = false;
 
         ImGui::PushID(label.c_str());
+        ImGuiIO &io = ImGui::GetIO();
 
+        // Use a dynamic column width based on font size
+        float columnWidth = ImGui::GetFontSize() * io.FontGlobalScale * LABEL_COLUMN_WIDTH_SCALE;
         ImGui::Columns(2);
         ImGui::SetColumnWidth(0, columnWidth);
         ImGui::Text("%s", label.c_str()); // Prevent format string exploits
@@ -41,8 +44,8 @@ namespace
         ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
 
-        float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-        ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
+        float lineHeight = GImGui->Font->FontSize * io.FontGlobalScale + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = {lineHeight + GImGui->Style.FramePadding.x, lineHeight};
 
         // X-axis control
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
@@ -146,7 +149,8 @@ namespace
 
             ImGui::PushID(memberName);
             ImGui::Columns(2);
-            ImGui::SetColumnWidth(0, DEFAULT_COLUMN_WIDTH);
+            // Use a dynamic column width
+            ImGui::SetColumnWidth(0, ImGui::GetFontSize() * ImGui::GetIO().FontGlobalScale * LABEL_COLUMN_WIDTH_SCALE);
             ImGui::Text("%s", memberName);
             ImGui::NextColumn();
 
@@ -164,13 +168,23 @@ namespace
         else if (memberType == entt::resolve<float>())
         {
             auto value = getter.cast<float>();
-            if (ImGui::DragFloat(memberName, &value, DEFAULT_DRAG_SPEED))
+
+            ImGui::PushID(memberName);
+            ImGui::Columns(2);
+            ImGui::SetColumnWidth(0, ImGui::GetFontSize() * ImGui::GetIO().FontGlobalScale * LABEL_COLUMN_WIDTH_SCALE);
+            ImGui::Text("%s", memberName);
+            ImGui::NextColumn();
+
+            if (ImGui::DragFloat("##Value", &value, DEFAULT_DRAG_SPEED))
             {
                 if (metaData.set(componentInstance, value))
                 {
                     modified = true;
                 }
             }
+
+            ImGui::Columns(1);
+            ImGui::PopID();
         }
         else if (memberType == entt::resolve<int>())
         {

@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <memory>
+#include <vector>
 
 //
 // 基础组件

@@ -9,6 +9,7 @@
 #include "systems/renderer_system.h"
 #include "editor/SceneHierarchyPanel.h"
 #include "editor/InspectorPanel.h"
+#include "editor/ComponentRegistry.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -59,30 +60,10 @@ MeshComponent CreateCubeMesh()
     return {vertices, indices, indices.size()};
 }
 
-void RegisterComponents()
-{
-    using namespace entt;
-    using namespace entt::literals;
-
-    meta_factory<TagComponent>()
-        .type("TagComponent")
-        .data<&TagComponent::Tag>("Tag");
-
-    meta_factory<TransformComponent>()
-        .type("TransformComponent")
-        .data<&TransformComponent::Position>("Position")
-        .data<&TransformComponent::Rotation>("Rotation")
-        .data<&TransformComponent::Scale>("Scale");
-
-    meta_factory<CameraComponent>()
-        .type("CameraComponent")
-        .data<&CameraComponent::IsPrimary>("IsPrimary");
-}
-
 int main()
 {
     // --- Register Components for reflection ---
-    RegisterComponents();
+    VIVID::ComponentRegistry::RegisterAllComponents();
 
     // --- GLFW/GLEW Initialization ---
     if (!glfwInit())
@@ -94,8 +75,13 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
-    GLFWwindow *window = glfwCreateWindow(800, 600, "VIVID ECS Renderer", nullptr, nullptr);
+    // Get primary monitor and its video mode to create a maximized window
+    GLFWmonitor *primary = glfwGetPrimaryMonitor();
+    const GLFWvidmode *mode = glfwGetVideoMode(primary);
+
+    GLFWwindow *window = glfwCreateWindow(mode->width, mode->height, "VIVID ECS Renderer", nullptr, nullptr);
     if (!window)
     {
         std::cerr << "Failed to create GLFW window" << std::endl;
@@ -119,7 +105,19 @@ int main()
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    // --- UI Scaling & Font Loading ---
+    // Define a single scale factor for both UI and fonts.
+    float scale = 2.0f;
+    // Load the font at a size that accounts for the scaling factor to ensure sharpness.
+    float fontSize = 16.0f;
+    io.Fonts->AddFontFromFileTTF("res/fonts/NotoSans-Regular.ttf", fontSize * scale);
+
     ImGui::StyleColorsDark();
+
+    // Scale all UI elements (windows, buttons, etc.) by the same factor.
+    ImGui::GetStyle().ScaleAllSizes(scale);
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
