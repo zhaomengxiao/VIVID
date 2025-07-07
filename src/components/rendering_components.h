@@ -68,8 +68,8 @@ struct GpuMaterialComponent
 // 材质组件，定义物体的外观和着色器
 struct MaterialComponent
 {
-    std::string ShaderPath;
-    glm::vec3 ObjectColor{1.0f, 0.5f, 0.31f};
+    std::string ShaderPath = "res/shaders/BlinnPhong.shader"; // 默认着色器
+    glm::vec3 ObjectColor{0.8f, 0.8f, 0.8f};                  // 默认颜色为灰色
     glm::vec3 SpecularColor{0.5f, 0.5f, 0.5f};
     float Shininess = 32.0f;
 };

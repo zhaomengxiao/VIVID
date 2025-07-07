@@ -4,14 +4,14 @@
 #include <imgui.h>
 
 // Forward declaration
-static void DrawEntityNode(entt::entity entity, const entt::registry *registry, entt::entity &selectionContext);
+static void DrawEntityNode(entt::entity entity, entt::registry *registry, entt::entity &selectionContext);
 
-SceneHierarchyPanel::SceneHierarchyPanel(const entt::registry *context)
+SceneHierarchyPanel::SceneHierarchyPanel(entt::registry *context)
 {
     SetContext(context);
 }
 
-void SceneHierarchyPanel::SetContext(const entt::registry *context)
+void SceneHierarchyPanel::SetContext(entt::registry *context)
 {
     m_Context = context;
 }
@@ -24,12 +24,29 @@ void SceneHierarchyPanel::OnImGuiRender()
     {
         for (auto entityID : m_Context->view<TagComponent>())
             DrawEntityNode(entityID, m_Context, m_SelectionContext);
+
+        if (ImGui::BeginPopupContextWindow())
+        {
+            if (ImGui::MenuItem("Create Empty Entity"))
+            {
+                CreateEntity("Empty Entity");
+            }
+
+            ImGui::EndPopup();
+        }
     }
 
     ImGui::End();
 }
 
-static void DrawEntityNode(entt::entity entity, const entt::registry *registry, entt::entity &selectionContext)
+void SceneHierarchyPanel::CreateEntity(const std::string &name)
+{
+    entt::entity entity = m_Context->create();
+    m_Context->emplace<TagComponent>(entity, name);
+    m_SelectionContext = entity;
+}
+
+static void DrawEntityNode(entt::entity entity, entt::registry *registry, entt::entity &selectionContext)
 {
     auto &tag = registry->get<TagComponent>(entity).Tag;
 

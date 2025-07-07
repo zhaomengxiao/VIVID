@@ -15,6 +15,16 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+// Helper function to keep renderer in sync with component changes
+void OnComponentChange(entt::registry &registry, entt::entity entity)
+{
+    // This function is triggered whenever a MeshComponent or MaterialComponent
+    // is added or updated. It calls the RendererSystem's Sync function
+    // to ensure GPU resources are created or updated accordingly.
+    VIVID::RendererSystem::Sync(registry);
+    std::cout << "Component changed" << std::endl;
+}
+
 // Helper function to create a cube mesh component
 MeshComponent CreateCubeMesh()
 {
@@ -123,6 +133,15 @@ int main()
 
     // --- ECS Setup ---
     entt::registry registry;
+
+    // --- Set up event listeners for component changes ---
+    // Connect the listener to the construction and update signals for both
+    // MeshComponent and MaterialComponent. This ensures that when either is
+    // added or modified, the renderer is notified.
+    registry.on_construct<MeshComponent>().connect<&OnComponentChange>();
+    registry.on_update<MeshComponent>().connect<&OnComponentChange>();
+    registry.on_construct<MaterialComponent>().connect<&OnComponentChange>();
+    registry.on_update<MaterialComponent>().connect<&OnComponentChange>();
 
     // Create a renderable cube entity
     auto cubeEntity = registry.create();

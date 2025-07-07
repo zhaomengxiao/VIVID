@@ -3,13 +3,17 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
-
-#include <entt/core/hashed_string.hpp>
-#include <entt/meta/meta.hpp>
-#include <entt/meta/resolve.hpp>
+#include <iostream> // 引入头文件
 
 namespace
 {
+    enum class UITrait : int
+    {
+        None = 0,
+        AsColor = 1 << 0, // 标志1：把它当作颜色
+        AsSlider = 1 << 1 // 标志2：未来可以扩展，比如把它当作滑块
+        // ... 其他未来可能的标志
+    };
     // Constants
     constexpr size_t INPUT_BUFFER_SIZE = 256;
     constexpr float DEFAULT_DRAG_SPEED = 0.1f;
@@ -112,17 +116,60 @@ namespace
 
         bool modified = false;
         auto memberType = metaData.type();
+        auto user_traits = metaData.traits<UITrait>();
 
         // Type-driven UI generation
         if (memberType == entt::resolve<glm::vec3>())
         {
             auto vec3 = getter.cast<glm::vec3>();
-            float resetVal = GetResetValue(data_id);
-            if (DrawVec3Control(memberName, vec3, resetVal))
+            auto user_traits = metaData.traits<UITrait>();
+
+            // 检查是否存在 AsColor 特性
+            if (static_cast<std::underlying_type_t<UITrait>>(user_traits) & static_cast<std::underlying_type_t<UITrait>>(UITrait::AsColor))
             {
-                if (metaData.set(componentInstance, vec3))
+                // --- 开始自定义颜色控件布局 ---
+
+                // 使用成员变量名作为唯一ID
+                ImGui::PushID(memberName);
+
+                // 创建两列
+                ImGui::Columns(2);
+
+                // 设置第一列（标签列）的宽度
+                float columnWidth = ImGui::GetFontSize() * ImGui::GetIO().FontGlobalScale * LABEL_COLUMN_WIDTH_SCALE;
+                ImGui::SetColumnWidth(0, columnWidth);
+
+                // 在第一列绘制标签
+                ImGui::Text("%s", memberName);
+
+                // 切换到第二列
+                ImGui::NextColumn();
+
+                // 在第二列绘制颜色控件，使用 "##" 隐藏其自带标签
+                if (ImGui::ColorEdit3("##Color", &vec3.x))
                 {
-                    modified = true;
+                    if (metaData.set(componentInstance, vec3))
+                    {
+                        modified = true;
+                    }
+                }
+
+                // 恢复单列布局
+                ImGui::Columns(1);
+                ImGui::PopID();
+
+                // --- 布局结束 ---
+            }
+            else
+            {
+                // 否则，渲染XYZ控制器
+                float resetVal = GetResetValue(data_id);
+                if (DrawVec3Control(memberName, vec3, resetVal))
+                {
+                    if (metaData.set(componentInstance, vec3))
+                    {
+                        modified = true;
+                    }
                 }
             }
         }
@@ -197,6 +244,21 @@ namespace
                 }
             }
         }
+        else if (memberType == entt::resolve<std::vector<float>>())
+        {
+            auto value = getter.cast<std::vector<float>>();
+            ImGui::Text("%s: %zu", memberName, value.size());
+        }
+        else if (memberType == entt::resolve<std::vector<unsigned int>>())
+        {
+            auto value = getter.cast<std::vector<unsigned int>>();
+            ImGui::Text("%s: %zu", memberName, value.size());
+        }
+        else if (memberType == entt::resolve<size_t>())
+        {
+            auto value = getter.cast<size_t>();
+            ImGui::Text("%s: %zu", memberName, value);
+        }
         else
         {
             // For unsupported types, display type information
@@ -225,7 +287,116 @@ namespace
             }
         }
     }
+
+    // Helper function to create a cube mesh component
+    MeshComponent CreateCubeMesh()
+    {
+        std::vector<float> vertices = {
+            // positions          // normals
+            -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+            0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+            0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+            -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,
+
+            -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+            0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+            0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+            -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,
+
+            -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f,
+            -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f,
+            -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f,
+            -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f,
+
+            0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+            0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+            0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+            0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+
+            -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,
+            0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,
+            0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,
+            -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,
+
+            -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+            0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+            0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
+            -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f};
+        std::vector<unsigned int> indices = {
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+            8, 9, 10, 10, 11, 8,
+            12, 13, 14, 14, 15, 12,
+            16, 17, 18, 18, 19, 16,
+            20, 21, 22, 22, 23, 20};
+
+        return {vertices, indices, indices.size()};
+    }
+
+    void DrawMeshComponent(entt::registry &registry, entt::entity entity)
+    {
+        if (ImGui::CollapsingHeader("MeshComponent", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            auto &meshComponent = registry.get<MeshComponent>(entity);
+
+            // Display some info
+            ImGui::Text("Vertex Count: %zu", meshComponent.m_Vertices.size() / 6); // 6 floats per vertex (pos+normal)
+            ImGui::Text("Index Count: %zu", meshComponent.m_IndexCount);
+
+            ImGui::Spacing();
+
+            // Button to generate cube
+            if (ImGui::Button("Generate Cube"))
+            {
+                registry.replace<MeshComponent>(entity, CreateCubeMesh());
+            }
+        }
+    }
 } // namespace
+
+void InspectorPanel::DrawAddComponentButton(entt::entity selectedEntity)
+{
+    ImGui::Separator();
+
+    // Add some vertical spacing
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // Center the button
+    float buttonWidth = ImGui::GetContentRegionAvail().x * 0.8f;
+    float buttonPosX = (ImGui::GetContentRegionAvail().x - buttonWidth) * 0.5f;
+    ImGui::SetCursorPosX(buttonPosX);
+
+    if (ImGui::Button("Add Component", {buttonWidth, 0}))
+    {
+        ImGui::OpenPopup("AddComponentPopup");
+    }
+
+    if (ImGui::BeginPopup("AddComponentPopup"))
+    {
+        for (auto &[id, type] : entt::resolve())
+        {
+            if (auto emplace_func = type.func("emplace_func"_hs); emplace_func)
+            {
+                auto *storage = m_Context->storage(id);
+                if (storage && !storage->contains(selectedEntity))
+                {
+                    if (ImGui::MenuItem(type.name()))
+                    {
+                        // 添加日志，打印将要添加的组件名称和实体ID
+                        std::cout << "[LOG] MenuItem clicked for: " << type.name()
+                                  << ", on entity: " << static_cast<uint32_t>(selectedEntity) << std::endl;
+
+                        emplace_func.invoke({}, std::ref(*m_Context), selectedEntity);
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            }
+        }
+
+        ImGui::EndPopup();
+    }
+}
 
 InspectorPanel::InspectorPanel(entt::registry *context)
 {
@@ -251,18 +422,18 @@ void InspectorPanel::OnImGuiRender(entt::entity selectedEntity)
 
     // Iterate through all storages to find components owned by the entity
     bool hasComponents = false;
-    for (auto &&[id, storage] : m_Context->storage())
+    for (auto &&[id, pool] : m_Context->storage())
     {
-        if (!storage.contains(selectedEntity))
+        if (!pool.contains(selectedEntity))
             continue;
 
         hasComponents = true;
-        auto metaType = entt::resolve(storage.info());
+        auto metaType = entt::resolve(pool.info());
         if (!metaType)
             continue;
 
         // Get the raw component pointer and wrap it as a meta_any
-        void *componentPtr = storage.value(selectedEntity);
+        void *componentPtr = pool.value(selectedEntity);
         if (!componentPtr)
             continue;
 
@@ -270,13 +441,22 @@ void InspectorPanel::OnImGuiRender(entt::entity selectedEntity)
         if (!componentInstance)
             continue;
 
-        DrawComponent(metaType, componentInstance);
+        if (metaType.id() == "MeshComponent"_hs)
+        {
+            DrawMeshComponent(*m_Context, selectedEntity);
+        }
+        else
+        {
+            DrawComponent(metaType, componentInstance);
+        }
     }
 
     if (!hasComponents)
     {
         ImGui::Text("This entity has no components");
     }
+
+    DrawAddComponentButton(selectedEntity);
 
     ImGui::End();
 }

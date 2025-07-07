@@ -13,5 +13,7 @@ public:
     void OnImGuiRender(entt::entity selectedEntity);
 
 private:
+    void DrawAddComponentButton(entt::entity selectedEntity);
+
     entt::registry *m_Context = nullptr;
 };
