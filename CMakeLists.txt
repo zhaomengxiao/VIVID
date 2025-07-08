@@ -81,6 +81,9 @@ add_executable(${PROJECT_NAME}
     src/editor/SceneHierarchyPanel.cpp
     src/editor/InspectorPanel.cpp
     src/editor/ComponentRegistry.cpp
+    src/plugins/DefaultPlugin.cpp
+    src/plugins/RenderPlugin.cpp
+    src/plugins/UIPlugin.cpp
 )
 
 # --- Link Libraries ---
