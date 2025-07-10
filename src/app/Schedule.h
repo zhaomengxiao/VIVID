@@ -5,7 +5,7 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
-#include "core/Resources.h"
+#include "Resources.h"
 
 // 系统函数类型
 using SystemFn = std::function<void(Resources &, entt::registry &)>;

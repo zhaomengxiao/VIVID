@@ -1,5 +1,5 @@
-#include "plugins/RenderPlugin.h"
-#include "core/App.h"
+#include "render_plugin.h"
+#include "app/App.h"
 
 namespace
 {

@@ -1,5 +1,5 @@
-#include "plugins/UIPlugin.h"
-#include "core/App.h"
+#include "editor_plugin.h"
+#include "app/App.h"
 
 // System implementations for UI
 namespace
@@ -81,14 +81,14 @@ namespace
 
 } // anonymous namespace
 
-void UIPlugin::build(App &app)
+void EditorPlugin::build(App &app)
 {
     app.add_system(ScheduleLabel::Startup, ui_startup_system);
     app.add_system(ScheduleLabel::Update, ui_update_system);
     app.add_system(ScheduleLabel::Shutdown, ui_shutdown_system);
 }
 
-std::string UIPlugin::name() const
+std::string EditorPlugin::name() const
 {
-    return "UIPlugin";
+    return "EditorPlugin";
 }

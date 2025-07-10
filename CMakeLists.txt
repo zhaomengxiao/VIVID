@@ -75,15 +75,15 @@ set(IMGUI_SOURCES
 
 add_executable(${PROJECT_NAME} 
     ${SOURCE_DIR}/main.cpp
-    ${SOURCE_DIR}/systems/renderer_system.cpp
+    ${SOURCE_DIR}/rendering/render_system.cpp
     ${OPENGL_WRAPPER_SOURCES}
     ${IMGUI_SOURCES}
     src/editor/SceneHierarchyPanel.cpp
     src/editor/InspectorPanel.cpp
     src/editor/ComponentRegistry.cpp
     src/plugins/DefaultPlugin.cpp
-    src/plugins/RenderPlugin.cpp
-    src/plugins/UIPlugin.cpp
+    src/rendering/render_plugin.cpp
+    src/editor/editor_plugin.cpp
 )
 
 # --- Link Libraries ---

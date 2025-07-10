@@ -5,8 +5,8 @@
 #include <vector>
 
 #include <entt/entt.hpp>
-#include "components/rendering_components.h"
-#include "systems/renderer_system.h"
+#include "rendering/render_component.h"
+#include "rendering/render_system.h"
 #include "editor/SceneHierarchyPanel.h"
 #include "editor/InspectorPanel.h"
 #include "editor/ComponentRegistry.h"
@@ -15,10 +15,10 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "core/App.h"
+#include "app/App.h"
 #include "plugins/DefaultPlugin.h"
-#include "plugins/UIPlugin.h"
-#include "plugins/RenderPlugin.h"
+#include "editor/editor_plugin.h"
+#include "rendering/render_plugin.h"
 
 int main()
 {
@@ -26,7 +26,7 @@ int main()
 
     app.add_plugin<DefaultPlugin>()
         .add_plugin<RenderPlugin>()
-        .add_plugin<UIPlugin>();
+        .add_plugin<EditorPlugin>();
 
     app.run();
 

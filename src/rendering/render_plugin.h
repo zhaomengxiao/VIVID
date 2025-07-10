@@ -1,10 +1,10 @@
 #pragma once
 
-#include "core/App.h"
-#include "core/Plugin.h"
-#include "systems/renderer_system.h"
+#include "app/App.h"
+#include "app/Plugin.h"
+#include "render_system.h"
 #include "editor/ComponentRegistry.h"
-#include "components/rendering_components.h"
+#include "render_component.h"
 #include <vector>
 
 class RenderPlugin : public Plugin

@@ -1,5 +1,5 @@
-#include "renderer_system.h"
-#include "components/rendering_components.h"
+#include "render_system.h"
+#include "render_component.h"
 #include <glm/gtc/type_ptr.hpp>
 
 #include "opengl/GLErrorHandler.h"

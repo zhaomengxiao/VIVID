@@ -1,5 +1,5 @@
 #include "editor/ComponentRegistry.h"
-#include "components/rendering_components.h"
+#include "rendering/render_component.h"
 #include <entt/entt.hpp>
 #include <iostream>
 #include <functional>

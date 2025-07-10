@@ -10,9 +10,9 @@
 #include <chrono>
 #include <thread>
 
-#include "core/Plugin.h"
-#include "core/Resources.h"
-#include "core/Schedule.h"
+#include "Plugin.h"
+#include "Resources.h"
+#include "Schedule.h"
 
 // 应用程序主类
 class App
