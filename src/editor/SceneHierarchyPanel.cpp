@@ -1,5 +1,5 @@
 #include "SceneHierarchyPanel.h"
-#include "components/rendering_components.h" // For TagComponent
+#include "rendering/render_component.h" // For TagComponent
 
 #include <imgui.h>
 

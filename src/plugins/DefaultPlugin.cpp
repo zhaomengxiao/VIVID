@@ -1,5 +1,5 @@
-#include "plugins/DefaultPlugin.h"
-#include "core/App.h"
+#include "DefaultPlugin.h"
+#include "app/App.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>

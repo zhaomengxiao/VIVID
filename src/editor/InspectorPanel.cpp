@@ -1,5 +1,5 @@
 #include "InspectorPanel.h"
-#include "components/rendering_components.h"
+#include "rendering/render_component.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>

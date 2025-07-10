@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/App.h"
-#include "core/Plugin.h"
+#include "app/App.h"
+#include "app/Plugin.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>

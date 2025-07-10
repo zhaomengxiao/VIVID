@@ -1,6 +1,6 @@
 #pragma once
 #include "entt/entt.hpp"
-#include "components/physics_components.h"
+#include "physics_component.h"
 #include "PxPhysicsAPI.h"
 
 // 物理系统：推进物理世界，并同步状态回ECS
