@@ -3,6 +3,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "opengl/GLErrorHandler.h"
+#include "../input/camera_controller.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -311,9 +312,35 @@ namespace VIVID
         GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.0f));
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-        glm::mat4 viewMatrix = glm::lookAt(mainCameraTransform->Position, mainCameraTransform->Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-        glm::mat4 projectionMatrix = mainCameraComponent->ProjectionMatrix;
+        glm::mat4 viewMatrix;
         glm::vec3 viewPos = mainCameraTransform->Position;
+        
+        // Check if camera has a controller
+        auto cameraControllerView = registry.view<CameraControllerComponent>();
+        bool hasController = false;
+        for (auto entity : cameraControllerView)
+        {
+            if (entity == mainCameraEntity)
+            {
+                hasController = true;
+                break;
+            }
+        }
+        
+        if (hasController)
+        {
+            // Use camera controller for proper view matrix
+            auto& cameraController = registry.get<CameraControllerComponent>(mainCameraEntity);
+            glm::vec3 target = mainCameraTransform->Position + cameraController.Front;
+            viewMatrix = glm::lookAt(mainCameraTransform->Position, target, cameraController.Up);
+        }
+        else
+        {
+            // Fallback to original behavior
+            viewMatrix = glm::lookAt(mainCameraTransform->Position, mainCameraTransform->Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+        }
+        
+        glm::mat4 projectionMatrix = mainCameraComponent->ProjectionMatrix;
 
         // Find light
         auto lightView = registry.view<TransformComponent, LightComponent>();

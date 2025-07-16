@@ -1,5 +1,6 @@
 #include "render_plugin.h"
 #include "app/App.h"
+#include "../input/camera_controller.h"
 
 namespace
 {
@@ -90,6 +91,7 @@ namespace
         camTransform.Position = {0.0f, 0.0f, 5.0f};
         world.emplace<CameraComponent>(cameraEntity);
         world.emplace<ViewportComponent>(cameraEntity);
+        world.emplace<CameraControllerComponent>(cameraEntity);
 
         // --- Renderer Init ---
         VIVID::RendererSystem::Init();

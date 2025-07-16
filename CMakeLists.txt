@@ -76,6 +76,7 @@ set(IMGUI_SOURCES
 add_executable(${PROJECT_NAME} 
     ${SOURCE_DIR}/main.cpp
     ${SOURCE_DIR}/rendering/render_system.cpp
+    ${SOURCE_DIR}/input/input_system.cpp
     ${OPENGL_WRAPPER_SOURCES}
     ${IMGUI_SOURCES}
     src/editor/SceneHierarchyPanel.cpp

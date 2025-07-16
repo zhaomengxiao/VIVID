@@ -3,6 +3,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include "../input/input_system.h"
 
 namespace
 {
@@ -42,6 +43,9 @@ namespace
         glEnable(GL_DEPTH_TEST);
 
         res.insert<WindowResource>(WindowResource{window});
+        
+        // Initialize input system
+        InputSystem::Initialize(window);
     }
 
     void window_close_system(App &app, Resources &res)
@@ -53,11 +57,17 @@ namespace
         }
     }
 
-    void window_update_system(Resources &res, entt::registry &)
+    void window_update_system(Resources &res, entt::registry &registry)
     {
         auto *windowRes = res.get<WindowResource>();
         if (windowRes)
         {
+            // Set registry for input system callbacks
+            glfwSetWindowUserPointer(windowRes->window, &registry);
+            
+            // Update input system
+            InputSystem::Update(registry);
+            
             glfwSwapBuffers(windowRes->window);
             glfwPollEvents();
         }
@@ -65,6 +75,9 @@ namespace
 
     void window_shutdown_system(Resources &res, entt::registry &)
     {
+        // Shutdown input system
+        InputSystem::Shutdown();
+        
         auto *windowRes = res.get<WindowResource>();
         if (windowRes)
         {
