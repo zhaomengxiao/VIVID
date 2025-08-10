@@ -1,4 +1,97 @@
+# Build directories
 /build*
+/lib/build*
+/standalone/build*
+/all/build*
+/test/build*
+/documentation/build*
+
+# IDE and Editor files
 /.vscode
-/cpm_modules
+/.idea
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# 第三方库
+/vendor/
+
+# Package managers and dependencies
+/cpm_modules
+/.cpm_cache
+/vendor/build*
+/vendor/install*
+/vendor/.cache
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!cmake/*.cmake
+!cmake/tools.cmake
+!cmake/CPM.cmake
+
+# Compiler generated files
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Debug and Release directories
+Debug/
+Release/
+x64/
+x86/
+
+# Test coverage and reports
+*.gcov
+*.gcda
+*.gcno
+coverage/
+htmlcov/
+.coverage
+*.info
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+temp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Documentation build
+documentation/_build/
+documentation/build/
+documentation/html/
+documentation/latex/
+
+# Profiling and debugging
+*.prof
+*.trace
+optick/

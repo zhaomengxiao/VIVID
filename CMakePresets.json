@@ -1,0 +1,54 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "VIVID",
+            "displayName": "VIVID Library Only",
+            "description": "Build only the VIVID library",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "host=x64",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "D:/DevSoftware/vcpkg-2025.04.09/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                }
+            }
+        },
+        {
+            "name": "VD",
+            "inherits": "VIVID",
+            "displayName": "Windows Debug",
+            "description": "Debug build using Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "VR",
+            "inherits": "VIVID",
+            "displayName": "Windows Release",
+            "description": "Release build using Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "VD",
+            "displayName": "VIVID all Debug",
+            "configurePreset": "VD",
+            "configuration": "Debug"
+        },
+        {
+            "name": "VR",
+            "displayName": "VIVID all Release",
+            "configurePreset": "VR",
+            "configuration": "Release"
+        }
+    ]
+}
