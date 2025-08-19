@@ -13,7 +13,8 @@
                 "CMAKE_TOOLCHAIN_FILE": {
                     "value": "D:/DevSoftware/vcpkg-2025.04.09/scripts/buildsystems/vcpkg.cmake",
                     "type": "FILEPATH"
-                }
+                },
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
             }
         },
         {
