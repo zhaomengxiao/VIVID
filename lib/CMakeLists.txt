@@ -219,11 +219,10 @@ target_link_libraries(${PROJECT_NAME}
     # glm::glm
     EnTT::EnTT
     GLEW::glew
-  PRIVATE
-    # New libraries for OpenGL rendering with GLFW
     glfw
-    OpenGL::GL
 
+    OpenGL::GL
+  PRIVATE
     # Existing libraries
     
     # raylib # Temporarily commented out, conflicts with glfw
