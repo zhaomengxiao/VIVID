@@ -1,3 +1,7 @@
+#pragma once
+
+#include <GL/glew.h>
+
 #include "vivid/app/App.h"
 #include "vivid/plugins/DefaultPlugin.h"
 #include "vivid/rendering/render_plugin.h"
@@ -37,13 +41,6 @@
 #  endif
 #  include <GLFW/glfw3native.h>  // for glfwGetWin32Window()
 #endif
-
-#include <GL/gl.h>
-#include <GL/glew.h>  // Add GLEW header
-#include <GL/glext.h>
-#include <GLFW/glfw3.h>
-
-#include <glm/gtc/type_ptr.hpp>
 
 // #define XR_USE_GRAPHICS_API_OPENGL
 // #define XR_USE_PLATFORM_WIN32
@@ -224,6 +221,8 @@ struct SwapchainInfo {
   int64_t swapchainFormat = 0;
   std::vector<void *> imageViews;
 };
+
+enum class SwapchainType : uint8_t { COLOR, DEPTH };
 struct XrResource {
   XrInstance xrInstance = {};
   std::vector<const char *> activeAPILayers = {};
@@ -262,6 +261,18 @@ struct XrResource {
 
   std::vector<SwapchainInfo> colorSwapchainInfos = {};
   std::vector<SwapchainInfo> depthSwapchainInfos = {};
+
+  // Building Render Loop
+  std::vector<XrEnvironmentBlendMode> applicationEnvironmentBlendModes
+      = {XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE};
+  std::vector<XrEnvironmentBlendMode> environmentBlendModes = {};
+  XrEnvironmentBlendMode environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM;
+
+  XrSpace localSpace = XR_NULL_HANDLE;
+
+  GLuint setFramebuffer = 0;
+  GLuint vertexArray = 0;
+  GLuint setIndexBuffer = 0;
 };
 
 // XR system
@@ -686,7 +697,7 @@ void GetViewConfigurationViews_system(Resources &res, entt::registry &world) {
 
 // TODO: move out
 // XR_DOCS_TAG_BEGIN_GraphicsAPI_OpenGL_AllocateSwapchainImageData
-enum class SwapchainType : uint8_t { COLOR, DEPTH };
+
 XrSwapchainImageBaseHeader *AllocateSwapchainImageData(Resources &res, XrSwapchain swapchain,
                                                        SwapchainType type, uint32_t count) {
   XrResource *xrRes = res.get<XrResource>();
@@ -795,14 +806,14 @@ void CreateSwapchains_system(Resources &res, entt::registry &world) {
         GL_RGBA8,
         GL_RGBA8_SNORM,
     };
-    const std::vector<int64_t>::const_iterator &swapchainFormatIt = std::find_first_of(
+    const std::vector<int64_t>::const_iterator &swapchainFormatIt_color = std::find_first_of(
         formats.begin(), formats.end(), std::begin(supportedColorSwapchainFormats),
         std::end(supportedColorSwapchainFormats));
-    if (swapchainFormatIt == formats.end()) {
+    if (swapchainFormatIt_color == formats.end()) {
       std::cerr << "ERROR: Unable to find supported Color Swapchain Format" << std::endl;
       DEBUG_BREAK;
     }
-    swapchainCI.format = *swapchainFormatIt;
+    swapchainCI.format = *swapchainFormatIt_color;
     swapchainCI.sampleCount
         = xrRes->viewConfigurationViews[i]
               .recommendedSwapchainSampleCount;  // Use the recommended values from the
@@ -829,14 +840,14 @@ void CreateSwapchains_system(Resources &res, entt::registry &world) {
         GL_DEPTH_COMPONENT24,
         GL_DEPTH_COMPONENT16,
     };
-    const std::vector<int64_t>::const_iterator &swapchainFormatIt = std::find_first_of(
+    const std::vector<int64_t>::const_iterator &swapchainFormatIt_depth = std::find_first_of(
         formats.begin(), formats.end(), std::begin(supportedDepthSwapchainFormats),
         std::end(supportedDepthSwapchainFormats));
-    if (swapchainFormatIt == formats.end()) {
+    if (swapchainFormatIt_depth == formats.end()) {
       std::cerr << "ERROR: Unable to find supported Depth Swapchain Format" << std::endl;
       DEBUG_BREAK;
     }
-    swapchainCI.format = *swapchainFormatIt;
+    swapchainCI.format = *swapchainFormatIt_depth;
     swapchainCI.sampleCount
         = xrRes->viewConfigurationViews[i]
               .recommendedSwapchainSampleCount;  // Use the recommended values from the
@@ -955,23 +966,302 @@ void DestroySwapchains_system(Resources &res, entt::registry &world) {
   }
 }
 
+// Building Render Loop
+struct RenderLayerInfo {
+  XrTime predictedDisplayTime;
+  std::vector<XrCompositionLayerBaseHeader *> layers;
+  XrCompositionLayerProjection layerProjection = {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+  std::vector<XrCompositionLayerProjectionView> layerProjectionViews;
+};
+void GetEnvironmentBlendModes_system(Resources &res, entt::registry &world) {
+  // Retrieves the available blend modes. The first call gets the count of the array that will be
+  // returned. The next call fills out the array.
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  uint32_t environmentBlendModeCount = 0;
+  OPENXR_CHECK(
+      xrRes->xrInstance,
+      xrEnumerateEnvironmentBlendModes(xrRes->xrInstance, xrRes->systemID, xrRes->viewConfiguration,
+                                       0, &environmentBlendModeCount, nullptr),
+      "Failed to enumerate EnvironmentBlend Modes.");
+  xrRes->environmentBlendModes.resize(environmentBlendModeCount);
+  OPENXR_CHECK(
+      xrRes->xrInstance,
+      xrEnumerateEnvironmentBlendModes(xrRes->xrInstance, xrRes->systemID, xrRes->viewConfiguration,
+                                       environmentBlendModeCount, &environmentBlendModeCount,
+                                       xrRes->environmentBlendModes.data()),
+      "Failed to enumerate EnvironmentBlend Modes.");
+
+  // Pick the first application supported blend mode supported by the hardware.
+  for (const XrEnvironmentBlendMode &environmentBlendMode :
+       xrRes->applicationEnvironmentBlendModes) {
+    if (std::find(xrRes->environmentBlendModes.begin(), xrRes->environmentBlendModes.end(),
+                  environmentBlendMode)
+        != xrRes->environmentBlendModes.end()) {
+      xrRes->environmentBlendMode = environmentBlendMode;
+      break;
+    }
+  }
+  if (xrRes->environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM) {
+    std::cerr
+        << "Failed to find a compatible blend mode. Defaulting to XR_ENVIRONMENT_BLEND_MODE_OPAQUE."
+        << std::endl;
+    xrRes->environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+  }
+}
+void CreateReferenceSpace_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  // Fill out an XrReferenceSpaceCreateInfo structure and create a reference XrSpace, specifying a
+  // Local space with an identity pose as the origin.
+  XrReferenceSpaceCreateInfo referenceSpaceCI{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
+  referenceSpaceCI.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+  referenceSpaceCI.poseInReferenceSpace = {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
+  OPENXR_CHECK(xrRes->xrInstance,
+               xrCreateReferenceSpace(xrRes->session, &referenceSpaceCI, &xrRes->localSpace),
+               "Failed to create ReferenceSpace.");
+}
+void DestroyReferenceSpace_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  // Destroy the reference XrSpace.
+  OPENXR_CHECK(xrRes->xrInstance, xrDestroySpace(xrRes->localSpace), "Failed to destroy Space.");
+}
+
+bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
+  // Locate the views from the view configuration within the (reference) space at the display time.
+  std::vector<XrView> views(xrRes->viewConfigurationViews.size(), {XR_TYPE_VIEW});
+
+  XrViewState viewState{XR_TYPE_VIEW_STATE};  // Will contain information on whether the position
+                                              // and/or orientation is valid and/or tracked.
+  XrViewLocateInfo viewLocateInfo{XR_TYPE_VIEW_LOCATE_INFO};
+  viewLocateInfo.viewConfigurationType = xrRes->viewConfiguration;
+  viewLocateInfo.displayTime = renderLayerInfo.predictedDisplayTime;
+  viewLocateInfo.space = xrRes->localSpace;
+  uint32_t viewCount = 0;
+  XrResult result = xrLocateViews(xrRes->session, &viewLocateInfo, &viewState,
+                                  static_cast<uint32_t>(views.size()), &viewCount, views.data());
+  if (result != XR_SUCCESS) {
+    std::cerr << "Failed to locate Views." << std::endl;
+    return false;
+  }
+
+  // Resize the layer projection views to match the view count. The layer projection views are used
+  // in the layer projection.
+  renderLayerInfo.layerProjectionViews.resize(viewCount,
+                                              {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+
+  // Per view in the view configuration:
+  for (uint32_t i = 0; i < viewCount; i++) {
+    SwapchainInfo &colorSwapchainInfo = xrRes->colorSwapchainInfos[i];
+    SwapchainInfo &depthSwapchainInfo = xrRes->depthSwapchainInfos[i];
+
+    // Acquire and wait for an image from the swapchains.
+    // Get the image index of an image in the swapchains.
+    // The timeout is infinite.
+    uint32_t colorImageIndex = 0;
+    uint32_t depthImageIndex = 0;
+    XrSwapchainImageAcquireInfo acquireInfo{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+    OPENXR_CHECK(
+        xrRes->xrInstance,
+        xrAcquireSwapchainImage(colorSwapchainInfo.swapchain, &acquireInfo, &colorImageIndex),
+        "Failed to acquire Image from the Color Swapchian");
+    OPENXR_CHECK(
+        xrRes->xrInstance,
+        xrAcquireSwapchainImage(depthSwapchainInfo.swapchain, &acquireInfo, &depthImageIndex),
+        "Failed to acquire Image from the Depth Swapchian");
+
+    XrSwapchainImageWaitInfo waitInfo = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+    waitInfo.timeout = XR_INFINITE_DURATION;
+    OPENXR_CHECK(xrRes->xrInstance, xrWaitSwapchainImage(colorSwapchainInfo.swapchain, &waitInfo),
+                 "Failed to wait for Image from the Color Swapchain");
+    OPENXR_CHECK(xrRes->xrInstance, xrWaitSwapchainImage(depthSwapchainInfo.swapchain, &waitInfo),
+                 "Failed to wait for Image from the Depth Swapchain");
+
+    // Get the width and height and construct the viewport and scissors.
+    const uint32_t &width = xrRes->viewConfigurationViews[i].recommendedImageRectWidth;
+    const uint32_t &height = xrRes->viewConfigurationViews[i].recommendedImageRectHeight;
+    // GraphicsAPI::Viewport viewport = {0.0f, 0.0f, (float)width, (float)height, 0.0f, 1.0f};
+    // GraphicsAPI::Rect2D scissor = {{(int32_t)0, (int32_t)0}, {width, height}};
+    float nearZ = 0.05f;
+    float farZ = 100.0f;
+
+    // Fill out the XrCompositionLayerProjectionView structure specifying the pose and fov from the
+    // view. This also associates the swapchain image with this layer projection view.
+    renderLayerInfo.layerProjectionViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
+    renderLayerInfo.layerProjectionViews[i].pose = views[i].pose;
+    renderLayerInfo.layerProjectionViews[i].fov = views[i].fov;
+    renderLayerInfo.layerProjectionViews[i].subImage.swapchain = colorSwapchainInfo.swapchain;
+    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.x = 0;
+    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.y = 0;
+    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.width
+        = static_cast<int32_t>(width);
+    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.height
+        = static_cast<int32_t>(height);
+    renderLayerInfo.layerProjectionViews[i].subImage.imageArrayIndex
+        = 0;  // Useful for multiview rendering.
+
+    // Rendering code to clear the color and depth image views.
+    // m_graphicsAPI->BeginRendering();
+    auto BeginRendering = [](XrResource *xrRes) {
+      glGenVertexArrays(1, &xrRes->vertexArray);
+      glBindVertexArray(xrRes->vertexArray);
+
+      glGenFramebuffers(1, &xrRes->setFramebuffer);
+      glBindFramebuffer(GL_FRAMEBUFFER, xrRes->setFramebuffer);
+    };
+    BeginRendering(xrRes);
+
+    auto ClearColor = [](XrResource *xrRes, void *imageView, float r, float g, float b, float a) {
+      glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)(uint64_t)imageView);
+      glClearColor(r, g, b, a);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    };
+    if (xrRes->environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_OPAQUE) {
+      // VR mode use a background color.
+      // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.17f, 0.17f,
+      // 0.17f,
+      //                           1.00f);
+
+      ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.0f, 0.8f, 0.17f, 1.00f);
+    } else {
+      // In AR mode make the background color black.
+      // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f,
+      // 0.00f,
+      //                           1.00f);
+      ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f, 0.00f, 1.00f);
+    }
+    // m_graphicsAPI->ClearDepth(depthSwapchainInfo.imageViews[depthImageIndex], 1.0f);
+    auto ClearDepth = [](XrResource *xrRes, void *imageView, float d) {
+      glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)(uint64_t)imageView);
+      glClearDepth(d);
+      glClear(GL_DEPTH_BUFFER_BIT);
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    };
+    ClearDepth(xrRes, depthSwapchainInfo.imageViews[depthImageIndex], 1.0f);
+    // m_graphicsAPI->EndRendering();
+    auto EndRendering = [](XrResource *xrRes) {
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glDeleteFramebuffers(1, &xrRes->setFramebuffer);
+      xrRes->setFramebuffer = 0;
+
+      glBindVertexArray(0);
+      glDeleteVertexArrays(1, &xrRes->vertexArray);
+      xrRes->vertexArray = 0;
+    };
+    EndRendering(xrRes);
+
+    // Give the swapchain image back to OpenXR, allowing the compositor to use the image.
+    XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrReleaseSwapchainImage(colorSwapchainInfo.swapchain, &releaseInfo),
+                 "Failed to release Image back to the Color Swapchain");
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrReleaseSwapchainImage(depthSwapchainInfo.swapchain, &releaseInfo),
+                 "Failed to release Image back to the Depth Swapchain");
+  }
+
+  // Fill out the XrCompositionLayerProjection structure for usage with xrEndFrame().
+  renderLayerInfo.layerProjection.layerFlags
+      = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT
+        | XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT;
+  renderLayerInfo.layerProjection.space = xrRes->localSpace;
+  renderLayerInfo.layerProjection.viewCount
+      = static_cast<uint32_t>(renderLayerInfo.layerProjectionViews.size());
+  renderLayerInfo.layerProjection.views = renderLayerInfo.layerProjectionViews.data();
+
+  return true;
+}
+
+// For each frame, we sequence through the three primary functions: xrWaitFrame, xrBeginFrame and
+// xrEndFrame. These functions wrap around our rendering code and communicate to the OpenXR runtime
+// that we are rendering and that we need to synchronize with the XR compositor.
+void RenderFrame_system(Resources &res, entt::registry &world) {
+  // Get the XrFrameState for timing and rendering info.
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+
+  if (xrRes->sessionRunning == false) {
+    return;
+  }
+
+  XrFrameState frameState{XR_TYPE_FRAME_STATE};
+  XrFrameWaitInfo frameWaitInfo{XR_TYPE_FRAME_WAIT_INFO};
+  OPENXR_CHECK(xrRes->xrInstance, xrWaitFrame(xrRes->session, &frameWaitInfo, &frameState),
+               "Failed to wait for XR Frame.");
+
+  // Tell the OpenXR compositor that the application is beginning the frame.
+  XrFrameBeginInfo frameBeginInfo{XR_TYPE_FRAME_BEGIN_INFO};
+  OPENXR_CHECK(xrRes->xrInstance, xrBeginFrame(xrRes->session, &frameBeginInfo),
+               "Failed to begin the XR Frame.");
+
+  // Variables for rendering and layer composition.
+  bool rendered = false;
+  RenderLayerInfo renderLayerInfo;
+  renderLayerInfo.predictedDisplayTime = frameState.predictedDisplayTime;
+
+  // Check that the session is active and that we should render.
+  bool sessionActive = (xrRes->sessionState == XR_SESSION_STATE_SYNCHRONIZED
+                        || xrRes->sessionState == XR_SESSION_STATE_VISIBLE
+                        || xrRes->sessionState == XR_SESSION_STATE_FOCUSED);
+  if (sessionActive && frameState.shouldRender) {
+    // Render the stereo image and associate one of swapchain images with the
+    // XrCompositionLayerProjection structure.
+    rendered = RenderLayer(xrRes, renderLayerInfo);
+    if (rendered) {
+      renderLayerInfo.layers.push_back(
+          reinterpret_cast<XrCompositionLayerBaseHeader *>(&renderLayerInfo.layerProjection));
+    }
+  }
+
+  // Tell OpenXR that we are finished with this frame; specifying its display time, environment
+  // blending and layers.
+  XrFrameEndInfo frameEndInfo{XR_TYPE_FRAME_END_INFO};
+  frameEndInfo.displayTime = frameState.predictedDisplayTime;
+  frameEndInfo.environmentBlendMode = xrRes->environmentBlendMode;
+  frameEndInfo.layerCount = static_cast<uint32_t>(renderLayerInfo.layers.size());
+  frameEndInfo.layers = renderLayerInfo.layers.data();
+  OPENXR_CHECK(xrRes->xrInstance, xrEndFrame(xrRes->session, &frameEndInfo),
+               "Failed to end the XR Frame.");
+}
+
 int main() {
-  auto &app = App::new_app().add_plugin<DefaultPlugin>().add_plugin<RenderPlugin>();
+  // auto &app = App::new_app().add_plugin<DefaultPlugin>().add_plugin<RenderPlugin>();
+  auto &app = App::new_app().add_plugin<DefaultPlugin>();
   app.add_system(ScheduleLabel::Startup, CreateInstance_system);
   app.add_system(ScheduleLabel::Startup, CreateDebugMessenger_system);
   app.add_system(ScheduleLabel::Startup, GetInstanceProperties_system);
   app.add_system(ScheduleLabel::Startup, GetSystemId_system);
+
   app.add_system(ScheduleLabel::Startup, GetViewConfigurationViews_system);
+  app.add_system(ScheduleLabel::Startup, GetEnvironmentBlendModes_system);
+
   app.add_system(ScheduleLabel::Startup, InitializeDevice_system);
   app.add_system(ScheduleLabel::Startup, CreateSession_system);
-  // app.add_system(ScheduleLabel::Startup, CreateSwapchains_system);
+  app.add_system(ScheduleLabel::Startup, CreateReferenceSpace_system);
+  app.add_system(ScheduleLabel::Startup, CreateSwapchains_system);
 
-  // app.add_system(ScheduleLabel::Update, PollEvents_system);
+  app.add_system(ScheduleLabel::Update, PollEvents_system);
+  app.add_system(ScheduleLabel::Update, RenderFrame_system);
 
   app.add_system(ScheduleLabel::Shutdown, DestroyInstance_system);
   app.add_system(ScheduleLabel::Shutdown, DestroyDebugMessenger_system);
   app.add_system(ScheduleLabel::Shutdown, DestroySession_system);
-  // app.add_system(ScheduleLabel::Shutdown, DestroySwapchains_system);
+  app.add_system(ScheduleLabel::Shutdown, DestroyReferenceSpace_system);
+  app.add_system(ScheduleLabel::Shutdown, DestroySwapchains_system);
 
   app.run();
 
