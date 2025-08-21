@@ -38,7 +38,12 @@
 #  include <GLFW/glfw3native.h>  // for glfwGetWin32Window()
 #endif
 
+#include <GL/gl.h>
+#include <GL/glew.h>  // Add GLEW header
+#include <GL/glext.h>
 #include <GLFW/glfw3.h>
+
+#include <glm/gtc/type_ptr.hpp>
 
 // #define XR_USE_GRAPHICS_API_OPENGL
 // #define XR_USE_PLATFORM_WIN32
@@ -181,6 +186,44 @@ void DestroyOpenXRDebugUtilsMessenger(XrInstance xrInstance,
 // XR_DOCS_TAG_END_Create_DestroyDebugMessenger
 
 // XR resources
+struct ImageCreateInfo {
+  uint32_t dimension;
+  uint32_t width;
+  uint32_t height;
+  uint32_t depth;
+  uint32_t mipLevels;
+  uint32_t arrayLayers;
+  uint32_t sampleCount;
+  int64_t format;
+  bool cubemap;
+  bool colorAttachment;
+  bool depthAttachment;
+  bool sampled;
+};
+struct ImageViewCreateInfo {
+  void *image;
+  enum class Type : uint8_t { RTV, DSV, SRV, UAV } type;
+  enum class View : uint8_t {
+    TYPE_1D,
+    TYPE_2D,
+    TYPE_3D,
+    TYPE_CUBE,
+    TYPE_1D_ARRAY,
+    TYPE_2D_ARRAY,
+    TYPE_CUBE_ARRAY,
+  } view;
+  int64_t format;
+  enum class Aspect : uint8_t { COLOR_BIT = 0x01, DEPTH_BIT = 0x02, STENCIL_BIT = 0x04 } aspect;
+  uint32_t baseMipLevel;
+  uint32_t levelCount;
+  uint32_t baseArrayLayer;
+  uint32_t layerCount;
+};
+struct SwapchainInfo {
+  XrSwapchain swapchain = XR_NULL_HANDLE;
+  int64_t swapchainFormat = 0;
+  std::vector<void *> imageViews;
+};
 struct XrResource {
   XrInstance xrInstance = {};
   std::vector<const char *> activeAPILayers = {};
@@ -201,10 +244,24 @@ struct XrResource {
 
   bool applicationRunning = true;
   bool sessionRunning = false;
-};
 
-struct GraphicsAPI_Resource {
+  // GraphicsAPI_Resource
   XrGraphicsBindingOpenGLWin32KHR graphicsBinding{XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR};
+  std::unordered_map<XrSwapchain, std::pair<SwapchainType, std::vector<XrSwapchainImageOpenGLKHR>>>
+      swapchainImagesMap{};
+
+  std::unordered_map<GLuint, ImageCreateInfo> images{};
+  std::unordered_map<GLuint, ImageViewCreateInfo> imageViews{};
+
+  // Swapchain
+  std::vector<XrViewConfigurationType> applicationViewConfigurations
+      = {XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO};
+  std::vector<XrViewConfigurationType> viewConfigurations;
+  XrViewConfigurationType viewConfiguration = XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;
+  std::vector<XrViewConfigurationView> viewConfigurationViews;
+
+  std::vector<SwapchainInfo> colorSwapchainInfos = {};
+  std::vector<SwapchainInfo> depthSwapchainInfos = {};
 };
 
 // XR system
@@ -385,10 +442,44 @@ void GetSystemId_system(Resources &res, entt::registry &world) {
                "Failed to get SystemProperties.");
 }
 
-// An XrSession encapsulates the state of the application from the perspective of OpenXR. When an
-// XrSession is created, it starts in the XrSessionState XR_SESSION_STATE_IDLE. It is up to the
-// runtime to provide any updates to the XrSessionState and for the application to query them and
-// react to them.
+void InitializeDevice_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  // Extension function must be loaded by name
+  PFN_xrGetOpenGLGraphicsRequirementsKHR pfnGetOpenGLGraphicsRequirementsKHR = nullptr;
+  OPENXR_CHECK(xrRes->xrInstance,
+               xrGetInstanceProcAddr(
+                   xrRes->xrInstance, "xrGetOpenGLGraphicsRequirementsKHR",
+                   reinterpret_cast<PFN_xrVoidFunction *>(&pfnGetOpenGLGraphicsRequirementsKHR)),
+               "Failed to get xrGetOpenGLGraphicsRequirementsKHR");
+
+  XrGraphicsRequirementsOpenGLKHR graphicsRequirements{XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR};
+  OPENXR_CHECK(xrRes->xrInstance,
+               pfnGetOpenGLGraphicsRequirementsKHR(xrRes->xrInstance, xrRes->systemID,
+                                                   &graphicsRequirements),
+               "Failed to get OpenGL Graphics Requirements.");
+
+  GLint major = 0;
+  GLint minor = 0;
+  glGetIntegerv(GL_MAJOR_VERSION, &major);
+  glGetIntegerv(GL_MINOR_VERSION, &minor);
+
+  const XrVersion desiredApiVersion = XR_MAKE_VERSION(major, minor, 0);
+  // if (graphicsRequirements.minApiVersionSupported > desiredApiVersion) {
+  //   std::cerr << "Runtime does not support desired Graphics API and/or version" << std::endl;
+  //   std::cerr << "Runtime: " << graphicsRequirements.minApiVersionSupported << std::endl;
+  //   std::cerr << "Desired: " << desiredApiVersion << std::endl;
+  //   return;
+  // }
+}
+
+// An XrSession encapsulates the state of the application from the perspective of OpenXR. When
+// an XrSession is created, it starts in the XrSessionState XR_SESSION_STATE_IDLE. It is up to
+// the runtime to provide any updates to the XrSessionState and for the application to query
+// them and react to them.
 void CreateSession_system(Resources &res, entt::registry &world) {
   XrResource *xrRes = res.get<XrResource>();
   if (!xrRes) {
@@ -398,21 +489,17 @@ void CreateSession_system(Resources &res, entt::registry &world) {
   XrSessionCreateInfo sessionCI{XR_TYPE_SESSION_CREATE_INFO};
   // xrRes->graphicsAPI = std::make_unique<GraphicsAPI_OpenGL>(xrRes->xrInstance, xrRes->systemID);
   // GetGraphicsBinding
-  GraphicsAPI_Resource *graphicsAPIRes = res.get<GraphicsAPI_Resource>();
-  if (!graphicsAPIRes) {
-    graphicsAPIRes = &res.insert<GraphicsAPI_Resource>();
-    std::cout << "Created GraphicsAPI_Resource." << std::endl;
-  }
   auto *windowRes = res.get<WindowResource>();
   if (!windowRes) {
     std::cerr << "Failed to get WindowResource." << std::endl;
     return;
   }
-  graphicsAPIRes->graphicsBinding = {XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR};
-  graphicsAPIRes->graphicsBinding.hDC = GetDC(glfwGetWin32Window(windowRes->window));
-  graphicsAPIRes->graphicsBinding.hGLRC = wglGetCurrentContext();
 
-  sessionCI.next = &graphicsAPIRes->graphicsBinding;
+  xrRes->graphicsBinding = {XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR};
+  xrRes->graphicsBinding.hDC = GetDC(glfwGetWin32Window(windowRes->window));
+  xrRes->graphicsBinding.hGLRC = wglGetCurrentContext();
+
+  sessionCI.next = &xrRes->graphicsBinding;
   sessionCI.createFlags = 0;
   sessionCI.systemId = xrRes->systemID;
 
@@ -509,7 +596,7 @@ void PollEvents_system(Resources &res, entt::registry &world) {
         if (sessionStateChanged->state == XR_SESSION_STATE_READY) {
           // SessionState is ready. Begin the XrSession using the XrViewConfigurationType.
           XrSessionBeginInfo sessionBeginInfo{XR_TYPE_SESSION_BEGIN_INFO};
-          sessionBeginInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+          sessionBeginInfo.primaryViewConfigurationType = xrRes->viewConfiguration;
           OPENXR_CHECK(xrRes->xrInstance, xrBeginSession(xrRes->session, &sessionBeginInfo),
                        "Failed to begin Session.");
           xrRes->sessionRunning = true;
@@ -542,17 +629,350 @@ void PollEvents_system(Resources &res, entt::registry &world) {
   }
 }
 
+void GetViewConfigurationViews_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+
+  // Gets the View Configuration Types. The first call gets the count of the array that will be
+  // returned. The next call fills out the array.
+  uint32_t viewConfigurationCount = 0;
+  OPENXR_CHECK(xrRes->xrInstance,
+               xrEnumerateViewConfigurations(xrRes->xrInstance, xrRes->systemID, 0,
+                                             &viewConfigurationCount, nullptr),
+               "Failed to enumerate View Configurations.");
+  xrRes->viewConfigurations.resize(viewConfigurationCount);
+  OPENXR_CHECK(
+      xrRes->xrInstance,
+      xrEnumerateViewConfigurations(xrRes->xrInstance, xrRes->systemID, viewConfigurationCount,
+                                    &viewConfigurationCount, xrRes->viewConfigurations.data()),
+      "Failed to enumerate View Configurations.");
+
+  // Pick the first application supported View Configuration Type con supported by the hardware.
+  for (const XrViewConfigurationType &viewConfiguration : xrRes->applicationViewConfigurations) {
+    if (std::find(xrRes->viewConfigurations.begin(), xrRes->viewConfigurations.end(),
+                  viewConfiguration)
+        != xrRes->viewConfigurations.end()) {
+      xrRes->viewConfiguration = viewConfiguration;
+      break;
+    }
+  }
+  if (xrRes->viewConfiguration == XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM) {
+    std::cerr << "Failed to find a view configuration type. Defaulting to "
+                 "XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO."
+              << std::endl;
+    xrRes->viewConfiguration = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+  }
+
+  // Gets the View Configuration Views. The first call gets the count of the array that will be
+  // returned. The next call fills out the array.
+  uint32_t viewConfigurationViewCount = 0;
+  OPENXR_CHECK(xrRes->xrInstance,
+               xrEnumerateViewConfigurationViews(xrRes->xrInstance, xrRes->systemID,
+                                                 xrRes->viewConfiguration, 0,
+                                                 &viewConfigurationViewCount, nullptr),
+               "Failed to enumerate ViewConfiguration Views.");
+  xrRes->viewConfigurationViews.resize(viewConfigurationViewCount,
+                                       {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+  OPENXR_CHECK(
+      xrRes->xrInstance,
+      xrEnumerateViewConfigurationViews(
+          xrRes->xrInstance, xrRes->systemID, xrRes->viewConfiguration, viewConfigurationViewCount,
+          &viewConfigurationViewCount, xrRes->viewConfigurationViews.data()),
+      "Failed to enumerate ViewConfiguration Views.");
+}
+
+// TODO: move out
+// XR_DOCS_TAG_BEGIN_GraphicsAPI_OpenGL_AllocateSwapchainImageData
+enum class SwapchainType : uint8_t { COLOR, DEPTH };
+XrSwapchainImageBaseHeader *AllocateSwapchainImageData(Resources &res, XrSwapchain swapchain,
+                                                       SwapchainType type, uint32_t count) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return nullptr;
+  }
+  xrRes->swapchainImagesMap[swapchain].first = type;
+  xrRes->swapchainImagesMap[swapchain].second.resize(count, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR});
+  return reinterpret_cast<XrSwapchainImageBaseHeader *>(
+      xrRes->swapchainImagesMap[swapchain].second.data());
+};
+// XR_DOCS_TAG_END_GraphicsAPI_OpenGL_AllocateSwapchainImageData
+void *CreateImageView(const ImageViewCreateInfo &imageViewCI, XrResource *xrRes) {
+  GLuint framebuffer = 0;
+  glGenFramebuffers(1, &framebuffer);
+
+  GLenum attachment = imageViewCI.aspect == ImageViewCreateInfo::Aspect::COLOR_BIT
+                          ? GL_COLOR_ATTACHMENT0
+                          : GL_DEPTH_ATTACHMENT;
+
+  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+  if (imageViewCI.view == ImageViewCreateInfo::View::TYPE_2D_ARRAY) {
+    glFramebufferTextureMultiviewOVR(GL_DRAW_FRAMEBUFFER, attachment,
+                                     (GLuint)(uint64_t)imageViewCI.image, imageViewCI.baseMipLevel,
+                                     imageViewCI.baseArrayLayer, imageViewCI.layerCount);
+  } else if (imageViewCI.view == ImageViewCreateInfo::View::TYPE_2D) {
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, attachment, GL_TEXTURE_2D,
+                           (GLuint)(uint64_t)imageViewCI.image, imageViewCI.baseMipLevel);
+  } else {
+    DEBUG_BREAK;
+    std::cout << "ERROR: OPENGL: Unknown ImageView View type." << std::endl;
+  }
+
+  GLenum result = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
+  if (result != GL_FRAMEBUFFER_COMPLETE) {
+    DEBUG_BREAK;
+    std::cout << "ERROR: OPENGL: Framebuffer is not complete." << std::endl;
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  xrRes->imageViews[framebuffer] = imageViewCI;
+  return (void *)(uint64_t)framebuffer;
+}
+
+void DestroyImageView(void *imageView, XrResource *xrRes) {
+  GLuint framebuffer = (GLuint)(uint64_t)imageView;
+  xrRes->imageViews.erase(framebuffer);
+  glDeleteFramebuffers(1, &framebuffer);
+  imageView = nullptr;
+}
+
+void CreateSwapchains_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  // Get the supported swapchain formats as an array of int64_t and ordered by runtime preference.
+  uint32_t formatCount = 0;
+  OPENXR_CHECK(xrRes->xrInstance,
+               xrEnumerateSwapchainFormats(xrRes->session, 0, &formatCount, nullptr),
+               "Failed to enumerate Swapchain Formats");
+  std::vector<int64_t> formats(formatCount);
+  OPENXR_CHECK(
+      xrRes->xrInstance,
+      xrEnumerateSwapchainFormats(xrRes->session, formatCount, &formatCount, formats.data()),
+      "Failed to enumerate Swapchain Formats");
+  // if (m_graphicsAPI->SelectDepthSwapchainFormat(formats) == 0) {
+  //   std::cerr << "Failed to find depth format for Swapchain." << std::endl;
+  //   DEBUG_BREAK;
+  // }
+
+  // SelectDepthSwapchainFormat
+  const std::vector<int64_t> &supportSwapchainFormats{GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32,
+                                                      GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT16};
+
+  const std::vector<int64_t>::const_iterator &swapchainFormatIt
+      = std::find_first_of(formats.begin(), formats.end(), std::begin(supportSwapchainFormats),
+                           std::end(supportSwapchainFormats));
+  if (swapchainFormatIt == formats.end()) {
+    std::cerr << "ERROR: Unable to find supported Depth Swapchain Format" << std::endl;
+    DEBUG_BREAK;
+  }
+
+  // Resize the SwapchainInfo to match the number of view in the View Configuration.
+  xrRes->colorSwapchainInfos.resize(xrRes->viewConfigurationViews.size());
+  xrRes->depthSwapchainInfos.resize(xrRes->viewConfigurationViews.size());
+
+  for (size_t i = 0; i < xrRes->viewConfigurationViews.size(); i++) {
+    SwapchainInfo &colorSwapchainInfo = xrRes->colorSwapchainInfos[i];
+    SwapchainInfo &depthSwapchainInfo = xrRes->depthSwapchainInfos[i];
+
+    // Fill out an XrSwapchainCreateInfo structure and create an XrSwapchain.
+    // Color.
+    XrSwapchainCreateInfo swapchainCI{XR_TYPE_SWAPCHAIN_CREATE_INFO};
+    swapchainCI.createFlags = 0;
+    swapchainCI.usageFlags
+        = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+
+    const std::vector<int64_t> &supportedColorSwapchainFormats{
+        GL_RGB10_A2,
+        GL_RGBA16F,
+        // The two below should only be used as a fallback, as they are linear color formats without
+        // enough bits for color depth, thus leading to banding.
+        GL_RGBA8,
+        GL_RGBA8_SNORM,
+    };
+    const std::vector<int64_t>::const_iterator &swapchainFormatIt = std::find_first_of(
+        formats.begin(), formats.end(), std::begin(supportedColorSwapchainFormats),
+        std::end(supportedColorSwapchainFormats));
+    if (swapchainFormatIt == formats.end()) {
+      std::cerr << "ERROR: Unable to find supported Color Swapchain Format" << std::endl;
+      DEBUG_BREAK;
+    }
+    swapchainCI.format = *swapchainFormatIt;
+    swapchainCI.sampleCount
+        = xrRes->viewConfigurationViews[i]
+              .recommendedSwapchainSampleCount;  // Use the recommended values from the
+                                                 // XrViewConfigurationView.
+    swapchainCI.width = xrRes->viewConfigurationViews[i].recommendedImageRectWidth;
+    swapchainCI.height = xrRes->viewConfigurationViews[i].recommendedImageRectHeight;
+    swapchainCI.faceCount = 1;
+    swapchainCI.arraySize = 1;
+    swapchainCI.mipCount = 1;
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrCreateSwapchain(xrRes->session, &swapchainCI, &colorSwapchainInfo.swapchain),
+                 "Failed to create Color Swapchain");
+    colorSwapchainInfo.swapchainFormat
+        = swapchainCI.format;  // Save the swapchain format for later use.
+
+    // Depth.
+    swapchainCI.createFlags = 0;
+    swapchainCI.usageFlags
+        = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    const std::vector<int64_t> &supportedDepthSwapchainFormats{
+        GL_DEPTH_COMPONENT32F,
+        GL_DEPTH_COMPONENT32,
+        GL_DEPTH_COMPONENT24,
+        GL_DEPTH_COMPONENT16,
+    };
+    const std::vector<int64_t>::const_iterator &swapchainFormatIt = std::find_first_of(
+        formats.begin(), formats.end(), std::begin(supportedDepthSwapchainFormats),
+        std::end(supportedDepthSwapchainFormats));
+    if (swapchainFormatIt == formats.end()) {
+      std::cerr << "ERROR: Unable to find supported Depth Swapchain Format" << std::endl;
+      DEBUG_BREAK;
+    }
+    swapchainCI.format = *swapchainFormatIt;
+    swapchainCI.sampleCount
+        = xrRes->viewConfigurationViews[i]
+              .recommendedSwapchainSampleCount;  // Use the recommended values from the
+                                                 // XrViewConfigurationView.
+    swapchainCI.width = xrRes->viewConfigurationViews[i].recommendedImageRectWidth;
+    swapchainCI.height = xrRes->viewConfigurationViews[i].recommendedImageRectHeight;
+    swapchainCI.faceCount = 1;
+    swapchainCI.arraySize = 1;
+    swapchainCI.mipCount = 1;
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrCreateSwapchain(xrRes->session, &swapchainCI, &depthSwapchainInfo.swapchain),
+                 "Failed to create Depth Swapchain");
+    depthSwapchainInfo.swapchainFormat
+        = swapchainCI.format;  // Save the swapchain format for later use.
+
+    // Get the number of images in the color/depth swapchain and allocate Swapchain image data via
+    // GraphicsAPI to store the returned array.
+    uint32_t colorSwapchainImageCount = 0;
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrEnumerateSwapchainImages(colorSwapchainInfo.swapchain, 0,
+                                            &colorSwapchainImageCount, nullptr),
+                 "Failed to enumerate Color Swapchain Images.");
+    XrSwapchainImageBaseHeader *colorSwapchainImages = AllocateSwapchainImageData(
+        res, colorSwapchainInfo.swapchain, SwapchainType::COLOR, colorSwapchainImageCount);
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrEnumerateSwapchainImages(colorSwapchainInfo.swapchain, colorSwapchainImageCount,
+                                            &colorSwapchainImageCount, colorSwapchainImages),
+                 "Failed to enumerate Color Swapchain Images.");
+
+    uint32_t depthSwapchainImageCount = 0;
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrEnumerateSwapchainImages(depthSwapchainInfo.swapchain, 0,
+                                            &depthSwapchainImageCount, nullptr),
+                 "Failed to enumerate Depth Swapchain Images.");
+
+    XrSwapchainImageBaseHeader *depthSwapchainImages = AllocateSwapchainImageData(
+        res, depthSwapchainInfo.swapchain, SwapchainType::DEPTH, depthSwapchainImageCount);
+    OPENXR_CHECK(xrRes->xrInstance,
+                 xrEnumerateSwapchainImages(depthSwapchainInfo.swapchain, depthSwapchainImageCount,
+                                            &depthSwapchainImageCount, depthSwapchainImages),
+                 "Failed to enumerate Depth Swapchain Images.");
+
+    // Per image in the swapchains, fill out a GraphicsAPI::ImageViewCreateInfo structure and create
+    // a color/depth image view.
+    for (uint32_t j = 0; j < colorSwapchainImageCount; j++) {
+      ImageViewCreateInfo imageViewCI;
+      // m_graphicsAPI->GetSwapchainImageData
+      imageViewCI.image = (void *)(uint64_t)xrRes->swapchainImagesMap[colorSwapchainInfo.swapchain]
+                              .second[j]
+                              .image;
+      imageViewCI.type = ImageViewCreateInfo::Type::RTV;
+      imageViewCI.view = ImageViewCreateInfo::View::TYPE_2D;
+      imageViewCI.format = colorSwapchainInfo.swapchainFormat;
+      imageViewCI.aspect = ImageViewCreateInfo::Aspect::COLOR_BIT;
+      imageViewCI.baseMipLevel = 0;
+      imageViewCI.levelCount = 1;
+      imageViewCI.baseArrayLayer = 0;
+      imageViewCI.layerCount = 1;
+      // m_graphicsAPI->CreateImageView
+
+      colorSwapchainInfo.imageViews.push_back(CreateImageView(imageViewCI, xrRes));
+    }
+    for (uint32_t j = 0; j < depthSwapchainImageCount; j++) {
+      ImageViewCreateInfo imageViewCI;
+      // GetSwapchainImageData
+      imageViewCI.image = (void *)(uint64_t)xrRes->swapchainImagesMap[depthSwapchainInfo.swapchain]
+                              .second[j]
+                              .image;
+      imageViewCI.type = ImageViewCreateInfo::Type::DSV;
+      imageViewCI.view = ImageViewCreateInfo::View::TYPE_2D;
+      imageViewCI.format = depthSwapchainInfo.swapchainFormat;
+      imageViewCI.aspect = ImageViewCreateInfo::Aspect::DEPTH_BIT;
+      imageViewCI.baseMipLevel = 0;
+      imageViewCI.levelCount = 1;
+      imageViewCI.baseArrayLayer = 0;
+      imageViewCI.layerCount = 1;
+      depthSwapchainInfo.imageViews.push_back(CreateImageView(imageViewCI, xrRes));
+    }
+  }
+}
+
+void DestroySwapchains_system(Resources &res, entt::registry &world) {
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return;
+  }
+  // Per view in the view configuration:
+  for (size_t i = 0; i < xrRes->viewConfigurationViews.size(); i++) {
+    SwapchainInfo &colorSwapchainInfo = xrRes->colorSwapchainInfos[i];
+    SwapchainInfo &depthSwapchainInfo = xrRes->depthSwapchainInfos[i];
+
+    // Destroy the color and depth image views from GraphicsAPI.
+    for (void *&imageView : colorSwapchainInfo.imageViews) {
+      // m_graphicsAPI->DestroyImageView(imageView);
+      DestroyImageView(imageView, xrRes);
+    }
+    for (void *&imageView : depthSwapchainInfo.imageViews) {
+      // m_graphicsAPI->DestroyImageView(imageView);
+      DestroyImageView(imageView, xrRes);
+    }
+
+    // Free the Swapchain Image Data.
+    // m_graphicsAPI->FreeSwapchainImageData(colorSwapchainInfo.swapchain);
+    xrRes->swapchainImagesMap[colorSwapchainInfo.swapchain].second.clear();
+    xrRes->swapchainImagesMap.erase(colorSwapchainInfo.swapchain);
+    // m_graphicsAPI->FreeSwapchainImageData(depthSwapchainInfo.swapchain);
+    xrRes->swapchainImagesMap[depthSwapchainInfo.swapchain].second.clear();
+    xrRes->swapchainImagesMap.erase(depthSwapchainInfo.swapchain);
+
+    // Destroy the swapchains.
+    OPENXR_CHECK(xrRes->xrInstance, xrDestroySwapchain(colorSwapchainInfo.swapchain),
+                 "Failed to destroy Color Swapchain");
+    OPENXR_CHECK(xrRes->xrInstance, xrDestroySwapchain(depthSwapchainInfo.swapchain),
+                 "Failed to destroy Depth Swapchain");
+  }
+}
+
 int main() {
   auto &app = App::new_app().add_plugin<DefaultPlugin>().add_plugin<RenderPlugin>();
   app.add_system(ScheduleLabel::Startup, CreateInstance_system);
   app.add_system(ScheduleLabel::Startup, CreateDebugMessenger_system);
   app.add_system(ScheduleLabel::Startup, GetInstanceProperties_system);
   app.add_system(ScheduleLabel::Startup, GetSystemId_system);
+  app.add_system(ScheduleLabel::Startup, GetViewConfigurationViews_system);
+  app.add_system(ScheduleLabel::Startup, InitializeDevice_system);
   app.add_system(ScheduleLabel::Startup, CreateSession_system);
+  // app.add_system(ScheduleLabel::Startup, CreateSwapchains_system);
+
+  // app.add_system(ScheduleLabel::Update, PollEvents_system);
+
   app.add_system(ScheduleLabel::Shutdown, DestroyInstance_system);
   app.add_system(ScheduleLabel::Shutdown, DestroyDebugMessenger_system);
   app.add_system(ScheduleLabel::Shutdown, DestroySession_system);
-  app.add_system(ScheduleLabel::Update, PollEvents_system);
+  // app.add_system(ScheduleLabel::Shutdown, DestroySwapchains_system);
+
   app.run();
 
   return 0;
