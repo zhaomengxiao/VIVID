@@ -2,10 +2,13 @@
 
 #include <vivid/app/App.h>
 
+#include "ComponentRegistry.h"
+
 // System implementations for UI
 namespace {
 
   void ui_startup_system(Resources &res, entt::registry &world) {
+    VIVID::ComponentRegistry::RegisterAllComponents();
     // --- ImGui Setup ---
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

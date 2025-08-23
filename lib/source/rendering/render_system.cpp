@@ -12,7 +12,7 @@
 
 namespace VIVID {
   // helper functions
-  ShaderProgramSource RendererSystem::ParseShader(const std::string &filepath) {
+  ShaderProgramSource ParseShader(const std::string &filepath) {
     std::ifstream stream(filepath);
 
     // Check if file opened successfully
@@ -53,8 +53,7 @@ namespace VIVID {
     return {vertexSource, fragmentSource};
   }
 
-  unsigned int RendererSystem::CreateShader(const std::string &vertexShader,
-                                            const std::string &fragmentShader) {
+  unsigned int CreateShader(const std::string &vertexShader, const std::string &fragmentShader) {
     // Check if shader sources are empty
     if (vertexShader.empty() || fragmentShader.empty()) {
       std::cerr << "Error: Cannot create shader with empty source code." << std::endl;
@@ -98,7 +97,7 @@ namespace VIVID {
     return program;
   }
 
-  unsigned int RendererSystem::CompileShader(unsigned int type, const std::string &source) {
+  unsigned int CompileShader(unsigned int type, const std::string &source) {
     GLCall(unsigned int id = glCreateShader(type));
     const char *src = source.c_str();
     GLCall(glShaderSource(id, 1, &src, nullptr));
@@ -122,7 +121,7 @@ namespace VIVID {
     return id;
   }
 
-  int RendererSystem::GetUniformLocation(unsigned int program, const std::string &name) {
+  int GetUniformLocation(unsigned int program, const std::string &name) {
     // if (m_UniformLocationCache.find(name) != m_UniformLocationCache.end())
     //     return m_UniformLocationCache[name];
 
@@ -134,107 +133,38 @@ namespace VIVID {
     return location;
   }
 
-  void RendererSystem::SetUniform1i(unsigned int program, const std::string &name, int value) {
+  void SetUniform1i(unsigned int program, const std::string &name, int value) {
     GLCall(glUniform1i(GetUniformLocation(program, name), value));
   }
 
-  void RendererSystem::SetUniform1f(unsigned int program, const std::string &name, float value) {
+  void SetUniform1f(unsigned int program, const std::string &name, float value) {
     GLCall(glUniform1f(GetUniformLocation(program, name), value));
   }
 
-  void RendererSystem::SetUniform3f(unsigned int program, const std::string &name, float v0,
-                                    float v1, float v2) {
+  void SetUniform3f(unsigned int program, const std::string &name, float v0, float v1, float v2) {
     GLCall(glUniform3f(GetUniformLocation(program, name), v0, v1, v2));
   }
 
-  void RendererSystem::SetUniform4f(unsigned int program, const std::string &name, float v0,
-                                    float v1, float v2, float v3) {
+  void SetUniform4f(unsigned int program, const std::string &name, float v0, float v1, float v2,
+                    float v3) {
     GLCall(glUniform4f(GetUniformLocation(program, name), v0, v1, v2, v3));
   }
 
-  void RendererSystem::SetUniformMat4f(unsigned int program, const std::string &name,
-                                       const glm::mat4 &matrix) {
+  void SetUniformMat4f(unsigned int program, const std::string &name, const glm::mat4 &matrix) {
     GLCall(glUniformMatrix4fv(GetUniformLocation(program, name), 1, GL_FALSE, &matrix[0][0]));
   }
 
-  // --- Framebuffer Class Implementation ---
-  class VIVID::RendererSystem::Framebuffer {
-  public:
-    Framebuffer(uint32_t width, uint32_t height) : m_Width(width), m_Height(height) {
-      Invalidate();
-    }
+  // // --- RendererSystem Implementation ---
+  // std::unique_ptr<FrameBuffer> s_Framebuffer;
 
-    ~Framebuffer() {
-      GLCall(glDeleteFramebuffers(1, &m_RendererID));
-      GLCall(glDeleteTextures(1, &m_ColorAttachment));
-      GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
-    }
-
-    void Invalidate() {
-      if (m_RendererID) {
-        GLCall(glDeleteFramebuffers(1, &m_RendererID));
-        GLCall(glDeleteTextures(1, &m_ColorAttachment));
-        GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
-      }
-
-      GLCall(glGenFramebuffers(1, &m_RendererID));
-      GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
-
-      GLCall(glGenTextures(1, &m_ColorAttachment));
-      GLCall(glBindTexture(GL_TEXTURE_2D, m_ColorAttachment));
-      GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_Width, m_Height, 0, GL_RGBA,
-                          GL_UNSIGNED_BYTE, nullptr));
-      GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-      GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-      GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                                    m_ColorAttachment, 0));
-
-      GLCall(glGenRenderbuffers(1, &m_DepthAttachment));
-      GLCall(glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment));
-      GLCall(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Width, m_Height));
-      GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
-                                       m_DepthAttachment));
-
-      if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        std::cerr << "Framebuffer is not complete!" << std::endl;
-
-      GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-    }
-
-    void Bind() {
-      GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
-      GLCall(glViewport(0, 0, m_Width, m_Height));
-    }
-
-    void Unbind() { GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0)); }
-
-    void Resize(uint32_t width, uint32_t height) {
-      if (m_Width != width || m_Height != height) {
-        m_Width = width;
-        m_Height = height;
-        Invalidate();
-      }
-    }
-
-    uint32_t GetColorAttachmentRendererID() const { return m_ColorAttachment; }
-
-  private:
-    uint32_t m_RendererID = 0;
-    uint32_t m_ColorAttachment = 0, m_DepthAttachment = 0;
-    uint32_t m_Width, m_Height;
-  };
-
-  // --- RendererSystem Implementation ---
-  std::unique_ptr<VIVID::RendererSystem::Framebuffer> VIVID::RendererSystem::s_Framebuffer;
-
-  void VIVID::RendererSystem::Init() {
+  void Init_system(Resources &res, entt::registry &world) {
     // Default size, will be resized by viewport component.
-    s_Framebuffer = std::make_unique<Framebuffer>(1280, 720);
+    res.insert<FrameBuffer>(1280, 720);
   }
 
-  void VIVID::RendererSystem::Shutdown() { s_Framebuffer.reset(); }
+  void Shutdown_system(Resources &res, entt::registry &world) { res.remove<FrameBuffer>(); }
 
-  void RendererSystem::Sync(entt::registry &registry) {
+  void Sync_system(entt::registry &registry) {
     // We only want to process entities that have the CPU-side data (Mesh, Material)
     // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
     // Using entt::exclude prevents us from re-processing entities and leaking resources.
@@ -295,7 +225,7 @@ namespace VIVID {
     });
   }
 
-  void RendererSystem::Update(entt::registry &registry) {
+  void Update_system(Resources &res, entt::registry &registry) {
     entt::entity mainCameraEntity = entt::null;
     TransformComponent *mainCameraTransform = nullptr;
     CameraComponent *mainCameraComponent = nullptr;
@@ -313,14 +243,14 @@ namespace VIVID {
 
     // Resize framebuffer if viewport size changed
     if (viewportComponent->Width > 0 && viewportComponent->Height > 0) {
-      s_Framebuffer->Resize(static_cast<uint32_t>(viewportComponent->Width),
-                            static_cast<uint32_t>(viewportComponent->Height));
+      res.get<FrameBuffer>()->Resize(static_cast<uint32_t>(viewportComponent->Width),
+                                     static_cast<uint32_t>(viewportComponent->Height));
       mainCameraComponent->ProjectionMatrix = glm::perspective(
           glm::radians(45.0f), viewportComponent->Width / viewportComponent->Height, 0.1f, 100.0f);
     }
 
     // Bind framebuffer and render
-    s_Framebuffer->Bind();
+    res.get<FrameBuffer>()->Bind();
 
     GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.0f));
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
@@ -401,9 +331,67 @@ namespace VIVID {
       GLCall(glDrawElements(GL_TRIANGLES, gpuMesh.IndexCount, GL_UNSIGNED_INT, nullptr));
     });
 
-    s_Framebuffer->Unbind();
+    res.get<FrameBuffer>()->Unbind();
 
     // Update viewport component with the rendered texture
-    viewportComponent->TextureID = s_Framebuffer->GetColorAttachmentRendererID();
+    viewportComponent->TextureID = res.get<FrameBuffer>()->GetColorAttachmentRendererID();
   }
+
 }  // namespace VIVID
+
+VIVID::FrameBuffer::FrameBuffer(uint32_t width, uint32_t height)
+    : m_Width(width), m_Height(height) {
+  Invalidate();
+}
+
+VIVID::FrameBuffer::~FrameBuffer() {
+  GLCall(glDeleteFramebuffers(1, &m_RendererID));
+  GLCall(glDeleteTextures(1, &m_ColorAttachment));
+  GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
+}
+
+void VIVID::FrameBuffer::Invalidate() {
+  if (m_RendererID) {
+    GLCall(glDeleteFramebuffers(1, &m_RendererID));
+    GLCall(glDeleteTextures(1, &m_ColorAttachment));
+    GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
+  }
+
+  GLCall(glGenFramebuffers(1, &m_RendererID));
+  GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
+
+  GLCall(glGenTextures(1, &m_ColorAttachment));
+  GLCall(glBindTexture(GL_TEXTURE_2D, m_ColorAttachment));
+  GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_Width, m_Height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                      nullptr));
+  GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+  GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+  GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                m_ColorAttachment, 0));
+
+  GLCall(glGenRenderbuffers(1, &m_DepthAttachment));
+  GLCall(glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment));
+  GLCall(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Width, m_Height));
+  GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+                                   m_DepthAttachment));
+
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    std::cerr << "FrameBuffer is not complete!" << std::endl;
+
+  GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+}
+
+void VIVID::FrameBuffer::Bind() {
+  GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));
+  GLCall(glViewport(0, 0, m_Width, m_Height));
+}
+
+void VIVID::FrameBuffer::Unbind() { GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0)); }
+
+void VIVID::FrameBuffer::Resize(uint32_t width, uint32_t height) {
+  if (m_Width != width || m_Height != height) {
+    m_Width = width;
+    m_Height = height;
+    Invalidate();
+  }
+}
