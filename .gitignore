@@ -95,3 +95,4 @@ documentation/latex/
 *.prof
 *.trace
 optick/
+.claude/settings.local.json

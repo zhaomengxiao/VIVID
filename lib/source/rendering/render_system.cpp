@@ -225,6 +225,14 @@ namespace VIVID {
     });
   }
 
+  void ClearColor_system(Resources &res, entt::registry &registry) {
+    auto frameBuffer = res.get<FrameBuffer>();
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)(uint64_t)frameBuffer->m_Image);
+    GLCall(glClearColor(0.0f, 0.8f, 0.17f, 1.00f));
+    GLCall(glClear(GL_COLOR_BUFFER_BIT));
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+
   void Update_system(Resources &res, entt::registry &registry) {
     entt::entity mainCameraEntity = entt::null;
     TransformComponent *mainCameraTransform = nullptr;
@@ -351,11 +359,11 @@ VIVID::FrameBuffer::~FrameBuffer() {
 }
 
 void VIVID::FrameBuffer::Invalidate() {
-  if (m_RendererID) {
-    GLCall(glDeleteFramebuffers(1, &m_RendererID));
-    GLCall(glDeleteTextures(1, &m_ColorAttachment));
-    GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
-  }
+  // if (m_RendererID) {
+  //   GLCall(glDeleteFramebuffers(1, &m_RendererID));
+  //   GLCall(glDeleteTextures(1, &m_ColorAttachment));
+  //   GLCall(glDeleteRenderbuffers(1, &m_DepthAttachment));
+  // }
 
   GLCall(glGenFramebuffers(1, &m_RendererID));
   GLCall(glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID));

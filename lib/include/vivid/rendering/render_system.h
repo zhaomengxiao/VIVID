@@ -11,7 +11,7 @@ namespace VIVID {
     std::string VertexSource;
     std::string FragmentSource;
   };
-  class FrameBuffer {
+  struct FrameBuffer {
   public:
     FrameBuffer(uint32_t width, uint32_t height);
 
@@ -27,14 +27,15 @@ namespace VIVID {
 
     uint32_t GetColorAttachmentRendererID() const { return m_ColorAttachment; }
 
-  private:
     uint32_t m_RendererID = 0;
     uint32_t m_ColorAttachment = 0, m_DepthAttachment = 0;
     uint32_t m_Width, m_Height;
+    void *m_Image = nullptr;
   };
 
   // 主更新函数，每帧调用
   void Sync_system(entt::registry &world);
+  void ClearColor_system(Resources &res, entt::registry &world);
   void Update_system(Resources &res, entt::registry &world);
 
   void Init_system(Resources &res, entt::registry &world);

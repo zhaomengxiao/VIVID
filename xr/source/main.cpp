@@ -42,6 +42,8 @@
 #  include <GLFW/glfw3native.h>  // for glfwGetWin32Window()
 #endif
 
+#include "vivid/rendering/render_system.h"
+
 // #define XR_USE_GRAPHICS_API_OPENGL
 // #define XR_USE_PLATFORM_WIN32
 
@@ -223,6 +225,13 @@ struct SwapchainInfo {
 };
 
 enum class SwapchainType : uint8_t { COLOR, DEPTH };
+
+struct RenderLayerInfo {
+  XrTime predictedDisplayTime;
+  std::vector<XrCompositionLayerBaseHeader *> layers;
+  XrCompositionLayerProjection layerProjection = {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+  std::vector<XrCompositionLayerProjectionView> layerProjectionViews;
+};
 struct XrResource {
   XrInstance xrInstance = {};
   std::vector<const char *> activeAPILayers = {};
@@ -273,6 +282,9 @@ struct XrResource {
   GLuint setFramebuffer = 0;
   GLuint vertexArray = 0;
   GLuint setIndexBuffer = 0;
+
+  // RenderFrame
+  RenderLayerInfo renderLayerInfo = {};
 };
 
 // XR system
@@ -967,12 +979,7 @@ void DestroySwapchains_system(Resources &res, entt::registry &world) {
 }
 
 // Building Render Loop
-struct RenderLayerInfo {
-  XrTime predictedDisplayTime;
-  std::vector<XrCompositionLayerBaseHeader *> layers;
-  XrCompositionLayerProjection layerProjection = {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
-  std::vector<XrCompositionLayerProjectionView> layerProjectionViews;
-};
+
 void GetEnvironmentBlendModes_system(Resources &res, entt::registry &world) {
   // Retrieves the available blend modes. The first call gets the count of the array that will be
   // returned. The next call fills out the array.
@@ -1037,7 +1044,16 @@ void DestroyReferenceSpace_system(Resources &res, entt::registry &world) {
   OPENXR_CHECK(xrRes->xrInstance, xrDestroySpace(xrRes->localSpace), "Failed to destroy Space.");
 }
 
-bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
+bool RenderLayer(Resources &res, entt::registry &world) {
+  // XrResource *xrRes, RenderLayerInfo &renderLayerInfo
+  XrResource *xrRes = res.get<XrResource>();
+  if (!xrRes) {
+    std::cerr << "Failed to get XrResource." << std::endl;
+    return false;
+  }
+
+  // RenderLayerInfo renderlarInfo;
+  // xrRes->renderLayerInfo.predictedDisplayTime = 0;
   // Locate the views from the view configuration within the (reference) space at the display time.
   std::vector<XrView> views(xrRes->viewConfigurationViews.size(), {XR_TYPE_VIEW});
 
@@ -1045,7 +1061,7 @@ bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
                                               // and/or orientation is valid and/or tracked.
   XrViewLocateInfo viewLocateInfo{XR_TYPE_VIEW_LOCATE_INFO};
   viewLocateInfo.viewConfigurationType = xrRes->viewConfiguration;
-  viewLocateInfo.displayTime = renderLayerInfo.predictedDisplayTime;
+  viewLocateInfo.displayTime = xrRes->renderLayerInfo.predictedDisplayTime;
   viewLocateInfo.space = xrRes->localSpace;
   uint32_t viewCount = 0;
   XrResult result = xrLocateViews(xrRes->session, &viewLocateInfo, &viewState,
@@ -1057,8 +1073,8 @@ bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
 
   // Resize the layer projection views to match the view count. The layer projection views are used
   // in the layer projection.
-  renderLayerInfo.layerProjectionViews.resize(viewCount,
-                                              {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
+  xrRes->renderLayerInfo.layerProjectionViews.resize(viewCount,
+                                                     {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW});
 
   // Per view in the view configuration:
   for (uint32_t i = 0; i < viewCount; i++) {
@@ -1097,50 +1113,60 @@ bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
 
     // Fill out the XrCompositionLayerProjectionView structure specifying the pose and fov from the
     // view. This also associates the swapchain image with this layer projection view.
-    renderLayerInfo.layerProjectionViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
-    renderLayerInfo.layerProjectionViews[i].pose = views[i].pose;
-    renderLayerInfo.layerProjectionViews[i].fov = views[i].fov;
-    renderLayerInfo.layerProjectionViews[i].subImage.swapchain = colorSwapchainInfo.swapchain;
-    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.x = 0;
-    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.y = 0;
-    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.width
+    xrRes->renderLayerInfo.layerProjectionViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
+    xrRes->renderLayerInfo.layerProjectionViews[i].pose = views[i].pose;
+    xrRes->renderLayerInfo.layerProjectionViews[i].fov = views[i].fov;
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.swapchain
+        = colorSwapchainInfo.swapchain;
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.x = 0;
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.imageRect.offset.y = 0;
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.width
         = static_cast<int32_t>(width);
-    renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.height
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.imageRect.extent.height
         = static_cast<int32_t>(height);
-    renderLayerInfo.layerProjectionViews[i].subImage.imageArrayIndex
+    xrRes->renderLayerInfo.layerProjectionViews[i].subImage.imageArrayIndex
         = 0;  // Useful for multiview rendering.
 
     // Rendering code to clear the color and depth image views.
     // m_graphicsAPI->BeginRendering();
-    auto BeginRendering = [](XrResource *xrRes) {
-      glGenVertexArrays(1, &xrRes->vertexArray);
-      glBindVertexArray(xrRes->vertexArray);
+    // auto BeginRendering = [](XrResource *xrRes) {
+    //   glGenVertexArrays(1, &xrRes->vertexArray);
+    //   glBindVertexArray(xrRes->vertexArray);
 
-      glGenFramebuffers(1, &xrRes->setFramebuffer);
-      glBindFramebuffer(GL_FRAMEBUFFER, xrRes->setFramebuffer);
-    };
-    BeginRendering(xrRes);
+    // glGenFramebuffers(1, &xrRes->setFramebuffer);
+    // glBindFramebuffer(GL_FRAMEBUFFER, xrRes->setFramebuffer);
+    // };
+    // BeginRendering(xrRes);
 
+    auto frameBuffer = res.get<VIVID::FrameBuffer>();
+    frameBuffer->m_Image = colorSwapchainInfo.imageViews[colorImageIndex];
+    frameBuffer->m_Width = width;
+    frameBuffer->m_Height = height;
+    // frameBuffer->Invalidate();
+
+    VIVID::ClearColor_system(res, world);
     auto ClearColor = [](XrResource *xrRes, void *imageView, float r, float g, float b, float a) {
       glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)(uint64_t)imageView);
       glClearColor(r, g, b, a);
       glClear(GL_COLOR_BUFFER_BIT);
       glBindFramebuffer(GL_FRAMEBUFFER, 0);
     };
-    if (xrRes->environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_OPAQUE) {
-      // VR mode use a background color.
-      // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.17f, 0.17f,
-      // 0.17f,
-      //                           1.00f);
+    // if (xrRes->environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_OPAQUE) {
+    //   // VR mode use a background color.
+    //   // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.17f, 0.17f,
+    //   // 0.17f,
+    //   //                           1.00f);
 
-      ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.0f, 0.8f, 0.17f, 1.00f);
-    } else {
-      // In AR mode make the background color black.
-      // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f,
-      // 0.00f,
-      //                           1.00f);
-      ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f, 0.00f, 1.00f);
-    }
+    //   ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.0f, 0.8f,
+    //   0.17f, 1.00f);
+    // } else {
+    //   // In AR mode make the background color black.
+    //   // m_graphicsAPI->ClearColor(colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f,
+    //   // 0.00f,
+    //   //                           1.00f);
+    //   ClearColor(xrRes, colorSwapchainInfo.imageViews[colorImageIndex], 0.00f, 0.00f,
+    //   0.00f, 1.00f);
+    // }
     // m_graphicsAPI->ClearDepth(depthSwapchainInfo.imageViews[depthImageIndex], 1.0f);
     auto ClearDepth = [](XrResource *xrRes, void *imageView, float d) {
       glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)(uint64_t)imageView);
@@ -1150,16 +1176,16 @@ bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
     };
     ClearDepth(xrRes, depthSwapchainInfo.imageViews[depthImageIndex], 1.0f);
     // m_graphicsAPI->EndRendering();
-    auto EndRendering = [](XrResource *xrRes) {
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
-      glDeleteFramebuffers(1, &xrRes->setFramebuffer);
-      xrRes->setFramebuffer = 0;
+    // auto EndRendering = [](XrResource *xrRes) {
+    //   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //   glDeleteFramebuffers(1, &xrRes->setFramebuffer);
+    //   xrRes->setFramebuffer = 0;
 
-      glBindVertexArray(0);
-      glDeleteVertexArrays(1, &xrRes->vertexArray);
-      xrRes->vertexArray = 0;
-    };
-    EndRendering(xrRes);
+    //   glBindVertexArray(0);
+    //   glDeleteVertexArrays(1, &xrRes->vertexArray);
+    //   xrRes->vertexArray = 0;
+    // };
+    // EndRendering(xrRes);
 
     // Give the swapchain image back to OpenXR, allowing the compositor to use the image.
     XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
@@ -1172,13 +1198,13 @@ bool RenderLayer(XrResource *xrRes, RenderLayerInfo &renderLayerInfo) {
   }
 
   // Fill out the XrCompositionLayerProjection structure for usage with xrEndFrame().
-  renderLayerInfo.layerProjection.layerFlags
+  xrRes->renderLayerInfo.layerProjection.layerFlags
       = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT
         | XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT;
-  renderLayerInfo.layerProjection.space = xrRes->localSpace;
-  renderLayerInfo.layerProjection.viewCount
-      = static_cast<uint32_t>(renderLayerInfo.layerProjectionViews.size());
-  renderLayerInfo.layerProjection.views = renderLayerInfo.layerProjectionViews.data();
+  xrRes->renderLayerInfo.layerProjection.space = xrRes->localSpace;
+  xrRes->renderLayerInfo.layerProjection.viewCount
+      = static_cast<uint32_t>(xrRes->renderLayerInfo.layerProjectionViews.size());
+  xrRes->renderLayerInfo.layerProjection.views = xrRes->renderLayerInfo.layerProjectionViews.data();
 
   return true;
 }
@@ -1210,8 +1236,9 @@ void RenderFrame_system(Resources &res, entt::registry &world) {
 
   // Variables for rendering and layer composition.
   bool rendered = false;
-  RenderLayerInfo renderLayerInfo;
-  renderLayerInfo.predictedDisplayTime = frameState.predictedDisplayTime;
+
+  // RenderLayerInfo renderLayerInfo;
+  xrRes->renderLayerInfo.predictedDisplayTime = frameState.predictedDisplayTime;
 
   // Check that the session is active and that we should render.
   bool sessionActive = (xrRes->sessionState == XR_SESSION_STATE_SYNCHRONIZED
@@ -1220,10 +1247,12 @@ void RenderFrame_system(Resources &res, entt::registry &world) {
   if (sessionActive && frameState.shouldRender) {
     // Render the stereo image and associate one of swapchain images with the
     // XrCompositionLayerProjection structure.
-    rendered = RenderLayer(xrRes, renderLayerInfo);
+    // rendered = RenderLayer(xrRes, renderLayerInfo);
+    rendered = RenderLayer(res, world);
+    xrRes->renderLayerInfo.layers.clear();
     if (rendered) {
-      renderLayerInfo.layers.push_back(
-          reinterpret_cast<XrCompositionLayerBaseHeader *>(&renderLayerInfo.layerProjection));
+      xrRes->renderLayerInfo.layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader *>(
+          &xrRes->renderLayerInfo.layerProjection));
     }
   }
 
@@ -1232,8 +1261,8 @@ void RenderFrame_system(Resources &res, entt::registry &world) {
   XrFrameEndInfo frameEndInfo{XR_TYPE_FRAME_END_INFO};
   frameEndInfo.displayTime = frameState.predictedDisplayTime;
   frameEndInfo.environmentBlendMode = xrRes->environmentBlendMode;
-  frameEndInfo.layerCount = static_cast<uint32_t>(renderLayerInfo.layers.size());
-  frameEndInfo.layers = renderLayerInfo.layers.data();
+  frameEndInfo.layerCount = static_cast<uint32_t>(xrRes->renderLayerInfo.layers.size());
+  frameEndInfo.layers = xrRes->renderLayerInfo.layers.data();
   OPENXR_CHECK(xrRes->xrInstance, xrEndFrame(xrRes->session, &frameEndInfo),
                "Failed to end the XR Frame.");
 }
@@ -1253,6 +1282,7 @@ int main() {
   app.add_system(ScheduleLabel::Startup, CreateSession_system);
   app.add_system(ScheduleLabel::Startup, CreateReferenceSpace_system);
   app.add_system(ScheduleLabel::Startup, CreateSwapchains_system);
+  app.add_system(ScheduleLabel::Startup, VIVID::Init_system);
 
   app.add_system(ScheduleLabel::Update, PollEvents_system);
   app.add_system(ScheduleLabel::Update, RenderFrame_system);
