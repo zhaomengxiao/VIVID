@@ -139,6 +139,7 @@ endif()
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 
 
 # PhysX and Optick (pre-compiled binaries)
@@ -220,11 +221,11 @@ target_link_libraries(${PROJECT_NAME}
     EnTT::EnTT
     GLEW::glew
     glfw
-
+    
     OpenGL::GL
   PRIVATE
     # Existing libraries
-    
+    SDL3::SDL3
     # raylib # Temporarily commented out, conflicts with glfw
     ${PHYSX_LIBS}
     # OptickCore

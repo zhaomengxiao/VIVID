@@ -18,6 +18,7 @@ private:
   Schedule schedule_;
   std::vector<std::unique_ptr<Plugin>> plugins_;
   bool running_ = true;
+  bool initialized_ = false;
 
 public:
   App() = default;
@@ -98,12 +99,13 @@ public:
   // 退出应用
   void exit() { running_ = false; }
 
-  // 运行应用
+  // 传统运行模式（保持向后兼容）
   void run() {
     std::cout << "Starting application..." << std::endl;
 
     // 运行启动系统
     schedule_.run_schedule(ScheduleLabel::Startup, resources_, world_);
+    initialized_ = true;
 
     // 主循环
     while (running_) {
@@ -120,4 +122,56 @@ public:
 
     std::cout << "Application finished." << std::endl;
   }
+
+  // SDL3 Callback 模式支持
+
+  // 初始化应用（对应 SDL_AppInit）
+  bool initialize(int argc, char **argv) {
+    if (initialized_) return true;
+
+    std::cout << "Initializing SDL3 application..." << std::endl;
+
+    // 运行启动系统
+    schedule_.run_schedule(ScheduleLabel::Startup, resources_, world_);
+    initialized_ = true;
+
+    return true;
+  }
+
+  // 单次迭代（对应 SDL_AppIterate）
+  bool iterate() {
+    if (!initialized_ || !running_) return false;
+
+    // 运行一帧的系统调度
+    schedule_.run_schedule(ScheduleLabel::PreUpdate, resources_, world_);
+    schedule_.run_schedule(ScheduleLabel::Update, resources_, world_);
+    schedule_.run_schedule(ScheduleLabel::PostUpdate, resources_, world_);
+    schedule_.run_schedule(ScheduleLabel::Render, resources_, world_);
+    schedule_.run_schedule(ScheduleLabel::Cleanup, resources_, world_);
+
+    return running_;
+  }
+
+  // 处理事件（对应 SDL_AppEvent）
+  bool handle_event(void *event_ptr) {
+    // 这里可以添加事件处理逻辑
+    // 具体的事件处理可以通过系统或插件来实现
+    return running_;
+  }
+
+  // 关闭应用（对应 SDL_AppQuit）
+  void shutdown() {
+    if (!initialized_) return;
+
+    std::cout << "SDL3 application shutting down..." << std::endl;
+    schedule_.run_schedule(ScheduleLabel::Shutdown, resources_, world_);
+
+    std::cout << "SDL3 application finished." << std::endl;
+  }
+
+  // 检查应用是否正在运行
+  bool is_running() const { return running_; }
+
+  // 检查应用是否已初始化
+  bool is_initialized() const { return initialized_; }
 };
