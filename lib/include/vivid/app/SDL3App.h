@@ -3,12 +3,9 @@
 // SDL3 应用集成头文件
 //
 // 使用方法：
-// 1. 在主源文件中首先定义 SDL3 回调入口：
-//    #define SDL_MAIN_USE_CALLBACKS
-//    #include <SDL3/SDL_main.h>
-// 2. 然后包含此头文件：
+// 1. 包含此头文件：
 //    #include "vivid/app/SDL3App.h"
-// 3. 使用 VIVID_SDL3_MAIN 宏创建应用
+// 2. 使用 VIVID_SDL3_MAIN 宏创建应用（无需其他设置）
 
 #include <SDL3/SDL.h>
 
@@ -105,14 +102,18 @@ SDL3AppBuilder create_sdl3_app();
       std::cerr << "Failed to create SDL3 app: " << e.what() << std::endl; \
       throw;                                                               \
     }                                                                      \
+  }                                                                        \
+  extern "C" {                                                             \
+  SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv);       \
+  SDL_AppResult SDL_AppIterate(void* appstate);                            \
+  SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event);            \
+  void SDL_AppQuit(void* appstate, SDL_AppResult result);                  \
   }
 
 // 注意：SDL3应用通过回调系统自动运行
 // 用户只需要使用 VIVID_SDL3_MAIN 宏即可
 //
 // 完整示例：
-//   #define SDL_MAIN_USE_CALLBACKS
-//   #include <SDL3/SDL_main.h>
 //   #include "vivid/app/SDL3App.h"
 //
 //   VIVID_SDL3_MAIN(

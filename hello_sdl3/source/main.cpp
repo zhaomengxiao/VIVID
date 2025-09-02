@@ -3,10 +3,6 @@
 
 #include <utility>
 
-// SDL3 主入口定义（必须在SDL3App.h之前）
-#define SDL_MAIN_USE_CALLBACKS
-#include <SDL3/SDL_main.h>
-
 #include "vivid/app/SDL3App.h"
 #include "vivid/plugins/DefaultPlugin.h"
 
