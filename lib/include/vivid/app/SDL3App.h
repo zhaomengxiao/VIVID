@@ -9,12 +9,24 @@
 
 #include <SDL3/SDL.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
 #include "App.h"
+#include "vivid/log/log.h"
 
+// 为了向后兼容，创建别名
+using SDL3LogLevel = VividLogLevel;
+using SDL3LogCategory = VividLogCategory;
+using SDL3LogConfig = VividLogConfig;
+using SDL3Logger = VividLogger;
+using SDL3ErrorHandler = VividErrorHandler;
+using SDL3AssertConfig = VividAssertConfig;
+using SDL3AssertManager = VividAssertManager;
+
+// =============================================================================
 // SDL3 元数据属性枚举
 // 对应SDL3官方支持的所有元数据属性
 enum class SDL3MetadataProperty {
@@ -123,6 +135,8 @@ struct SDL3AppMetadata {
 struct SDL3AppState {
   std::unique_ptr<App> app;
   SDL3AppMetadata metadata;
+  SDL3LogConfig log_config;
+  SDL3AssertConfig assert_config;
   bool initialized = false;
 
   SDL3AppState() = default;
@@ -143,6 +157,8 @@ class SDL3AppBuilder {
 private:
   std::unique_ptr<App> app_;
   SDL3AppMetadata metadata_;
+  SDL3LogConfig log_config_;
+  SDL3AssertConfig assert_config_;
 
 public:
   SDL3AppBuilder() : app_(std::make_unique<App>()) {}
@@ -224,9 +240,81 @@ public:
     return *this;
   }
 
+  // =============================================================================
+  // SDL3 日志和错误处理配置方法
+  // =============================================================================
+
+  // 设置日志配置
+  SDL3AppBuilder& set_log_config(const SDL3LogConfig& config) {
+    log_config_ = config;
+    return *this;
+  }
+
+  // 设置默认日志级别
+  SDL3AppBuilder& set_default_log_level(SDL3LogLevel level) {
+    log_config_.default_level = level;
+    return *this;
+  }
+
+  // 设置特定分类的日志级别
+  SDL3AppBuilder& set_log_level(SDL3LogCategory category, SDL3LogLevel level) {
+    log_config_.set_category_level(category, level);
+    return *this;
+  }
+
+  // 启用/禁用日志前缀
+  SDL3AppBuilder& enable_log_prefix(bool enable = true) {
+    log_config_.enable_prefix = enable;
+    return *this;
+  }
+
+  // 设置自定义日志输出函数
+  SDL3AppBuilder& set_custom_log_output(
+      std::function<void(SDL3LogCategory, SDL3LogLevel, const char*)> output) {
+    log_config_.custom_output = std::move(output);
+    return *this;
+  }
+
+  // 设置断言配置
+  SDL3AppBuilder& set_assert_config(const SDL3AssertConfig& config) {
+    assert_config_ = config;
+    return *this;
+  }
+
+  // 启用/禁用断言时日志记录
+  SDL3AppBuilder& enable_assert_logging(bool enable = true) {
+    assert_config_.log_on_assert = enable;
+    return *this;
+  }
+
+  // 设置断言日志级别
+  SDL3AppBuilder& set_assert_log_level(SDL3LogLevel level) {
+    assert_config_.assert_log_level = level;
+    return *this;
+  }
+
+  // 设置自定义断言处理函数
+  SDL3AppBuilder& set_custom_assert_handler(SDL3AssertConfig::AssertHandler handler) {
+    assert_config_.custom_handler = std::move(handler);
+    return *this;
+  }
+
   // 注意：SDL3应用通过回调系统自动运行，不需要显式的run方法
 
-  // 获取内部App实例和元数据（用于SDL3回调）
+  // 获取内部App实例、元数据和配置（用于SDL3回调）
+  struct SDL3AppBundle {
+    std::unique_ptr<App> app;
+    SDL3AppMetadata metadata;
+    SDL3LogConfig log_config;
+    SDL3AssertConfig assert_config;
+  };
+
+  SDL3AppBundle release_app_bundle() {
+    return SDL3AppBundle{std::move(app_), std::move(metadata_), std::move(log_config_),
+                         std::move(assert_config_)};
+  }
+
+  // 保持向后兼容性
   std::pair<std::unique_ptr<App>, SDL3AppMetadata> release_app_with_metadata() {
     return std::make_pair(std::move(app_), std::move(metadata_));
   }

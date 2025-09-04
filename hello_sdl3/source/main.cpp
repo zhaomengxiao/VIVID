@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "vivid/app/SDL3App.h"
+#include "vivid/log/log.h"
 #include "vivid/plugins/DefaultPlugin.h"
 
 struct MyResource {
@@ -13,7 +14,7 @@ struct MyResource {
 
 // Simple startup system
 void hello_startup_system(Resources&, entt::registry& world) {
-  std::cout << "Hello from SDL3 startup system!" << std::endl;
+  VividLogger::app_info("Hello from SDL3 startup system!");
 
   // Create a simple entity
   auto entity = world.create();
@@ -26,14 +27,14 @@ void hello_update_system(Resources& res, entt::registry& world) {
   frame_count++;
 
   if (frame_count % 60 == 0) {  // Print every 60 frames
-    std::cout << "SDL3 app running... Frame: " << frame_count << std::endl;
-    std::cout << "MyResource value: " << res.get<MyResource>()->value << std::endl;
+    VividLogger::app_info("SDL3 app running... Frame: %d", frame_count);
+    VividLogger::app_debug("MyResource value: %d", res.get<MyResource>()->value);
   }
 
   // Exit after 300 frames (about 5 seconds at 60 FPS)
   // if (frame_count > 300) {
   //   // Access the app instance to exit (this would need to be implemented)
-  //   std::cout << "Exiting SDL3 application..." << std::endl;
+  //   VividLogger::app_info("Exiting SDL3 application...");
   // }
 }
 
@@ -57,6 +58,9 @@ SDL3AppBuilder create_app_instance() {
           .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
           // 自定义属性
           .set_custom_metadata("custom_property", "custom_value")
+          // 配置日志系统 - 设置为Debug级别以显示详细日志
+          .set_default_log_level(VividLogLevel::Debug)
+          .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
           // 应用配置
           .insert_resource<MyResource>(100)
           .add_plugin<DefaultPlugin>()
@@ -77,6 +81,8 @@ SDL3AppBuilder create_app_instance() {
 // Method 4: Using VIVID_SDL3_MAIN macro with simplified metadata API (游戏示例)
 // VIVID_SDL3_MAIN(.set_app_info("My Awesome Game", "2.0.0", "com.mygame.app")
 //                     .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Game)
+//                     .set_default_log_level(VividLogLevel::Info)
+//                     .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
 //                     .insert_resource<MyResource>(100)
 //                     .add_plugin<DefaultPlugin>()
 //                     .add_startup_system(hello_startup_system)
@@ -91,6 +97,10 @@ SDL3AppBuilder create_app_instance() {
 //   builder.set_metadata(SDL3MetadataProperty::Creator, "My Company");
 //   builder.set_metadata(SDL3MetadataProperty::Type, "application");
 //   builder.set_custom_metadata("build_config", "debug");
+//
+//   // Configure logging
+//   builder.set_default_log_level(VividLogLevel::Info);
+//   builder.set_log_level(VividLogCategory::Application, VividLogLevel::Debug);
 //
 //   // Configure app
 //   builder.add_plugin<DefaultPlugin>();

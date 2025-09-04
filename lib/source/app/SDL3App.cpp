@@ -13,30 +13,57 @@ extern SDL3AppBuilder create_app_instance();
 extern "C" {
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
-  std::cout << "SDL_AppInit called with " << argc << " arguments" << std::endl;
-
   // 创建应用状态
   auto* state = new SDL3AppState();
 
-  // 使用宏定义的函数创建应用
-  auto builder = create_app_instance();
-  auto [app, metadata] = builder.release_app_with_metadata();
-  state->app = std::move(app);
-  state->metadata = std::move(metadata);
+  try {
+    // 使用宏定义的函数创建应用
+    auto builder = create_app_instance();
+    auto bundle = builder.release_app_bundle();
+    state->app = std::move(bundle.app);
+    state->metadata = std::move(bundle.metadata);
+    state->log_config = std::move(bundle.log_config);
+    state->assert_config = std::move(bundle.assert_config);
 
-  // 应用SDL3元数据
-  apply_sdl3_metadata(state->metadata);
+    // 初始化日志系统
+    VividLogger::initialize(state->log_config);
+    VividLogger::app_info("SDL_AppInit called with %d arguments", argc);
 
-  SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO);
+    // 初始化断言系统
+    VividAssertManager::initialize(state->assert_config);
 
-  // 初始化应用
-  if (state->app && state->app->initialize(argc, argv)) {
-    state->initialized = true;
-    *appstate = state;
-    std::cout << "SDL3 application initialized successfully" << std::endl;
-    return SDL_APP_CONTINUE;
-  } else {
-    std::cerr << "Failed to initialize SDL3 application" << std::endl;
+    // 清除任何之前的错误
+    VividErrorHandler::clear_error();
+
+    // 应用SDL3元数据
+    apply_sdl3_metadata(state->metadata);
+
+    // 初始化SDL子系统
+    if (!VividErrorHandler::check_sdl_result(SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO),
+                                             "SDL_Init")) {
+      VividLogger::app_error("Failed to initialize SDL");
+      delete state;
+      return SDL_APP_FAILURE;
+    }
+
+    // 初始化应用
+    VIVID_ASSERT(state->app != nullptr);
+    if (state->app && state->app->initialize(argc, argv)) {
+      state->initialized = true;
+      *appstate = state;
+      VividLogger::app_info("SDL3 application initialized successfully");
+      return SDL_APP_CONTINUE;
+    } else {
+      VividLogger::app_error("Failed to initialize SDL3 application");
+      delete state;
+      return SDL_APP_FAILURE;
+    }
+  } catch (const std::exception& e) {
+    VividLogger::app_critical("Exception during SDL_AppInit: %s", e.what());
+    delete state;
+    return SDL_APP_FAILURE;
+  } catch (...) {
+    VividLogger::app_critical("Unknown exception during SDL_AppInit");
     delete state;
     return SDL_APP_FAILURE;
   }
@@ -45,38 +72,73 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 SDL_AppResult SDL_AppIterate(void* appstate) {
   auto* state = static_cast<SDL3AppState*>(appstate);
 
-  if (!state || !state->app || !state->initialized) {
+  // 验证应用状态
+  if (!VividErrorHandler::check_condition(state != nullptr,
+                                          "Invalid application state: null pointer")) {
     return SDL_APP_FAILURE;
   }
 
-  // 执行一帧迭代
-  if (state->app->iterate()) {
-    return SDL_APP_CONTINUE;
-  } else {
-    // 应用请求退出
-    return SDL_APP_SUCCESS;
+  if (!VividErrorHandler::check_condition(state->is_valid(),
+                                          "Invalid application state: not properly initialized")) {
+    return SDL_APP_FAILURE;
+  }
+
+  try {
+    // 执行一帧迭代
+    if (state->app->iterate()) {
+      return SDL_APP_CONTINUE;
+    } else {
+      // 应用请求退出
+      VividLogger::app_info("Application requested exit");
+      return SDL_APP_SUCCESS;
+    }
+  } catch (const std::exception& e) {
+    VividLogger::app_error("Exception during SDL_AppIterate: %s", e.what());
+    return SDL_APP_FAILURE;
+  } catch (...) {
+    VividLogger::app_error("Unknown exception during SDL_AppIterate");
+    return SDL_APP_FAILURE;
   }
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
   auto* state = static_cast<SDL3AppState*>(appstate);
 
-  if (!state || !state->app || !state->initialized) {
+  // 验证应用状态和事件指针
+  if (!VividErrorHandler::check_condition(state != nullptr,
+                                          "Invalid application state: null pointer")) {
     return SDL_APP_FAILURE;
   }
 
-  // 处理特殊事件
-  if (event->type == SDL_EVENT_QUIT) {
-    std::cout << "Received SDL_EVENT_QUIT" << std::endl;
-    state->app->exit();
-    return SDL_APP_SUCCESS;
+  if (!VividErrorHandler::check_condition(event != nullptr, "Invalid event: null pointer")) {
+    return SDL_APP_FAILURE;
   }
 
-  // 让应用处理事件
-  if (state->app->handle_event(event)) {
-    return SDL_APP_CONTINUE;
-  } else {
-    return SDL_APP_SUCCESS;
+  if (!VividErrorHandler::check_condition(state->is_valid(),
+                                          "Invalid application state: not properly initialized")) {
+    return SDL_APP_FAILURE;
+  }
+
+  try {
+    // 处理特殊事件
+    if (event->type == SDL_EVENT_QUIT) {
+      VividLogger::app_info("Received SDL_EVENT_QUIT");
+      state->app->exit();
+      return SDL_APP_SUCCESS;
+    }
+
+    // 让应用处理事件
+    if (state->app->handle_event(event)) {
+      return SDL_APP_CONTINUE;
+    } else {
+      return SDL_APP_SUCCESS;
+    }
+  } catch (const std::exception& e) {
+    VividLogger::app_error("Exception during SDL_AppEvent: %s", e.what());
+    return SDL_APP_FAILURE;
+  } catch (...) {
+    VividLogger::app_error("Unknown exception during SDL_AppEvent");
+    return SDL_APP_FAILURE;
   }
 }
 
@@ -84,19 +146,37 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
   auto* state = static_cast<SDL3AppState*>(appstate);
 
   if (state) {
-    std::cout << "SDL_AppQuit called with result: "
-              << (result == SDL_APP_SUCCESS   ? "SUCCESS"
-                  : result == SDL_APP_FAILURE ? "FAILURE"
-                                              : "CONTINUE")
-              << std::endl;
+    const char* result_str = (result == SDL_APP_SUCCESS   ? "SUCCESS"
+                              : result == SDL_APP_FAILURE ? "FAILURE"
+                                                          : "CONTINUE");
+    VividLogger::app_info("SDL_AppQuit called with result: %s", result_str);
 
-    if (state->app && state->initialized) {
-      state->app->shutdown();
-      SDL_QuitSubSystem(SDL_INIT_EVENTS | SDL_INIT_VIDEO);
-      SDL_Quit();
+    try {
+      if (state->app && state->initialized) {
+        VividLogger::app_info("Shutting down application");
+        state->app->shutdown();
+
+        // 安全关闭SDL子系统
+        SDL_QuitSubSystem(SDL_INIT_EVENTS | SDL_INIT_VIDEO);
+        SDL_Quit();
+
+        VividLogger::app_info("SDL subsystems shut down successfully");
+      }
+
+      // 重置断言报告
+      VividAssertManager::reset_assertion_report();
+
+      VividLogger::app_info("Application cleanup completed");
+    } catch (const std::exception& e) {
+      VividLogger::app_error("Exception during SDL_AppQuit: %s", e.what());
+    } catch (...) {
+      VividLogger::app_error("Unknown exception during SDL_AppQuit");
     }
 
     delete state;
+  } else {
+    // 即使state为空，也要确保SDL正确关闭
+    SDL_Quit();
   }
 }
 
@@ -107,14 +187,22 @@ SDL3AppBuilder create_sdl3_app() { return SDL3AppBuilder{}; }
 // 应用SDL3元数据的辅助函数实现
 // 完全按照SDL3官方规范设置所有支持的元数据属性
 void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
+  VividLogger::app_debug("Applying SDL3 metadata");
+
+  // 清除之前的错误
+  VividErrorHandler::clear_error();
+
   // 设置基本元数据（name, version, identifier）
   // 根据SDL3规范：name有默认值"SDL Application"，version和identifier无默认值
   if (metadata.has_basic_info()) {
     // 用户提供了完整的基本信息
-    SDL_SetAppMetadata(metadata.name.c_str(), metadata.version.c_str(),
-                       metadata.identifier.c_str());
-    std::cout << "SDL3 App Info: " << metadata.name << " v" << metadata.version << " ("
-              << metadata.identifier << ")" << std::endl;
+    if (SDL_SetAppMetadata(metadata.name.c_str(), metadata.version.c_str(),
+                           metadata.identifier.c_str())) {
+      VividLogger::app_info("SDL3 App Info: %s v%s (%s)", metadata.name.c_str(),
+                            metadata.version.c_str(), metadata.identifier.c_str());
+    } else {
+      VividLogger::app_warn("Failed to set basic app metadata: %s", VividErrorHandler::get_error());
+    }
   } else {
     // 缺少必要信息，使用可用的信息和合理的默认值
     std::string final_name = metadata.name.empty() ? "SDL Application" : metadata.name;
@@ -123,40 +211,70 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
         = metadata.identifier.empty() ? "com.example.sdlapp" : metadata.identifier;
 
     if (metadata.version.empty() || metadata.identifier.empty()) {
-      std::cout << "Warning: App metadata incomplete. "
-                << "Missing " << (metadata.version.empty() ? "version " : "")
-                << (metadata.identifier.empty() ? "identifier " : "") << std::endl;
+      VividLogger::app_warn("App metadata incomplete. Missing %s%s",
+                            (metadata.version.empty() ? "version " : ""),
+                            (metadata.identifier.empty() ? "identifier " : ""));
     }
 
-    SDL_SetAppMetadata(final_name.c_str(), final_version.c_str(), final_identifier.c_str());
+    if (SDL_SetAppMetadata(final_name.c_str(), final_version.c_str(), final_identifier.c_str())) {
+      VividLogger::app_info("SDL3 App Info (with defaults): %s v%s (%s)", final_name.c_str(),
+                            final_version.c_str(), final_identifier.c_str());
+    } else {
+      VividLogger::app_error("Failed to set app metadata: %s", VividErrorHandler::get_error());
+    }
   }
 
   // 设置扩展属性（按SDL3规范，仅在非空时设置）
   // SDL_PROP_APP_METADATA_CREATOR_STRING - 创建者信息
   if (!metadata.creator.empty()) {
-    SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, metadata.creator.c_str());
+    if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING,
+                                   metadata.creator.c_str())) {
+      VividLogger::app_debug("Set creator metadata: %s", metadata.creator.c_str());
+    } else {
+      VividLogger::app_warn("Failed to set creator metadata: %s", VividErrorHandler::get_error());
+    }
   }
 
   // SDL_PROP_APP_METADATA_COPYRIGHT_STRING - 版权信息
   if (!metadata.copyright.empty()) {
-    SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, metadata.copyright.c_str());
+    if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING,
+                                   metadata.copyright.c_str())) {
+      VividLogger::app_debug("Set copyright metadata: %s", metadata.copyright.c_str());
+    } else {
+      VividLogger::app_warn("Failed to set copyright metadata: %s", VividErrorHandler::get_error());
+    }
   }
 
   // SDL_PROP_APP_METADATA_URL_STRING - 应用网址
   if (!metadata.url.empty()) {
-    SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, metadata.url.c_str());
+    if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, metadata.url.c_str())) {
+      VividLogger::app_debug("Set URL metadata: %s", metadata.url.c_str());
+    } else {
+      VividLogger::app_warn("Failed to set URL metadata: %s", VividErrorHandler::get_error());
+    }
   }
 
   // SDL_PROP_APP_METADATA_TYPE_STRING - 应用类型
   // 根据SDL3规范，默认值为"application"，总是设置此属性
-  SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, metadata.type.c_str());
+  if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, metadata.type.c_str())) {
+    VividLogger::app_debug("Set application type: %s", metadata.type.c_str());
+  } else {
+    VividLogger::app_warn("Failed to set application type: %s", VividErrorHandler::get_error());
+  }
 
   // 设置自定义属性（非SDL3官方规范）
   if (!metadata.custom_properties.empty()) {
-    std::cout << "Setting " << metadata.custom_properties.size() << " custom metadata properties"
-              << std::endl;
+    VividLogger::app_debug("Setting %zu custom metadata properties",
+                           metadata.custom_properties.size());
     for (const auto& [key, value] : metadata.custom_properties) {
-      SDL_SetAppMetadataProperty(key.c_str(), value.c_str());
+      if (SDL_SetAppMetadataProperty(key.c_str(), value.c_str())) {
+        VividLogger::app_debug("Set custom property: %s = %s", key.c_str(), value.c_str());
+      } else {
+        VividLogger::app_warn("Failed to set custom property %s: %s", key.c_str(),
+                              VividErrorHandler::get_error());
+      }
     }
   }
+
+  VividLogger::app_debug("SDL3 metadata application completed");
 }
