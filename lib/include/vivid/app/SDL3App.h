@@ -10,12 +10,119 @@
 #include <SDL3/SDL.h>
 
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "App.h"
+
+// SDL3 元数据属性枚举
+// 对应SDL3官方支持的所有元数据属性
+enum class SDL3MetadataProperty {
+  // SDL_PROP_APP_METADATA_NAME_STRING
+  // 应用程序的易读名称，如"My Game 2: Bad Guy's Revenge!"
+  // 会显示在操作系统中将应用程序名称与窗口标题分开显示的位置（如音量控制小程序等）
+  // 默认值："SDL Application"
+  Name,
+
+  // SDL_PROP_APP_METADATA_VERSION_STRING
+  // 正在运行的应用程序版本，格式没有规定
+  // 可以是"1.0.3beta2"、"April 22nd, 2024"或git哈希值等
+  // 无默认值
+  Version,
+
+  // SDL_PROP_APP_METADATA_IDENTIFIER_STRING
+  // 标识此应用程序的唯一字符串，必须采用反向域名格式，如"com.example.mygame2"
+  // 用于桌面合成器识别和分组窗口，匹配应用程序与桌面设置和图标
+  // 如果打包到Flatpak等容器中，应用ID应与容器名称匹配
+  // 无默认值
+  Identifier,
+
+  // SDL_PROP_APP_METADATA_CREATOR_STRING
+  // 此应用的创建者/开发者/制造者的易读名称，如"MojoWorkshop, LLC"
+  // 无默认值
+  Creator,
+
+  // SDL_PROP_APP_METADATA_COPYRIGHT_STRING
+  // 人类可读的版权声明，如"Copyright (c) 2024 MojoWorkshop, LLC"
+  // 请控制在一行内，不要粘贴完整的软件许可证
+  // 无默认值
+  Copyright,
+
+  // SDL_PROP_APP_METADATA_URL_STRING
+  // 指向网络上应用程序的URL，可能是产品页面、店面或GitHub仓库
+  // 供用户获取更多信息
+  // 无默认值
+  Url,
+
+  // SDL_PROP_APP_METADATA_TYPE_STRING
+  // 应用程序类型：
+  // "game" - 视频游戏
+  // "mediaplayer" - 媒体播放器
+  // "application" - 通用应用程序（如果没有其他适用类型）
+  // 未来的SDL版本可能会添加新类型
+  // 默认值："application"
+  Type
+};
+
+// SDL3 应用类型常量（符合官方规范）
+namespace SDL3AppType {
+  constexpr const char* Game = "game";                // 视频游戏
+  constexpr const char* MediaPlayer = "mediaplayer";  // 媒体播放器
+  constexpr const char* Application = "application";  // 通用应用程序（默认）
+}  // namespace SDL3AppType
+
+// SDL3 应用元数据结构
+// 完全对应SDL3官方支持的元数据属性
+struct SDL3AppMetadata {
+  // SDL_PROP_APP_METADATA_NAME_STRING - 应用程序易读名称
+  // 默认值："SDL Application"
+  std::string name = "SDL Application";
+
+  // SDL_PROP_APP_METADATA_VERSION_STRING - 应用程序版本
+  // 无默认值，格式不限（可以是"1.0.3beta2"、"April 22nd, 2024"、git哈希等）
+  std::string version;
+
+  // SDL_PROP_APP_METADATA_IDENTIFIER_STRING - 应用程序唯一标识符
+  // 无默认值，必须是反向域名格式（如"com.example.mygame2"）
+  std::string identifier;
+
+  // SDL_PROP_APP_METADATA_CREATOR_STRING - 创建者/开发者/制造者名称
+  // 无默认值（如"MojoWorkshop, LLC"）
+  std::string creator;
+
+  // SDL_PROP_APP_METADATA_COPYRIGHT_STRING - 版权声明
+  // 无默认值，应控制在一行内（如"Copyright (c) 2024 MojoWorkshop, LLC"）
+  std::string copyright;
+
+  // SDL_PROP_APP_METADATA_URL_STRING - 应用程序网址
+  // 无默认值，可以是产品页面、店面或GitHub仓库等
+  std::string url;
+
+  // SDL_PROP_APP_METADATA_TYPE_STRING - 应用程序类型
+  // 默认值："application"，可选值："game"、"mediaplayer"、"application"
+  std::string type = "application";
+
+  // 自定义元数据属性（不在SDL3官方规范内）
+  std::unordered_map<std::string, std::string> custom_properties;
+
+  // 检查是否设置了基本元数据（name, version, identifier）
+  // 根据SDL3规范，name有默认值，但version和identifier无默认值
+  bool has_basic_info() const { return !name.empty() && !version.empty() && !identifier.empty(); }
+
+  // 检查是否为游戏类型应用
+  bool is_game() const { return type == "game"; }
+
+  // 检查是否为媒体播放器类型应用
+  bool is_media_player() const { return type == "mediaplayer"; }
+
+  // 检查是否为通用应用类型
+  bool is_application() const { return type == "application"; }
+};
 
 // SDL3 应用状态管理结构
 struct SDL3AppState {
   std::unique_ptr<App> app;
+  SDL3AppMetadata metadata;
   bool initialized = false;
 
   SDL3AppState() = default;
@@ -35,6 +142,7 @@ struct SDL3AppState {
 class SDL3AppBuilder {
 private:
   std::unique_ptr<App> app_;
+  SDL3AppMetadata metadata_;
 
 public:
   SDL3AppBuilder() : app_(std::make_unique<App>()) {}
@@ -69,9 +177,61 @@ public:
     return *this;
   }
 
+  // =============================================================================
+  // SDL3 应用元数据设置方法
+  // =============================================================================
+
+  // 设置应用基本信息（推荐使用此方法设置核心信息）
+  SDL3AppBuilder& set_app_info(const std::string& name, const std::string& version,
+                               const std::string& identifier) {
+    metadata_.name = name;
+    metadata_.version = version;
+    metadata_.identifier = identifier;
+    return *this;
+  }
+
+  // 统一的元数据设置方法
+  SDL3AppBuilder& set_metadata(SDL3MetadataProperty property, const std::string& value) {
+    switch (property) {
+      case SDL3MetadataProperty::Name:
+        metadata_.name = value;
+        break;
+      case SDL3MetadataProperty::Version:
+        metadata_.version = value;
+        break;
+      case SDL3MetadataProperty::Identifier:
+        metadata_.identifier = value;
+        break;
+      case SDL3MetadataProperty::Creator:
+        metadata_.creator = value;
+        break;
+      case SDL3MetadataProperty::Copyright:
+        metadata_.copyright = value;
+        break;
+      case SDL3MetadataProperty::Url:
+        metadata_.url = value;
+        break;
+      case SDL3MetadataProperty::Type:
+        metadata_.type = value;
+        break;
+    }
+    return *this;
+  }
+
+  // 设置自定义元数据属性
+  SDL3AppBuilder& set_custom_metadata(const std::string& name, const std::string& value) {
+    metadata_.custom_properties[name] = value;
+    return *this;
+  }
+
   // 注意：SDL3应用通过回调系统自动运行，不需要显式的run方法
 
-  // 获取内部App实例（用于SDL3回调）
+  // 获取内部App实例和元数据（用于SDL3回调）
+  std::pair<std::unique_ptr<App>, SDL3AppMetadata> release_app_with_metadata() {
+    return std::make_pair(std::move(app_), std::move(metadata_));
+  }
+
+  // 保持向后兼容性
   std::unique_ptr<App> release_app() { return std::move(app_); }
 };
 
@@ -85,6 +245,9 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result);
 
 // 静态工厂函数 - 返回临时对象支持移动语义
 SDL3AppBuilder create_sdl3_app();
+
+// 应用SDL3元数据的辅助函数
+void apply_sdl3_metadata(const SDL3AppMetadata& metadata);
 
 // =============================================================================
 // SDL3 主入口宏

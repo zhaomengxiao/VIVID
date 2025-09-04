@@ -44,13 +44,24 @@ void hello_update_system(Resources& res, entt::registry& world) {
 
 // 其他链式调用方法示例：
 
-// Method 2: Direct function with chain calls
+// Method 2: Direct function with chain calls and metadata (新的简化API)
 SDL3AppBuilder create_app_instance() {
-  return std::move(create_sdl3_app()
-                       .insert_resource<MyResource>(100)
-                       .add_plugin<DefaultPlugin>()
-                       .add_startup_system(hello_startup_system)
-                       .add_system(ScheduleLabel::Update, hello_update_system));
+  return std::move(
+      create_sdl3_app()
+          // 设置应用基本信息（推荐方法）
+          .set_app_info("VIVID Hello SDL3", "1.0.0", "com.vivid.hello_sdl3")
+          // 使用枚举设置其他元数据
+          .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
+          .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
+          .set_metadata(SDL3MetadataProperty::Url, "https://github.com/vivid-engine/vivid")
+          .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+          // 自定义属性
+          .set_custom_metadata("custom_property", "custom_value")
+          // 应用配置
+          .insert_resource<MyResource>(100)
+          .add_plugin<DefaultPlugin>()
+          .add_startup_system(hello_startup_system)
+          .add_system(ScheduleLabel::Update, hello_update_system));
 }
 
 // Method 3: Step-by-step building
@@ -63,8 +74,29 @@ SDL3AppBuilder create_app_instance() {
 //   return std::move(builder);
 // }
 
-// Method 4: With resources
-// VIVID_SDL3_MAIN(.insert_resource<MyResource>(100)
+// Method 4: Using VIVID_SDL3_MAIN macro with simplified metadata API (游戏示例)
+// VIVID_SDL3_MAIN(.set_app_info("My Awesome Game", "2.0.0", "com.mygame.app")
+//                     .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Game)
+//                     .insert_resource<MyResource>(100)
 //                     .add_plugin<DefaultPlugin>()
 //                     .add_startup_system(hello_startup_system)
 //                     .add_system(ScheduleLabel::Update, hello_update_system))
+
+// Method 5: Step-by-step with simplified metadata API
+// SDL3AppBuilder create_app_instance() {
+//   auto builder = create_sdl3_app();
+//
+//   // Set metadata using simplified API
+//   builder.set_app_info("My SDL3 Application", "1.0.0-beta", "com.company.myapp");
+//   builder.set_metadata(SDL3MetadataProperty::Creator, "My Company");
+//   builder.set_metadata(SDL3MetadataProperty::Type, "application");
+//   builder.set_custom_metadata("build_config", "debug");
+//
+//   // Configure app
+//   builder.add_plugin<DefaultPlugin>();
+//   builder.add_startup_system(hello_startup_system);
+//   builder.add_system(ScheduleLabel::Update, hello_update_system);
+//   builder.insert_resource<MyResource>(100);
+//
+//   return std::move(builder);
+// }
