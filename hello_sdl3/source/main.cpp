@@ -6,6 +6,7 @@
 #include "vivid/app/SDL3App.h"
 #include "vivid/log/log.h"
 #include "vivid/plugins/DefaultPlugin.h"
+#include "vivid/window/window_systems.h"
 
 struct MyResource {
   int value;
@@ -21,19 +22,57 @@ void hello_startup_system(Resources&, entt::registry& world) {
   // Add components as needed...
 }
 
+// Custom window creation system - demonstrates ECS approach
+void create_custom_window_system(Resources&, entt::registry& world) {
+  VividLogger::app_info("Creating custom window entity with ECS components");
+
+  // Create a custom window entity with specific configuration
+  auto window_entity = world.create();
+
+  // Configure window component with custom settings
+  auto& window_comp = world.emplace<VIVID::Window::WindowComponent>(window_entity);
+  window_comp.title = "VIVID Hello SDL3 with ECS Window";
+  window_comp.width = 1024;
+  window_comp.height = 768;
+  window_comp.flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+  window_comp.visible = true;
+
+  VividLogger::app_info("Custom window entity created with title: %s", window_comp.title.c_str());
+}
+
 // Simple update system
 void hello_update_system(Resources& res, entt::registry& world) {
   static int frame_count = 0;
   frame_count++;
 
   if (frame_count % 60 == 0) {  // Print every 60 frames
-    VividLogger::app_info("SDL3 app running... Frame: %d", frame_count);
+    VividLogger::app_info("SDL3 ECS app running... Frame: %d", frame_count);
     VividLogger::app_debug("MyResource value: %d", res.get<MyResource>()->value);
+
+    // Check window status using ECS approach
+    auto window_view
+        = world.view<VIVID::Window::WindowComponent, VIVID::Window::WindowGpuComponent>();
+    for (auto entity : window_view) {
+      auto& window_comp = world.get<VIVID::Window::WindowComponent>(entity);
+      auto& gpu_comp = world.get<VIVID::Window::WindowGpuComponent>(entity);
+
+      if (gpu_comp.initialized) {
+        VividLogger::app_info("ECS Window '%s' is active and running (%dx%d)",
+                              window_comp.title.c_str(), window_comp.width, window_comp.height);
+
+        // Check for window events
+        if (world.all_of<VIVID::Window::WindowEventsComponent>(entity)) {
+          auto& events_comp = world.get<VIVID::Window::WindowEventsComponent>(entity);
+          if (events_comp.quit_requested || events_comp.close_requested) {
+            VividLogger::app_info("Window close/quit requested - application should exit");
+          }
+        }
+      }
+    }
   }
 
   // Exit after 300 frames (about 5 seconds at 60 FPS)
   // if (frame_count > 300) {
-  //   // Access the app instance to exit (this would need to be implemented)
   //   VividLogger::app_info("Exiting SDL3 application...");
   // }
 }
@@ -50,7 +89,7 @@ SDL3AppBuilder create_app_instance() {
   return std::move(
       create_sdl3_app()
           // 设置应用基本信息（推荐方法）
-          .set_app_info("VIVID Hello SDL3", "1.0.0", "com.vivid.hello_sdl3")
+          .set_app_info("VIVID Hello SDL3 with ECS Window", "1.0.0", "com.vivid.hello_sdl3")
           // 使用枚举设置其他元数据
           .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
           .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
@@ -63,8 +102,10 @@ SDL3AppBuilder create_app_instance() {
           .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
           // 应用配置
           .insert_resource<MyResource>(100)
-          .add_plugin<DefaultPlugin>()
+          // .add_plugin<DefaultPlugin>()
+          .add_plugin<VIVID::Window::WindowPlugin>()
           .add_startup_system(hello_startup_system)
+          .add_startup_system(create_custom_window_system)
           .add_system(ScheduleLabel::Update, hello_update_system));
 }
 
