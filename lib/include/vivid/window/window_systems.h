@@ -25,7 +25,7 @@ namespace VIVID::Window {
   // GPU resource component - holds SDL window handle (similar to GpuMeshComponent design)
   struct WindowGpuComponent {
     SDL_Window* window_handle = nullptr;
-    bool initialized = false;
+    SDL_GLContext gl_context = nullptr;
 
     // Cache previous values to detect changes
     std::string cached_title;
@@ -34,6 +34,8 @@ namespace VIVID::Window {
     int cached_x = 0;
     int cached_y = 0;
     bool cached_visible = true;
+
+    bool initialized = false;
   };
 
   // Window events component - stores events for processing

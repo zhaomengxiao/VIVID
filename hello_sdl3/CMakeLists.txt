@@ -18,7 +18,7 @@ include(../cmake/CPM.cmake)
 CPMAddPackage(NAME VIVID SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../lib)
 
 # ImGui for editor UI - using local vendor copy
-# set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)    
 
 # OpenGL libraries
 # find_package(OpenGL REQUIRED)
@@ -30,19 +30,18 @@ CPMAddPackage(NAME VIVID SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../lib)
 file(GLOB_RECURSE sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp)
 
 # ImGui source files
-# set(IMGUI_SOURCES
-#     ${IMGUI_DIR}/imgui.cpp
-#     ${IMGUI_DIR}/imgui_demo.cpp
-#     ${IMGUI_DIR}/imgui_draw.cpp
-#     ${IMGUI_DIR}/imgui_tables.cpp
-#     ${IMGUI_DIR}/imgui_widgets.cpp
-#     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-#     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
-# )
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
 
-# add_executable(${PROJECT_NAME} ${sources} ${IMGUI_SOURCES})
+add_executable(${PROJECT_NAME} ${sources} ${IMGUI_SOURCES})
 
-add_executable(${PROJECT_NAME} ${sources})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 OUTPUT_NAME "HelloSDL3")
 
 target_link_libraries(${PROJECT_NAME} 
@@ -50,8 +49,8 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-    # ${IMGUI_DIR}
-    # ${IMGUI_DIR}/backends
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
 

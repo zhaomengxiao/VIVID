@@ -5,13 +5,112 @@
 
 #include "vivid/app/SDL3App.h"
 #include "vivid/log/log.h"
-#include "vivid/plugins/DefaultPlugin.h"
 #include "vivid/window/window_systems.h"
+
+// 如何在SDL3窗口中显示imgui: 1.添加imgui头文件
+#include <SDL3/SDL_opengl.h>
+#include <imgui.h>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
 
 struct MyResource {
   int value;
   MyResource(int v) : value(v) {}
 };
+
+// 如何在SDL3窗口中显示imgui: 2.初始化
+void initImGui(Resources& res, entt::registry& world) {
+  // Setup Dear ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // IF using Docking Branch
+
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+  // ImGui::StyleColorsLight();
+
+  // Setup scaling
+  ImGuiStyle& style = ImGui::GetStyle();
+  // style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution
+  // for dynamic style scaling, changing this requires resetting Style + calling this again)
+  // style.FontScaleDpi = main_scale;        // Set initial font scale. (using
+  // io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation
+  // purpose) Setup Platform/Renderer backends
+  auto view = world.view<VIVID::Window::WindowGpuComponent>();
+
+  view.each([&](auto entity, auto& gpu_comp) {
+    ImGui_ImplSDL3_InitForOpenGL(gpu_comp.window_handle, gpu_comp.gl_context);
+    ImGui_ImplOpenGL3_Init(nullptr);
+    return;  // 只处理第一个窗口
+  });
+
+  // Load Fonts
+  // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
+  // fonts and use ImGui::PushFont()/PopFont() to select them.
+  // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the
+  // font among multiple.
+  // - If the file cannot be loaded, the function will return a nullptr. Please handle those
+  // errors in your application (e.g. use an assertion, or display an error and quit).
+  // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher
+  // quality font rendering.
+  // - Read 'docs/FONTS.md' for more instructions and details. If you like the default font but
+  // want it to scale better, consider using the 'ProggyVector' from the same author!
+  // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to
+  // write a double backslash \\ !
+  // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the
+  // "fonts/" folder. See Makefile.emscripten for details.
+  // style.FontSizeBase = 20.0f;
+  // io.Fonts->AddFontDefault();
+  // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf");
+  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf");
+  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf");
+  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf");
+  // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
+  // IM_ASSERT(font != nullptr);
+}
+
+// 如何在SDL3窗口中显示imgui: 3.处理事件
+void ProcessImGuiEvent(Resources& res, entt::registry& world) {
+  auto eventQueues = res.get<EventQueues>();
+  if (eventQueues) {
+    ImGui_ImplSDL3_ProcessEvent(&eventQueues->raw_sdl_events.front());
+    eventQueues->raw_sdl_events.pop();
+  }
+}
+
+// 如何在SDL3窗口中显示imgui: 4.显示imgui Demo
+void ShowImGuiDemo(Resources& res, entt::registry& world) {
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
+
+  ImGui::ShowDemoWindow();
+
+  // Rendering
+  ImGui::Render();
+  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+  glViewport(0, 0, (int)ImGui::GetIO().DisplaySize.x, (int)ImGui::GetIO().DisplaySize.y);
+  glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w,
+               clear_color.z * clear_color.w, clear_color.w);
+  glClear(GL_COLOR_BUFFER_BIT);
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+  auto view = world.view<VIVID::Window::WindowGpuComponent>();
+
+  view.each([&](auto entity, auto& gpu_comp) {
+    SDL_GL_SwapWindow(gpu_comp.window_handle);
+    return;  // 只处理第一个窗口
+  });
+}
+
+void ShutDownImGui(Resources& res, entt::registry& world) {
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
+}
 
 // Simple startup system
 void hello_startup_system(Resources&, entt::registry& world) {
@@ -106,7 +205,11 @@ SDL3AppBuilder create_app_instance() {
           .add_plugin<VIVID::Window::WindowPlugin>()
           .add_startup_system(hello_startup_system)
           .add_startup_system(create_custom_window_system)
-          .add_system(ScheduleLabel::Update, hello_update_system));
+          .add_system(ScheduleLabel::Startup, initImGui)
+          .add_system(ScheduleLabel::Update, ShowImGuiDemo)
+          // .add_system(ScheduleLabel::Update, hello_update_system)
+          .add_system(ScheduleLabel::Event, ProcessImGuiEvent)
+          .add_system(ScheduleLabel::Shutdown, ShutDownImGui));
 }
 
 // Method 3: Step-by-step building

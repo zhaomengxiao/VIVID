@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include "vivid/app/Schedule.h"
+#include "vivid/log/log.h"
 
 namespace VIVID::Window {
 
@@ -24,19 +25,33 @@ namespace VIVID::Window {
       SDL_Window* window_handle = SDL_CreateWindow(window_comp.title.c_str(), window_comp.width,
                                                    window_comp.height, window_comp.flags);
 
-      if (!window_handle) {
-        SDL_Log("Failed to create window: %s", SDL_GetError());
-        return;
+      if (!VividErrorHandler::check_sdl_pointer(window_handle, "SDL_CreateWindow")) {
+        return;  // 错误已记录到日志
       }
+
+      // TODO: =======move to render==========================================================
+      SDL_GLContext gl_context = SDL_GL_CreateContext(window_handle);
+
+      if (!VividErrorHandler::check_sdl_pointer(gl_context, "SDL_GL_CreateContext")) {
+        return;  // 错误已记录到日志
+      }
+
+      SDL_GL_MakeCurrent(window_handle, gl_context);
+      SDL_GL_SetSwapInterval(1);  // Enable vsync
+
+      //=====================================================================================
 
       // Set window position if specified
       if (window_comp.x != SDL_WINDOWPOS_CENTERED && window_comp.y != SDL_WINDOWPOS_CENTERED) {
-        SDL_SetWindowPosition(window_handle, window_comp.x, window_comp.y);
+        VividErrorHandler::check_sdl_result(
+            SDL_SetWindowPosition(window_handle, window_comp.x, window_comp.y),
+            "SDL_SetWindowPosition");
       }
 
       // Add GPU component to mark as initialized
       auto& gpu_comp = registry.emplace<WindowGpuComponent>(entity);
       gpu_comp.window_handle = window_handle;
+      gpu_comp.gl_context = gl_context;
       gpu_comp.initialized = true;
 
       // Initialize cache with current values
@@ -52,11 +67,11 @@ namespace VIVID::Window {
 
       // Show window if visible
       if (window_comp.visible) {
-        SDL_ShowWindow(window_handle);
+        VividErrorHandler::check_sdl_result(SDL_ShowWindow(window_handle), "SDL_ShowWindow");
       }
 
-      SDL_Log("Window created successfully: %s (%dx%d)", window_comp.title.c_str(),
-              window_comp.width, window_comp.height);
+      VividLogger::app_info("Window created successfully: %s (%dx%d)", window_comp.title.c_str(),
+                            window_comp.width, window_comp.height);
     });
   }
 
@@ -181,6 +196,7 @@ namespace VIVID::Window {
     auto view = registry.view<WindowGpuComponent>();
 
     view.each([&](auto entity, auto& gpu_comp) {
+      SDL_GL_DestroyContext(gpu_comp.gl_context);
       if (gpu_comp.window_handle) {
         SDL_DestroyWindow(gpu_comp.window_handle);
         gpu_comp.window_handle = nullptr;
@@ -213,8 +229,8 @@ namespace VIVID::Window {
 
     // Add window systems to appropriate schedules
     app.add_system(ScheduleLabel::Startup, window_initialization_system);
-    app.add_system(ScheduleLabel::Update, window_event_processing_system);
-    app.add_system(ScheduleLabel::Update, window_update_system);
+    // app.add_system(ScheduleLabel::Update, window_event_processing_system);
+    // app.add_system(ScheduleLabel::Update, window_update_system);
     app.add_system(ScheduleLabel::Shutdown, window_cleanup_system);
   }
 

@@ -127,8 +127,16 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
       return SDL_APP_SUCCESS;
     }
 
+    // 如果没有EventQueues，则创建一个
+    auto event_queues = state->app->resources().get<EventQueues>();
+    if (!event_queues) {
+      event_queues = &state->app->resources().insert<EventQueues>();
+    }
+
+    event_queues->raw_sdl_events.push(*event);
+
     // 让应用处理事件
-    if (state->app->handle_event(event)) {
+    if (state->app->handle_event()) {
       return SDL_APP_CONTINUE;
     } else {
       return SDL_APP_SUCCESS;

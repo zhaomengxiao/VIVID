@@ -153,9 +153,10 @@ public:
   }
 
   // 处理事件（对应 SDL_AppEvent）
-  bool handle_event(void *event_ptr) {
+  bool handle_event() {
     // 这里可以添加事件处理逻辑
     // 具体的事件处理可以通过系统或插件来实现
+    schedule_.run_schedule(ScheduleLabel::Event, resources_, world_);
     return running_;
   }
 
