@@ -22,5 +22,9 @@ namespace VIVID::Render {
   /// @param world
   void RequestWebGPUAdapterSync(Resources &res, entt::registry &world);
 
+  void RequestWebGPUDeviceSync(Resources &res, entt::registry &world);
+
   void InspectWebGPUAdapter(Resources &res, entt::registry &world);
+
+  void InspectWebGPUDevice(Resources &res, entt::registry &world);
 }  // namespace VIVID::Render

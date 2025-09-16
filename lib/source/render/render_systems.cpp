@@ -19,10 +19,21 @@ WGPUStringView toWgpuStringView(std::string_view stdStringView) {
 }
 WGPUStringView toWgpuStringView(const char *cString) { return {cString, WGPU_STRLEN}; }
 
+void sleepForMilliseconds(unsigned int milliseconds) {
+#ifdef __EMSCRIPTEN__
+  emscripten_sleep(milliseconds);
+#else
+  std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+#endif
+}
+
+// Resources
 struct WebGPUResources {
   WGPUInstance instance = nullptr;
   WGPUAdapter adapter = nullptr;
   bool adapterRequestEnded = false;
+  WGPUDevice device = nullptr;
+  bool deviceRequestEnded = false;
 };
 
 namespace VIVID::Render {
@@ -56,13 +67,6 @@ namespace VIVID::Render {
     VividLogger::app_info("WGPU instance: %p", instance);
   }
 
-  void sleepForMilliseconds(unsigned int milliseconds) {
-#ifdef __EMSCRIPTEN__
-    emscripten_sleep(milliseconds);
-#else
-    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
-#endif
-  }
   void RequestWebGPUAdapterSync(Resources &res, entt::registry &world) {
     VividLogger::app_debug("Requesting WebGPU adapter...");
 
@@ -133,8 +137,6 @@ namespace VIVID::Render {
     webgpuRes->adapterRequestEnded = userData.requestEnded;
 
     VividLogger::app_debug("Got WebGPU adapter");
-
-    ReleaseWebGPUInstance(res, world);
   }
 
   void ReleaseWebGPUInstance(Resources &res, entt::registry &world) {
@@ -213,4 +215,171 @@ namespace VIVID::Render {
     wgpuAdapterInfoFreeMembers(properties);
   }
 
+  void RequestWebGPUDeviceSync(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Requesting WebGPU device...");
+    WGPUDeviceDescriptor deviceDesc = {};
+    deviceDesc.nextInChain = nullptr;
+    // Any name works here, that's your call
+    deviceDesc.label = toWgpuStringView("My Device");
+    deviceDesc.requiredFeatureCount = 0;
+    deviceDesc.requiredFeatures = nullptr;
+    deviceDesc.requiredLimits = nullptr;
+    deviceDesc.defaultQueue.label = toWgpuStringView("The Default Queue");
+
+    auto onDeviceLost
+        = [](WGPUDevice const *device, WGPUDeviceLostReason reason, struct WGPUStringView message,
+             void * /* userdata1 */, void * /* userdata2 */
+          ) {
+            // All we do is display a message when the device is lost
+            std::cout << "Device " << device << " was lost: reason " << reason << " ("
+                      << toStdStringView(message) << ")" << std::endl;
+          };
+
+    deviceDesc.deviceLostCallbackInfo.callback = onDeviceLost;
+    deviceDesc.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+
+    auto onDeviceError
+        = [](WGPUDevice const *device, WGPUErrorType type, struct WGPUStringView message,
+             void * /* userdata1 */, void * /* userdata2 */
+          ) {
+            std::cout << "Uncaptured error in device " << device << ": type " << type << " ("
+                      << toStdStringView(message) << ")" << std::endl;
+          };
+
+    deviceDesc.uncapturedErrorCallbackInfo.callback = onDeviceError;
+
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+
+    struct UserData {
+      WGPUDevice device = nullptr;
+      bool requestEnded = false;
+    };
+    UserData userData;
+
+    // The callback
+    auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device,
+                                   WGPUStringView message, void *userdata1, void * /* userdata2 */
+                                ) {
+      UserData &userData = *reinterpret_cast<UserData *>(userdata1);
+      if (status == WGPURequestDeviceStatus_Success) {
+        userData.device = device;
+      } else {
+        std::cerr << "Error while requesting device: " << toStdStringView(message) << std::endl;
+      }
+      userData.requestEnded = true;
+    };
+
+    // Build the callback info
+    WGPURequestDeviceCallbackInfo callbackInfo = {/* nextInChain = */ nullptr,
+                                                  /* mode = */ WGPUCallbackMode_AllowProcessEvents,
+                                                  /* callback = */ onDeviceRequestEnded,
+                                                  /* userdata1 = */ &userData,
+                                                  /* userdata2 = */ nullptr};
+
+    // Call to the WebGPU request adapter procedure
+    wgpuAdapterRequestDevice(webgpuRes->adapter, &deviceDesc, callbackInfo);
+
+    // Hand the execution to the WebGPU instance until the request ended
+    wgpuInstanceProcessEvents(webgpuRes->instance);
+    while (!userData.requestEnded) {
+      sleepForMilliseconds(200);
+      wgpuInstanceProcessEvents(webgpuRes->instance);
+    }
+
+    VIVID_ASSERT(userData.requestEnded);
+
+    webgpuRes->device = userData.device;
+    webgpuRes->deviceRequestEnded = userData.requestEnded;
+
+    VividLogger::app_debug("Got WebGPU device");
+  }
+
+  void InspectWebGPUDevice(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Inspecting WebGPU device...");
+
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+
+    WGPUSupportedFeatures features = {};
+    wgpuDeviceGetFeatures(webgpuRes->device, &features);
+    std::cout << "Device features:" << std::endl;
+    std::cout << std::hex;
+    for (size_t i = 0; i < features.featureCount; ++i) {
+      std::cout << " - 0x" << features.features[i] << std::endl;
+    }
+    std::cout << std::dec;
+    wgpuSupportedFeaturesFreeMembers(features);
+
+    WGPULimits limits = {};
+    bool success = wgpuDeviceGetLimits(webgpuRes->device, &limits) == WGPUStatus_Success;
+
+    if (success) {
+      std::cout << "Device limits:" << std::endl;
+      std::cout << " - maxTextureDimension1D: " << limits.maxTextureDimension1D << std::endl;
+      std::cout << " - maxTextureDimension2D: " << limits.maxTextureDimension2D << std::endl;
+      std::cout << " - maxTextureDimension3D: " << limits.maxTextureDimension3D << std::endl;
+      std::cout << " - maxTextureArrayLayers: " << limits.maxTextureArrayLayers << std::endl;
+      std::cout << " - maxBindGroups: " << limits.maxBindGroups << std::endl;
+      std::cout << " - maxBindGroupsPlusVertexBuffers: " << limits.maxBindGroupsPlusVertexBuffers
+                << std::endl;
+      std::cout << " - maxBindingsPerBindGroup: " << limits.maxBindingsPerBindGroup << std::endl;
+      std::cout << " - maxDynamicUniformBuffersPerPipelineLayout: "
+                << limits.maxDynamicUniformBuffersPerPipelineLayout << std::endl;
+      std::cout << " - maxDynamicStorageBuffersPerPipelineLayout: "
+                << limits.maxDynamicStorageBuffersPerPipelineLayout << std::endl;
+      std::cout << " - maxSampledTexturesPerShaderStage: "
+                << limits.maxSampledTexturesPerShaderStage << std::endl;
+      std::cout << " - maxSamplersPerShaderStage: " << limits.maxSamplersPerShaderStage
+                << std::endl;
+      std::cout << " - maxStorageBuffersPerShaderStage: " << limits.maxStorageBuffersPerShaderStage
+                << std::endl;
+      std::cout << " - maxStorageTexturesPerShaderStage: "
+                << limits.maxStorageTexturesPerShaderStage << std::endl;
+      std::cout << " - maxUniformBuffersPerShaderStage: " << limits.maxUniformBuffersPerShaderStage
+                << std::endl;
+      std::cout << " - maxUniformBufferBindingSize: " << limits.maxUniformBufferBindingSize
+                << std::endl;
+      std::cout << " - maxStorageBufferBindingSize: " << limits.maxStorageBufferBindingSize
+                << std::endl;
+      std::cout << " - minUniformBufferOffsetAlignment: " << limits.minUniformBufferOffsetAlignment
+                << std::endl;
+      std::cout << " - minStorageBufferOffsetAlignment: " << limits.minStorageBufferOffsetAlignment
+                << std::endl;
+      std::cout << " - maxVertexBuffers: " << limits.maxVertexBuffers << std::endl;
+      std::cout << " - maxBufferSize: " << limits.maxBufferSize << std::endl;
+      std::cout << " - maxVertexAttributes: " << limits.maxVertexAttributes << std::endl;
+      std::cout << " - maxVertexBufferArrayStride: " << limits.maxVertexBufferArrayStride
+                << std::endl;
+      std::cout << " - maxInterStageShaderVariables: " << limits.maxInterStageShaderVariables
+                << std::endl;
+      std::cout << " - maxColorAttachments: " << limits.maxColorAttachments << std::endl;
+      std::cout << " - maxColorAttachmentBytesPerSample: "
+                << limits.maxColorAttachmentBytesPerSample << std::endl;
+      std::cout << " - maxComputeWorkgroupStorageSize: " << limits.maxComputeWorkgroupStorageSize
+                << std::endl;
+      std::cout << " - maxComputeInvocationsPerWorkgroup: "
+                << limits.maxComputeInvocationsPerWorkgroup << std::endl;
+      std::cout << " - maxComputeWorkgroupSizeX: " << limits.maxComputeWorkgroupSizeX << std::endl;
+      std::cout << " - maxComputeWorkgroupSizeY: " << limits.maxComputeWorkgroupSizeY << std::endl;
+      std::cout << " - maxComputeWorkgroupSizeZ: " << limits.maxComputeWorkgroupSizeZ << std::endl;
+      std::cout << " - maxComputeWorkgroupsPerDimension: "
+                << limits.maxComputeWorkgroupsPerDimension << std::endl;
+      // std::cout << " - maxStorageBuffersInVertexStage: " << limits.maxStorageBuffersInVertexStage
+      //           << std::endl;
+      // std::cout << " - maxStorageTexturesInVertexStage: " <<
+      // limits.maxStorageTexturesInVertexStage
+      //           << std::endl;
+      // std::cout << " - maxStorageBuffersInFragmentStage: "
+      //           << limits.maxStorageBuffersInFragmentStage << std::endl;
+      // std::cout << " - maxStorageTexturesInFragmentStage: "
+      //           << limits.maxStorageTexturesInFragmentStage << std::endl;
+    }
+  }
 }  // namespace VIVID::Render
