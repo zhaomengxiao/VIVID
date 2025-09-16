@@ -8,10 +8,6 @@ namespace VIVID::Render {
   /// @param res
   /// @param world
   void CreateWebGPUInstance(Resources &res, entt::registry &world);
-  /// @brief 释放WebGPU实例
-  /// @param res
-  /// @param world
-  void ReleaseWebGPUInstance(Resources &res, entt::registry &world);
 
   /// @brief 同步请求WebGPU适配器
   /// @note We will no longer need to use the instance once we have selected our adapter, so we will
@@ -27,4 +23,11 @@ namespace VIVID::Render {
   void InspectWebGPUAdapter(Resources &res, entt::registry &world);
 
   void InspectWebGPUDevice(Resources &res, entt::registry &world);
+
+  void TestCommandQueue(Resources &res, entt::registry &world);
+
+  /// @brief 释放WebGPU资源
+  /// @param res
+  /// @param world
+  void ReleaseWebGPUResources(Resources &res, entt::registry &world);
 }  // namespace VIVID::Render

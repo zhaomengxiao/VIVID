@@ -34,6 +34,7 @@ struct WebGPUResources {
   bool adapterRequestEnded = false;
   WGPUDevice device = nullptr;
   bool deviceRequestEnded = false;
+  WGPUQueue queue = nullptr;
 };
 
 namespace VIVID::Render {
@@ -139,14 +140,23 @@ namespace VIVID::Render {
     VividLogger::app_debug("Got WebGPU adapter");
   }
 
-  void ReleaseWebGPUInstance(Resources &res, entt::registry &world) {
+  void ReleaseWebGPUResources(Resources &res, entt::registry &world) {
     VividLogger::app_debug("Releasing WebGPU instance...");
 
     auto webgpuRes = res.get<WebGPUResources>();
     if (webgpuRes) {
+      wgpuQueueRelease(webgpuRes->queue);
+      wgpuAdapterRelease(webgpuRes->adapter);
+      wgpuDeviceRelease(webgpuRes->device);
+      wgpuInstanceProcessEvents(webgpuRes->instance);
       wgpuInstanceRelease(webgpuRes->instance);
-      VividLogger::app_debug("WGPU instance released");
+      VividLogger::app_debug("WGPU instance, adapter, and device released");
+      webgpuRes->queue = nullptr;
       webgpuRes->instance = nullptr;
+      webgpuRes->adapter = nullptr;
+      webgpuRes->device = nullptr;
+      webgpuRes->adapterRequestEnded = false;
+      webgpuRes->deviceRequestEnded = false;
     }
   }
 
@@ -381,5 +391,79 @@ namespace VIVID::Render {
       // std::cout << " - maxStorageTexturesInFragmentStage: "
       //           << limits.maxStorageTexturesInFragmentStage << std::endl;
     }
+  }
+
+  void TestCommandQueue(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Testing WebGPU command queue...");
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+    // Get the queue
+    WGPUQueue queue = wgpuDeviceGetQueue(webgpuRes->device);
+    webgpuRes->queue = queue;
+    // Create the command encoder
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.label = toWgpuStringView("My command encoder");
+
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(webgpuRes->device, &encoderDesc);
+
+    // Insert debug markers
+    wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do one thing"));
+    wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do another thing"));
+
+    // generate the command buffer by finishing the command encoder
+    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    cmdBufferDescriptor.label = toWgpuStringView("Command buffer");
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    wgpuCommandEncoderRelease(encoder);  // release encoder after it's finished
+
+    // Finally submit the command queue
+    std::cout << "Submitting command..." << std::endl;
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+    std::cout << "Command submitted." << std::endl;
+
+    // wait for completion
+    //  Our callback invoked when GPU instructions have been executed
+    auto onQueuedWorkDone
+        = [](WGPUQueueWorkDoneStatus status, void *userdata1, void * /* userdata2 */
+          ) {
+            // Display a warning when status is not success
+            if (status != WGPUQueueWorkDoneStatus_Success) {
+              VividLogger::render_error(
+                  "Warning: wgpuQueueOnSubmittedWorkDone failed, this is suspicious!");
+            }
+
+            // Interpret userdata1 as a pointer to a boolean (and turn it into a
+            // mutable reference), then turn it to 'true'
+            bool &workDone = *reinterpret_cast<bool *>(userdata1);
+            workDone = true;
+          };
+
+    // Create the boolean that will be passed to the callback as userdata1
+    // and initialize it to 'false'
+    bool workDone = false;
+
+    // Create the callback info
+    WGPUQueueWorkDoneCallbackInfo callbackInfo = {};
+    callbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+    callbackInfo.callback = onQueuedWorkDone;
+    callbackInfo.userdata1 = &workDone;  // pass the address of workDone
+
+    // Add the async operation to the queue
+    wgpuQueueOnSubmittedWorkDone(queue, callbackInfo);
+
+    // Hand the execution to the WebGPU instance until onQueuedWorkDone gets invoked
+    wgpuInstanceProcessEvents(webgpuRes->instance);
+    while (!workDone) {
+      sleepForMilliseconds(200);
+      wgpuInstanceProcessEvents(webgpuRes->instance);
+    }
+
+    VividLogger::app_info("All queued instructions have been executed!");
+
+    VividLogger::app_debug("WebGPU command queue tested");
   }
 }  // namespace VIVID::Render
