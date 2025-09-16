@@ -27,6 +27,61 @@ void sleepForMilliseconds(unsigned int milliseconds) {
 #endif
 }
 
+/**
+ * Fetch data from a GPU buffer back to the CPU.
+ * This function blocks until the data is available on CPU, then calls the
+ * `processBufferData` callback, and finally unmap the buffer.
+ */
+void fetchBufferDataSync(WGPUInstance instance, WGPUBuffer buffer, size_t bufferSize,
+                         std::function<void(const void *)> processBufferData) {
+  // Read the data back from buffer B
+  // Context passed to `onBufferBMapped` through theuserdata pointer:
+  struct OnBufferBMappedContext {
+    bool operationEnded = false;       // Turned true as soon as the callback is invoked
+    bool mappingIsSuccessful = false;  // Turned true only if mapping succeeded
+  };
+
+  // This function has the type WGPUBufferMapCallback as defined in webgpu.h
+  auto onBufferMapped = [](WGPUMapAsyncStatus status, struct WGPUStringView message,
+                           void *userdata1, void * /* userdata2 */
+                        ) {
+    OnBufferBMappedContext &context = *reinterpret_cast<OnBufferBMappedContext *>(userdata1);
+    context.operationEnded = true;
+    if (status == WGPUMapAsyncStatus_Success) {
+      context.mappingIsSuccessful = true;
+    } else {
+      std::cout << "Could not map buffer B! Status: " << status
+                << ", message: " << toStdStringView(message) << std::endl;
+    }
+  };
+
+  // We create an instance of the context shared with `onBufferBMapped`
+  OnBufferBMappedContext context;
+
+  // And we build the callback info:
+  WGPUBufferMapCallbackInfo bufferMapCallbackInfo = {};
+  bufferMapCallbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+  bufferMapCallbackInfo.callback = onBufferMapped;
+  bufferMapCallbackInfo.userdata1 = &context;
+
+  // And finally we launch the asynchronous operation
+  wgpuBufferMapAsync(buffer, WGPUMapMode_Read,
+                     0,  // offset
+                     bufferSize, bufferMapCallbackInfo);
+
+  // Process events until the map operation ended
+  wgpuInstanceProcessEvents(instance);
+  while (!context.operationEnded) {
+    sleepForMilliseconds(200);
+    wgpuInstanceProcessEvents(instance);
+  }
+
+  if (context.mappingIsSuccessful) {
+    const void *bufferData = wgpuBufferGetConstMappedRange(buffer, 0, bufferSize);
+    processBufferData(bufferData);
+  }
+}
+
 // Resources
 struct WebGPUResources {
   WGPUInstance instance = nullptr;
@@ -407,11 +462,50 @@ namespace VIVID::Render {
     WGPUCommandEncoderDescriptor encoderDesc = {};
     encoderDesc.label = toWgpuStringView("My command encoder");
 
+    // Create buffers
+    // Create buffer A
+    WGPUBufferDescriptor bufferDescA = {};
+    bufferDescA.size = 256;
+    // Buffer A is *written* on CPU, and used as *source* of a GPU-side copy
+    bufferDescA.usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
+    bufferDescA.label = toWgpuStringView("Buffer A");
+    bufferDescA.mappedAtCreation = true;
+
+    WGPUBuffer bufferA = wgpuDeviceCreateBuffer(webgpuRes->device, &bufferDescA);
+    // Create buffer B
+    // We build a second buffer, called B
+    WGPUBufferDescriptor bufferDescB = {};
+    bufferDescB.size = 32;
+    // Buffer B is *read* on CPU, and used as *destination* of a GPU-side copy
+    bufferDescB.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bufferDescB.label = toWgpuStringView("Buffer B");
+
+    WGPUBuffer bufferB = wgpuDeviceCreateBuffer(webgpuRes->device, &bufferDescB);
+    // Writhe initial data to buffer A
+    // Get a pointer to the entire mapped buffer and interpret it as 8-bit unsigned integers
+    uint8_t *bufferDataA
+        = static_cast<uint8_t *>(wgpuBufferGetMappedRange(bufferA, 0, bufferDescA.size));
+
+    // Write 0, 1, 2, 3, ... in bufferA
+    for (size_t i = 0; i < 256; ++i) {
+      bufferDataA[i] = static_cast<uint8_t>(i);
+    }
+
+    // see also wgpuBufferWriteMappedRange, wgpuQueueWriteBuffer
+
+    wgpuBufferUnmap(bufferA);
+    // Do NOT use bufferDataA beyond this point!
+
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(webgpuRes->device, &encoderDesc);
 
     // Insert debug markers
-    wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do one thing"));
-    wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do another thing"));
+    // wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do one thing"));
+    // wgpuCommandEncoderInsertDebugMarker(encoder, toWgpuStringView("Do another thing"));
+    wgpuCommandEncoderCopyBufferToBuffer(encoder, bufferA,
+                                         16,  // sourceOffset
+                                         bufferB,
+                                         0,  // destinationOffset
+                                         bufferDescB.size);
 
     // generate the command buffer by finishing the command encoder
     WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
@@ -461,6 +555,22 @@ namespace VIVID::Render {
       sleepForMilliseconds(200);
       wgpuInstanceProcessEvents(webgpuRes->instance);
     }
+
+    fetchBufferDataSync(webgpuRes->instance, bufferB, bufferDescB.size, [&](const void *data) {
+      const uint8_t *bufferDataB = static_cast<const uint8_t *>(data);
+      std::cout << "Buffer B: [";
+      for (size_t i = 0; i < bufferDescB.size; ++i) {
+        if (i > 0) std::cout << ", ";
+        std::cout << static_cast<int>(bufferDataB[i]);
+      }
+      std::cout << "]" << std::endl;
+    });
+
+    wgpuBufferUnmap(bufferB);
+
+    // At the end of the program:
+    wgpuBufferRelease(bufferA);
+    wgpuBufferRelease(bufferB);
 
     VividLogger::app_info("All queued instructions have been executed!");
 
