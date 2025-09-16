@@ -13,6 +13,8 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
 
+#include "vivid/render/render_systems.h"
+
 struct MyResource {
   int value;
   MyResource(int v) : value(v) {}
@@ -176,6 +178,8 @@ void hello_update_system(Resources& res, entt::registry& world) {
   // }
 }
 
+#define MAIN_HELLO_WEBGPU
+
 // Method 1: Using macro with chain calls (most concise)
 // VIVID_SDL3_MAIN(.add_plugin<DefaultPlugin>()
 //                     .add_startup_system(hello_startup_system)
@@ -183,7 +187,10 @@ void hello_update_system(Resources& res, entt::registry& world) {
 
 // 其他链式调用方法示例：
 
+// Hello SDL3
 // Method 2: Direct function with chain calls and metadata (新的简化API)
+
+#ifdef MAIN_HELLO_SDL3
 SDL3AppBuilder create_app_instance() {
   return std::move(
       create_sdl3_app()
@@ -205,12 +212,45 @@ SDL3AppBuilder create_app_instance() {
           .add_plugin<VIVID::Window::WindowPlugin>()
           .add_startup_system(hello_startup_system)
           .add_startup_system(create_custom_window_system)
+          // .add_startup_system(VIVID::Render::test_webgpu_instance)
           .add_system(ScheduleLabel::Startup, initImGui)
           .add_system(ScheduleLabel::Update, ShowImGuiDemo)
           // .add_system(ScheduleLabel::Update, hello_update_system)
           .add_system(ScheduleLabel::Event, ProcessImGuiEvent)
           .add_system(ScheduleLabel::Shutdown, ShutDownImGui));
 }
+#endif
+
+// Hello WebGPU
+#ifdef MAIN_HELLO_WEBGPU
+VIVID_SDL3_MAIN(
+        .set_app_info("VIVID Hello SDL3 with ECS Window", "1.0.0", "com.vivid.hello_sdl3")
+        // 使用枚举设置其他元数据
+        .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
+        .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
+        .set_metadata(SDL3MetadataProperty::Url, "https://github.com/vivid-engine/vivid")
+        .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+        // 自定义属性
+        .set_custom_metadata("custom_property", "custom_value")
+        // 配置日志系统 - 设置为Debug级别以显示详细日志
+        .set_default_log_level(VividLogLevel::Debug)
+        .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
+        // 应用配置
+        .insert_resource<MyResource>(100)
+        // .add_plugin<DefaultPlugin>()
+        .add_plugin<VIVID::Window::WindowPlugin>()
+        .add_startup_system(hello_startup_system)
+        .add_startup_system(create_custom_window_system)
+        .add_startup_system(VIVID::Render::CreateWebGPUInstance)
+        .add_startup_system(VIVID::Render::RequestWebGPUAdapterSync)
+        .add_startup_system(VIVID::Render::InspectWebGPUAdapter)
+    // .add_system(ScheduleLabel::Startup, initImGui)
+    // .add_system(ScheduleLabel::Update, ShowImGuiDemo)
+    // .add_system(ScheduleLabel::Update, hello_update_system)
+    // .add_system(ScheduleLabel::Event, ProcessImGuiEvent)
+    // .add_system(ScheduleLabel::Shutdown, ShutDownImGui))
+)
+#endif
 
 // Method 3: Step-by-step building
 // SDL3AppBuilder create_app_instance() {

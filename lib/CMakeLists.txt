@@ -142,6 +142,8 @@ find_package(glfw3 3.3 REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 
 
+
+
 # PhysX and Optick (pre-compiled binaries)
 set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 set(PHYSX_ROOT "${VENDOR_DIR}/PhysX/physx/install/vc17win64/PhysX")
@@ -213,6 +215,15 @@ target_include_directories(vivid_glm INTERFACE
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
 )
 
+# # set(WEBGPU_BACKEND "DAWN")
+
+# # Include webgpu directory, to define the 'webgpu' target
+add_subdirectory(${VENDOR_DIR}/webgpu)
+
+# # Create a wrapper interface library for webgpu to enable export
+# add_library(vivid_webgpu INTERFACE)
+# target_link_libraries(vivid_webgpu INTERFACE webgpu)
+
 # Update target link libraries to include PhysX, Optick, and GLEW
 target_link_libraries(${PROJECT_NAME} 
   PUBLIC
@@ -229,6 +240,8 @@ target_link_libraries(${PROJECT_NAME}
     # raylib # Temporarily commented out, conflicts with glfw
     ${PHYSX_LIBS}
     # OptickCore
+    webgpu
+
 )
 
 # ---- Create an installable target ----
@@ -248,6 +261,11 @@ install(
   COMPONENT "${PROJECT_NAME}_Development"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
 )
+
+# The application's binary must find wgpu.dll or libwgpu.so at runtime,
+# so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
+# next to the binary.
+target_copy_webgpu_binaries(${PROJECT_NAME})
 
 packageProject(
   NAME ${PROJECT_NAME}
