@@ -3,7 +3,9 @@
 #include <sstream>
 #include <thread>
 
+#include "sdl3webgpu.h"
 #include "vivid/log/log.h"
+#include "vivid/window/window_systems.h"
 #include "webgpu/webgpu.h"
 
 // Utility functions
@@ -90,6 +92,9 @@ struct WebGPUResources {
   WGPUDevice device = nullptr;
   bool deviceRequestEnded = false;
   WGPUQueue queue = nullptr;
+  WGPURenderPipeline pipeline = nullptr;
+  WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
+  WGPUSurface surface = nullptr;
 };
 
 namespace VIVID::Render {
@@ -133,6 +138,18 @@ namespace VIVID::Render {
     if (!webgpuRes) {
       VividLogger::app_error("Could not get WebGPU resources!");
       return;
+    }
+    // Set surface to sdl3 using SDL_GetWGPUSurface
+    auto view = world.view<VIVID::Window::WindowGpuComponent>();
+    if (view.empty()) {
+      VividLogger::app_error("Could not get Window GPU component!");
+      adapterOpts.compatibleSurface = nullptr;
+    } else {
+      view.each([&](auto entity, auto &gpu_comp) {
+        webgpuRes->surface = SDL_GetWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
+
+        adapterOpts.compatibleSurface = webgpuRes->surface;
+      });
     }
     // A simple structure holding the local information shared with the
     // onAdapterRequestEnded callback.
@@ -193,26 +210,6 @@ namespace VIVID::Render {
     webgpuRes->adapterRequestEnded = userData.requestEnded;
 
     VividLogger::app_debug("Got WebGPU adapter");
-  }
-
-  void ReleaseWebGPUResources(Resources &res, entt::registry &world) {
-    VividLogger::app_debug("Releasing WebGPU instance...");
-
-    auto webgpuRes = res.get<WebGPUResources>();
-    if (webgpuRes) {
-      wgpuQueueRelease(webgpuRes->queue);
-      wgpuAdapterRelease(webgpuRes->adapter);
-      wgpuDeviceRelease(webgpuRes->device);
-      wgpuInstanceProcessEvents(webgpuRes->instance);
-      wgpuInstanceRelease(webgpuRes->instance);
-      VividLogger::app_debug("WGPU instance, adapter, and device released");
-      webgpuRes->queue = nullptr;
-      webgpuRes->instance = nullptr;
-      webgpuRes->adapter = nullptr;
-      webgpuRes->device = nullptr;
-      webgpuRes->adapterRequestEnded = false;
-      webgpuRes->deviceRequestEnded = false;
-    }
   }
 
   void InspectWebGPUAdapter(Resources &res, entt::registry &world) {
@@ -576,4 +573,241 @@ namespace VIVID::Render {
 
     VividLogger::app_debug("WebGPU command queue tested");
   }
+
+  void ConfigureSurface(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Configuring WebGPU surface...");
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+
+    WGPUSurfaceConfiguration config = {};
+    config.nextInChain = nullptr;
+
+    config.width = 640;
+    config.height = 480;
+
+    WGPUSurfaceCapabilities capabilities = {};
+    wgpuSurfaceGetCapabilities(webgpuRes->surface, webgpuRes->adapter, &capabilities);
+
+    // print the formats
+    std::cout << "Surface formats:" << std::endl;
+    for (size_t i = 0; i < capabilities.formatCount; ++i) {
+      std::cout << " - " << capabilities.formats[i] << std::endl;
+    }
+    if (capabilities.formatCount < 0) {
+      VividLogger::render_error("No surface formats found!");
+      return;
+    }
+
+    WGPUTextureFormat surfaceFormat = capabilities.formats[0];
+    config.format = surfaceFormat;
+    // Keep the selected surface format for pipeline creation
+    webgpuRes->surfaceFormat = surfaceFormat;
+    // And we do not need any particular view format:
+    config.viewFormatCount = 0;
+    config.viewFormats = nullptr;
+    config.usage = WGPUTextureUsage_RenderAttachment;
+
+    if (webgpuRes->device == nullptr) {
+      VividLogger::render_error("No device found! Call RequestWebGPUDeviceSync first!");
+      return;
+    }
+    config.device = webgpuRes->device;
+    config.presentMode = WGPUPresentMode_Fifo;
+    config.alphaMode = WGPUCompositeAlphaMode_Auto;
+
+    wgpuSurfaceConfigure(webgpuRes->surface, &config);
+
+    VividLogger::app_debug("WebGPU surface configured");
+  }
+
+  void Draw(Resources &res, entt::registry &world) {
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+    // [...] Get the next target texture view
+    WGPUSurfaceTexture surfaceTexture;
+    wgpuSurfaceGetCurrentTexture(webgpuRes->surface, &surfaceTexture);
+    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal) {
+      VividLogger::app_error("Get the next target texture view failed");
+      return;
+    }
+
+    WGPUTextureViewDescriptor viewDescriptor = {};
+    viewDescriptor.nextInChain = nullptr;
+    viewDescriptor.label = toWgpuStringView("Surface texture view");
+    viewDescriptor.format = wgpuTextureGetFormat(surfaceTexture.texture);
+    viewDescriptor.dimension = WGPUTextureViewDimension_2D;
+    viewDescriptor.baseMipLevel = 0;
+    viewDescriptor.mipLevelCount = 1;
+    viewDescriptor.baseArrayLayer = 0;
+    viewDescriptor.arrayLayerCount = 1;
+    viewDescriptor.aspect = WGPUTextureAspect_All;
+    // View usage must be compatible with the surface texture's usage (RENDER_ATTACHMENT)
+    viewDescriptor.usage = WGPUTextureUsage_RenderAttachment;
+    WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
+
+    // [...] Draw things
+    // [...] Create Command Encoder
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.nextInChain = nullptr;
+    encoderDesc.label = toWgpuStringView("begin render pass encoder");
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(webgpuRes->device, &encoderDesc);
+
+    // [...] Encode Render Pass
+    // Describe the attachment
+    WGPURenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.view = targetView;
+    renderPassColorAttachment.resolveTarget = nullptr;
+    renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+    renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+    renderPassColorAttachment.clearValue = WGPUColor{0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+
+    // Describe the render pass
+    WGPURenderPassDescriptor renderPassDesc = {};
+    renderPassDesc.nextInChain = nullptr;
+    renderPassDesc.colorAttachmentCount = 1;
+    renderPassDesc.colorAttachments = &renderPassColorAttachment;
+    renderPassDesc.depthStencilAttachment = nullptr;
+    renderPassDesc.timestampWrites
+        = nullptr;  // When measuring the performance of a render pass, it is not possible to use
+                    // CPU-side timing functions, since the commands are not executed synchronously.
+                    // Instead, the render pass can receive a set of timestamp queries.
+
+    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+
+    // Use Render Pass
+
+    wgpuRenderPassEncoderEnd(renderPass);
+    wgpuRenderPassEncoderRelease(renderPass);
+
+    // [...] Finish encoding and submit
+    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    cmdBufferDescriptor.nextInChain = nullptr;
+    cmdBufferDescriptor.label = toWgpuStringView("Command buffer");
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    wgpuCommandEncoderRelease(encoder);  // release encoder after it's finished
+
+    // Finally submit the command queue
+    std::cout << "Submitting command..." << std::endl;
+    wgpuQueueSubmit(webgpuRes->queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+    std::cout << "Command submitted." << std::endl;
+
+    // [...] Present the surface onto the window
+    wgpuTextureViewRelease(targetView);
+#ifndef WEBGPU_BACKEND_WGPU
+    // We no longer need the texture, only its view
+    // (NB: with wgpu-native, surface textures must be release after the call to wgpuSurfacePresent)
+    wgpuTextureRelease(surfaceTexture.texture);
+#endif  // WEBGPU_BACKEND_WGPU
+
+// In the context of a Web browser, we do not present the surface texture ourselves. We rather rely
+// on emscripten_set_main_loop_arg (a.k.a. requestAnimationFrame in JavaScript) to call our
+// MainLoop() function right before presenting.
+#ifndef __EMSCRIPTEN__
+    wgpuSurfacePresent(webgpuRes->surface);
+#endif
+
+#ifdef WEBGPU_BACKEND_WGPU
+    wgpuTextureRelease(surfaceTexture.texture);
+#endif
+  }
+
+  void CreatePipeline(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Creating WebGPU pipeline...");
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+
+    const char *shaderSource = R"(
+      @vertex
+      fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
+          if (in_vertex_index == 0u) {
+              return vec4f(-0.45, 0.5, 0.0, 1.0);
+          } else if (in_vertex_index == 1u) {
+              return vec4f(0.45, 0.5, 0.0, 1.0);
+          } else {
+              return vec4f(0.0, -0.5, 0.0, 1.0);
+          }
+      }
+
+      @fragment
+      fn fs_main() -> @location(0) vec4f {
+          return vec4f(0.0, 0.4, 0.7, 1.0);
+      }
+    )";
+
+    // create the shader module
+    WGPUShaderSourceWGSL wgslDesc = {};
+    wgslDesc.code = toWgpuStringView(shaderSource);
+    WGPUShaderModuleDescriptor shaderDesc = {};
+    shaderDesc.nextInChain = &wgslDesc.chain;  // connect the chained extension
+    shaderDesc.label = toWgpuStringView("Shader source");
+    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(webgpuRes->device, &shaderDesc);
+
+    // Describe render pipeline
+    WGPURenderPipelineDescriptor pipelineDesc = {};
+    pipelineDesc.vertex.module = shaderModule;
+    pipelineDesc.vertex.entryPoint = toWgpuStringView("vs_main");
+
+    // const char *fragmentShaderSource = R"(
+    //   @fragment
+    //   fn fs_main() -> @location(0) vec4f {
+    //       return vec4f(0.0, 0.4, 0.7, 1.0);
+    //   }
+    // )";
+
+    WGPUFragmentState fragmentState = {};
+    fragmentState.module = shaderModule;
+    fragmentState.entryPoint = toWgpuStringView("fs_main");
+    pipelineDesc.fragment = &fragmentState;
+
+    WGPUColorTargetState colorTarget;
+    colorTarget.format = webgpuRes->surfaceFormat;
+    fragmentState.targetCount = 1;
+    fragmentState.targets = &colorTarget;
+
+    WGPUBlendState blendState;
+    colorTarget.blend = &blendState;
+
+    webgpuRes->pipeline = wgpuDeviceCreateRenderPipeline(webgpuRes->device, &pipelineDesc);
+
+    // @compute @workgroup_size(32)
+    // fn computeStuff(@builtin(global_invocation_id) threadId: vec3u) {
+    //     // [...]
+    // }
+  }
+
+  void ReleaseWebGPUResources(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Releasing WebGPU instance...");
+
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (webgpuRes) {
+      wgpuSurfaceRelease(webgpuRes->surface);
+      // wgpuRenderPipelineRelease(webgpuRes->pipeline);
+      wgpuQueueRelease(webgpuRes->queue);
+      wgpuAdapterRelease(webgpuRes->adapter);
+      wgpuDeviceRelease(webgpuRes->device);
+      wgpuInstanceProcessEvents(webgpuRes->instance);
+      wgpuInstanceRelease(webgpuRes->instance);
+      VividLogger::app_debug("WGPU instance, adapter, and device released");
+      webgpuRes->queue = nullptr;
+      webgpuRes->surface = nullptr;
+      webgpuRes->pipeline = nullptr;
+      webgpuRes->instance = nullptr;
+      webgpuRes->adapter = nullptr;
+      webgpuRes->device = nullptr;
+      webgpuRes->adapterRequestEnded = false;
+      webgpuRes->deviceRequestEnded = false;
+    }
+  }
+
 }  // namespace VIVID::Render

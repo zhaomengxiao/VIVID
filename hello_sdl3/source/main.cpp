@@ -247,6 +247,8 @@ VIVID_SDL3_MAIN(
         .add_startup_system(VIVID::Render::RequestWebGPUDeviceSync)
         .add_startup_system(VIVID::Render::InspectWebGPUDevice)
         .add_startup_system(VIVID::Render::TestCommandQueue)
+        .add_startup_system(VIVID::Render::ConfigureSurface)
+        .add_system(ScheduleLabel::Update, VIVID::Render::Draw)
         .add_system(ScheduleLabel::Shutdown, VIVID::Render::ReleaseWebGPUResources)
     // .add_system(ScheduleLabel::Startup, initImGui)
     // .add_system(ScheduleLabel::Update, ShowImGuiDemo)

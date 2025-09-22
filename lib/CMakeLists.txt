@@ -142,7 +142,19 @@ find_package(glfw3 3.3 REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu ${CMAKE_CURRENT_BINARY_DIR}/sdl3webgpu)
 
+# Ensure sdl3webgpu has proper include paths when installed
+target_include_directories(sdl3webgpu PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>
+)
+
+# Override vendor's '.' include path in INTERFACE to avoid source-prefixed paths in export
+set_target_properties(sdl3webgpu PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>;$<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>"
+)
 
 # PhysX and Optick (pre-compiled binaries)
 set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
@@ -241,7 +253,7 @@ target_link_libraries(${PROJECT_NAME}
     ${PHYSX_LIBS}
     # OptickCore
     webgpu
-
+    sdl3webgpu
 )
 
 # ---- Create an installable target ----
@@ -253,6 +265,23 @@ string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
 # # Install vivid_glm target along with VIVID
 install(TARGETS vivid_glm EXPORT ${PROJECT_NAME}Targets)
+
+# Install and export sdl3webgpu along with VIVID
+install(
+  TARGETS sdl3webgpu
+  EXPORT ${PROJECT_NAME}Targets
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
+)
+
+# Install sdl3webgpu public headers
+install(
+  FILES ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu/sdl3webgpu.h
+  DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
+  COMPONENT "${PROJECT_NAME}_Development"
+)
 
 # Install glm headers
 install(

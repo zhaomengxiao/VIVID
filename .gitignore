@@ -17,7 +17,9 @@ Thumbs.db
 desktop.ini
 
 # 第三方库
-# /vendor/
+/vendor/optick
+/vendor/PhysX
+/vendor/rlImGui
 # /lib/vendor/
 
 # Package managers and dependencies
@@ -48,6 +50,7 @@ Makefile
 *.pdb
 *.ilk
 *.exp
+*.zip
 
 # Debug and Release directories
 Debug/

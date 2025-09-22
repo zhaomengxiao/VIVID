@@ -26,6 +26,13 @@ namespace VIVID::Render {
 
   void TestCommandQueue(Resources &res, entt::registry &world);
 
+  // This must be done at the end of the initialization:
+  void ConfigureSurface(Resources &res, entt::registry &world);
+
+  void Draw(Resources &res, entt::registry &world);
+
+  void CreatePipeline(Resources &res, entt::registry &world);
+
   /// @brief 释放WebGPU资源
   /// @param res
   /// @param world
