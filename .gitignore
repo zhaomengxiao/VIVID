@@ -17,8 +17,8 @@ Thumbs.db
 desktop.ini
 
 # 第三方库
-/vendor/
-/lib/vendor/
+# /vendor/
+# /lib/vendor/
 
 # Package managers and dependencies
 /cpm_modules

@@ -218,7 +218,7 @@ target_include_directories(vivid_glm INTERFACE
 # # set(WEBGPU_BACKEND "DAWN")
 
 # # Include webgpu directory, to define the 'webgpu' target
-add_subdirectory(${VENDOR_DIR}/webgpu)
+# add_subdirectory(${VENDOR_DIR}/webgpu)
 
 # # Create a wrapper interface library for webgpu to enable export
 # add_library(vivid_webgpu INTERFACE)
@@ -265,7 +265,7 @@ install(
 # The application's binary must find wgpu.dll or libwgpu.so at runtime,
 # so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
 # next to the binary.
-target_copy_webgpu_binaries(${PROJECT_NAME})
+# target_copy_webgpu_binaries(${PROJECT_NAME})
 
 packageProject(
   NAME ${PROJECT_NAME}

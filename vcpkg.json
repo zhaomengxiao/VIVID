@@ -1,0 +1,18 @@
+{
+    "name": "vivid",
+    "version": "1.0.0",
+    "description": "VIVID - A cross-platform 3D graphics and game development library",
+    "homepage": "https://github.com/your-repo/vivid",
+    "license": "MIT",
+    "dependencies": [
+        {
+            "name": "glew"
+        },
+        {
+            "name": "glfw3"
+        },
+        {
+            "name": "sdl3"
+        }
+    ]
+}

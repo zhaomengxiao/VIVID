@@ -14,7 +14,11 @@
                     "value": "D:/DevSoftware/vcpkg-2025.04.09/scripts/buildsystems/vcpkg.cmake",
                     "type": "FILEPATH"
                 },
-                "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+                "VCPKG_FEATURE_FLAGS": "manifests"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/ClineWorkSpace/StartOpenGL/ep/vcpkg"
             }
         },
         {
