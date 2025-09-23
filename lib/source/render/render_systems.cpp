@@ -1,5 +1,7 @@
 #include "vivid/render/render_systems.h"
 
+#include <SDL3/SDL.h>
+
 #include <sstream>
 #include <thread>
 
@@ -95,9 +97,38 @@ struct WebGPUResources {
   WGPURenderPipeline pipeline = nullptr;
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
   WGPUSurface surface = nullptr;
+  uint32_t configuredWidth = 0;
+  uint32_t configuredHeight = 0;
 };
 
 namespace VIVID::Render {
+  static void ReconfigureSurface(Resources &res, entt::registry &world, uint32_t width,
+                                 uint32_t height) {
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes || !webgpuRes->surface || !webgpuRes->device) {
+      return;
+    }
+
+    if (width == 0 || height == 0) {
+      return;
+    }
+
+    WGPUSurfaceConfiguration config = {};
+    config.nextInChain = nullptr;
+    config.width = width;
+    config.height = height;
+    config.format = webgpuRes->surfaceFormat;
+    config.viewFormatCount = 0;
+    config.viewFormats = nullptr;
+    config.usage = WGPUTextureUsage_RenderAttachment;
+    config.device = webgpuRes->device;
+    config.presentMode = WGPUPresentMode_Fifo;
+    config.alphaMode = WGPUCompositeAlphaMode_Auto;
+    wgpuSurfaceConfigure(webgpuRes->surface, &config);
+
+    webgpuRes->configuredWidth = width;
+    webgpuRes->configuredHeight = height;
+  }
   void CreateWebGPUInstance(Resources &res, entt::registry &world) {
     // We create a descriptor
 
@@ -585,8 +616,29 @@ namespace VIVID::Render {
     WGPUSurfaceConfiguration config = {};
     config.nextInChain = nullptr;
 
-    config.width = 640;
-    config.height = 480;
+    // Query current window pixel size instead of hard-coded values
+    int pixel_width = 0;
+    int pixel_height = 0;
+    {
+      auto view = world.view<VIVID::Window::WindowGpuComponent>();
+      view.each([&](auto entity, auto &gpu_comp) {
+        if (gpu_comp.window_handle) {
+          SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
+        }
+      });
+    }
+
+    // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
+    if (pixel_width <= 0 || pixel_height <= 0) {
+      VividLogger::app_warn(
+          "Window pixel size is %dx%d; using fallback size for surface configuration", pixel_width,
+          pixel_height);
+      pixel_width = 1;
+      pixel_height = 1;
+    }
+
+    config.width = static_cast<uint32_t>(pixel_width);
+    config.height = static_cast<uint32_t>(pixel_height);
 
     WGPUSurfaceCapabilities capabilities = {};
     wgpuSurfaceGetCapabilities(webgpuRes->surface, webgpuRes->adapter, &capabilities);
@@ -618,7 +670,8 @@ namespace VIVID::Render {
     config.presentMode = WGPUPresentMode_Fifo;
     config.alphaMode = WGPUCompositeAlphaMode_Auto;
 
-    wgpuSurfaceConfigure(webgpuRes->surface, &config);
+    // Initial configure using selected format
+    ReconfigureSurface(res, world, config.width, config.height);
 
     VividLogger::app_debug("WebGPU surface configured");
   }
@@ -629,11 +682,47 @@ namespace VIVID::Render {
       VividLogger::app_error("Could not get WebGPU resources!");
       return;
     }
+    // Check current window pixel size and reconfigure if changed or zero
+    int pixel_width = 0;
+    int pixel_height = 0;
+    {
+      auto view = world.view<VIVID::Window::WindowGpuComponent>();
+      view.each([&](auto entity, auto &gpu_comp) {
+        if (gpu_comp.window_handle) {
+          SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
+        }
+      });
+    }
+
+    if (pixel_width <= 0 || pixel_height <= 0) {
+      // Minimized or not ready; skip this frame
+      return;
+    }
+
+    if (webgpuRes->configuredWidth != static_cast<uint32_t>(pixel_width)
+        || webgpuRes->configuredHeight != static_cast<uint32_t>(pixel_height)) {
+      ReconfigureSurface(res, world, static_cast<uint32_t>(pixel_width),
+                         static_cast<uint32_t>(pixel_height));
+      // Skip this frame after reconfiguration
+      return;
+    }
+
     // [...] Get the next target texture view
     WGPUSurfaceTexture surfaceTexture;
     wgpuSurfaceGetCurrentTexture(webgpuRes->surface, &surfaceTexture);
-    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal) {
-      VividLogger::app_error("Get the next target texture view failed");
+    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal
+        && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
+#ifdef __EMSCRIPTEN__
+        && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success
+#endif
+    ) {
+      if (surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated
+          || surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Lost) {
+        // Reconfigure on outdated/lost
+        ReconfigureSurface(res, world, static_cast<uint32_t>(pixel_width),
+                           static_cast<uint32_t>(pixel_height));
+      }
+      // Skip this frame for any non-success status
       return;
     }
 
