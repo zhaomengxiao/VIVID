@@ -118,6 +118,8 @@ namespace VIVID::Render {
     WGPUBuffer vertexBuffer = nullptr;
     WGPUBuffer indexBuffer = nullptr;
     uint32_t indexCount = 0;
+    WGPUBuffer uniformBuffer = nullptr;
+    WGPUBindGroup bindGroup = nullptr;
     WGPUVertexBufferLayout vertexBufferLayout = {};
     WGPUPipelineLayout layout = nullptr;
     WGPUBindGroupLayout bindGroupLayout = nullptr;
@@ -409,6 +411,8 @@ namespace VIVID::Render {
 
     webgpuRes->device = userData.device;
     webgpuRes->deviceRequestEnded = userData.requestEnded;
+    // Set default queue for later write/submit operations
+    webgpuRes->queue = wgpuDeviceGetQueue(webgpuRes->device);
 
     VividLogger::app_debug("Got WebGPU device");
   }
@@ -728,7 +732,11 @@ namespace VIVID::Render {
       // Create index buffer (use 32-bit indices to match MeshComponent definition)
       // (we reuse the bufferDesc initialized for the vertexBuffer)
       bufferDesc.size = mesh.m_Indices.size() * sizeof(uint32_t);
-      bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+
+      // only need when using uint16_t, uint32_t is 4 bytes aligned
+      // bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+      // mesh.m_Indices.resize((mesh.m_Indices.size() + 1)
+      //                       & ~1);  // round up to the next multiple of 2
       bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
       WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &bufferDesc);
 
@@ -829,12 +837,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       WGPUColorTargetState colorTarget = {};
       colorTarget.format = webgpuRes->surfaceFormat;
       WGPUBlendState blendState = {};
-      blendState.color.srcFactor = WGPUBlendFactor_One;
-      blendState.color.dstFactor = WGPUBlendFactor_Zero;
-      blendState.color.operation = WGPUBlendOperation_Add;
-      blendState.alpha.srcFactor = WGPUBlendFactor_One;
-      blendState.alpha.dstFactor = WGPUBlendFactor_Zero;
-      blendState.alpha.operation = WGPUBlendOperation_Add;
       colorTarget.blend = &blendState;
       colorTarget.writeMask = WGPUColorWriteMask_All;
       fragmentState.targetCount = 1;
@@ -855,18 +857,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       multisample.mask = 0xFFFFFFFF;
       multisample.alphaToCoverageEnabled = false;
       pipelineDesc.multisample = multisample;
-      // Define binding layout (don't forget to = Default)
+      // Define binding layout for a uniform buffer used in VS/FS
       WGPUBindGroupLayoutEntry bindingLayout = {};
-
-      // The binding index as used in the @binding attribute in the shader
-      bindingLayout.binding = 0;
-
-      // The stage that needs to access this resource
-      bindingLayout.visibility = WGPUShaderStage_Vertex;
-      bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
-      bindingLayout.buffer.minBindingSize = 4 * sizeof(float);
-      bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+      bindingLayout.binding = 0;  // shader @binding(0)
       bindingLayout.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+      bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+      bindingLayout.buffer.hasDynamicOffset = false;
+      bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
       // Create a bind group layout
       WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
@@ -893,7 +890,31 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       gpuMeshComponent.indexBuffer = indexBuffer;
       gpuMeshComponent.indexCount = (unsigned int)mesh.m_Indices.size();
       gpuMeshComponent.vertexBufferLayout = vertexBufferLayout;
+      gpuMeshComponent.layout = layout;
+      gpuMeshComponent.bindGroupLayout = bindGroupLayout;
       gpuMeshComponent.pipeline = pipeline;
+
+      // Create per-entity uniform buffer and bind group (persist across frames)
+      WGPUBufferDescriptor uniformDesc = {};
+      uniformDesc.nextInChain = nullptr;
+      uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
+      uniformDesc.size = sizeof(MyUniforms);
+      uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+      gpuMeshComponent.uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &uniformDesc);
+
+      WGPUBindGroupEntry bgEntry = {};
+      bgEntry.binding = 0;
+      bgEntry.buffer = gpuMeshComponent.uniformBuffer;
+      bgEntry.offset = 0;
+      bgEntry.size = sizeof(MyUniforms);
+
+      WGPUBindGroupDescriptor bgDesc = {};
+      bgDesc.nextInChain = nullptr;
+      bgDesc.layout = bindGroupLayout;
+      bgDesc.entryCount = 1;
+      bgDesc.entries = &bgEntry;
+      gpuMeshComponent.bindGroup = wgpuDeviceCreateBindGroup(webgpuRes->device, &bgDesc);
+
       world.emplace<GpuMeshComponent>(entity, gpuMeshComponent);
     });
   }
@@ -1015,53 +1036,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         uniforms.color[2] = material->ObjectColor.z;
         uniforms.color[3] = 1.0f;
       }
-
-      // Create and upload uniform buffer (Uniform | CopyDst)
-      WGPUBufferDescriptor uniformDesc = {};
-      uniformDesc.nextInChain = nullptr;
-      uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
-      uniformDesc.size = sizeof(MyUniforms);
-      uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
-      WGPUBuffer uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &uniformDesc);
-
-      wgpuQueueWriteBuffer(webgpuRes->queue, uniformBuffer, 0, &uniforms, sizeof(uniforms));
-
-      // Resolve bind group layout from component or pipeline
-      WGPUBindGroupLayout bindGroupLayout = gpu.bindGroupLayout;
-      bool layoutFromPipeline = false;
-      if (bindGroupLayout == nullptr) {
-        bindGroupLayout = wgpuRenderPipelineGetBindGroupLayout(gpu.pipeline, 0);
-        layoutFromPipeline = true;
+      // Update per-entity uniform buffer content
+      if (gpu.uniformBuffer != nullptr) {
+        wgpuQueueWriteBuffer(webgpuRes->queue, gpu.uniformBuffer, 0, &uniforms, sizeof(uniforms));
       }
-
-      // Create bind group for the uniform buffer
-      WGPUBindGroupEntry bgEntry = {};
-      bgEntry.binding = 0;
-      bgEntry.buffer = uniformBuffer;
-      bgEntry.offset = 0;
-      bgEntry.size = sizeof(MyUniforms);
-
-      WGPUBindGroupDescriptor bgDesc = {};
-      bgDesc.nextInChain = nullptr;
-      bgDesc.layout = bindGroupLayout;
-      bgDesc.entryCount = 1;
-      bgDesc.entries = &bgEntry;
-      WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(webgpuRes->device, &bgDesc);
 
       // Bind pipeline and buffers, then draw
       wgpuRenderPassEncoderSetPipeline(renderPass, gpu.pipeline);
       wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, gpu.vertexBuffer, 0, WGPU_WHOLE_SIZE);
       wgpuRenderPassEncoderSetIndexBuffer(renderPass, gpu.indexBuffer, WGPUIndexFormat_Uint32, 0,
                                           WGPU_WHOLE_SIZE);
-      wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
+      wgpuRenderPassEncoderSetBindGroup(renderPass, 0, gpu.bindGroup, 0, nullptr);
       wgpuRenderPassEncoderDrawIndexed(renderPass, gpu.indexCount, 1, 0, 0, 0);
-
-      // Release per-frame temporary resources
-      wgpuBindGroupRelease(bindGroup);
-      if (layoutFromPipeline) {
-        wgpuBindGroupLayoutRelease(bindGroupLayout);
-      }
-      wgpuBufferRelease(uniformBuffer);
     });
 
     wgpuRenderPassEncoderEnd(renderPass);
@@ -1192,6 +1178,42 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
   void ReleaseWebGPUResources(Resources &res, entt::registry &world) {
     VividLogger::app_debug("Releasing WebGPU instance...");
+
+    // Release all per-entity GPU resources first
+    {
+      auto view = world.view<GpuMeshComponent>();
+      view.each([&](auto entity, GpuMeshComponent &gpu) {
+        if (gpu.bindGroup) {
+          wgpuBindGroupRelease(gpu.bindGroup);
+          gpu.bindGroup = nullptr;
+        }
+        if (gpu.uniformBuffer) {
+          wgpuBufferRelease(gpu.uniformBuffer);
+          gpu.uniformBuffer = nullptr;
+        }
+        if (gpu.vertexBuffer) {
+          wgpuBufferRelease(gpu.vertexBuffer);
+          gpu.vertexBuffer = nullptr;
+        }
+        if (gpu.indexBuffer) {
+          wgpuBufferRelease(gpu.indexBuffer);
+          gpu.indexBuffer = nullptr;
+        }
+        if (gpu.pipeline) {
+          wgpuRenderPipelineRelease(gpu.pipeline);
+          gpu.pipeline = nullptr;
+        }
+        if (gpu.layout) {
+          wgpuPipelineLayoutRelease(gpu.layout);
+          gpu.layout = nullptr;
+        }
+        if (gpu.bindGroupLayout) {
+          wgpuBindGroupLayoutRelease(gpu.bindGroupLayout);
+          gpu.bindGroupLayout = nullptr;
+        }
+      });
+      world.clear<GpuMeshComponent>();
+    }
 
     auto webgpuRes = res.get<WebGPUResources>();
     if (webgpuRes) {
