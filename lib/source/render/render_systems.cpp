@@ -11,12 +11,25 @@
 #include "vivid/rendering/render_component.h"
 #include "vivid/window/window_systems.h"
 #include "webgpu/webgpu.h"
+// Camera controller helpers for view matrix
+#include "vivid/input/camera_controller.h"
+// glm helpers for matrix ops
+#include <glm/gtc/matrix_transform.hpp>
 
 // Internal structs
-struct MyUniforms {
-  std::array<float, 4> color;
-  float time;
-  float _pad[3];
+// Uniforms for Blinn-Phong shading. Layout is 16-byte aligned for WGSL std140-like rules.
+struct BPUniforms {
+  glm::mat4 model;
+  glm::mat4 view;
+  glm::mat4 projection;
+  glm::mat4 normalMatrix;              // store as mat4 for alignment; use upper-left 3x3 in shader
+  std::array<float, 4> viewPos;        // xyz + pad
+  std::array<float, 4> lightPos;       // xyz + pad
+  std::array<float, 4> objectColor;    // rgb + pad
+  std::array<float, 4> lightColor;     // rgb + pad
+  std::array<float, 4> ambientColor;   // rgb + pad
+  std::array<float, 4> specularColor;  // rgb + pad
+  std::array<float, 4> params;         // constant, linear, quadratic, shininess
 };
 
 // Utility functions
@@ -108,6 +121,10 @@ struct WebGPUResources {
   WGPUSurface surface = nullptr;
   uint32_t configuredWidth = 0;
   uint32_t configuredHeight = 0;
+  // Depth resources
+  WGPUTexture depthTexture = nullptr;
+  WGPUTextureView depthView = nullptr;
+  WGPUTextureFormat depthFormat = WGPUTextureFormat_Depth24Plus;
 };
 
 // Components
@@ -152,6 +169,41 @@ namespace VIVID::Render {
 
     webgpuRes->configuredWidth = width;
     webgpuRes->configuredHeight = height;
+
+    // (Re)create depth resources matching the surface size
+    if (webgpuRes->depthView) {
+      wgpuTextureViewRelease(webgpuRes->depthView);
+      webgpuRes->depthView = nullptr;
+    }
+    if (webgpuRes->depthTexture) {
+      wgpuTextureRelease(webgpuRes->depthTexture);
+      webgpuRes->depthTexture = nullptr;
+    }
+
+    WGPUTextureDescriptor depthDesc = {};
+    depthDesc.nextInChain = nullptr;
+    depthDesc.label = toWgpuStringView("Depth texture");
+    depthDesc.usage = WGPUTextureUsage_RenderAttachment;
+    depthDesc.dimension = WGPUTextureDimension_2D;
+    depthDesc.size.width = width;
+    depthDesc.size.height = height;
+    depthDesc.size.depthOrArrayLayers = 1;
+    depthDesc.format = webgpuRes->depthFormat;
+    depthDesc.mipLevelCount = 1;
+    depthDesc.sampleCount = 1;
+    webgpuRes->depthTexture = wgpuDeviceCreateTexture(webgpuRes->device, &depthDesc);
+
+    WGPUTextureViewDescriptor depthViewDesc = {};
+    depthViewDesc.nextInChain = nullptr;
+    depthViewDesc.label = toWgpuStringView("Depth texture view");
+    depthViewDesc.format = webgpuRes->depthFormat;
+    depthViewDesc.dimension = WGPUTextureViewDimension_2D;
+    depthViewDesc.baseMipLevel = 0;
+    depthViewDesc.mipLevelCount = 1;
+    depthViewDesc.baseArrayLayer = 0;
+    depthViewDesc.arrayLayerCount = 1;
+    depthViewDesc.aspect = WGPUTextureAspect_All;
+    webgpuRes->depthView = wgpuTextureCreateView(webgpuRes->depthTexture, &depthViewDesc);
   }
   void CreateWebGPUInstance(Resources &res, entt::registry &world) {
     // We create a descriptor
@@ -761,56 +813,65 @@ namespace VIVID::Render {
       vertexBufferLayout.arrayStride = 6 * sizeof(float);
       vertexBufferLayout.stepMode = WGPUVertexStepMode_Vertex;
 
-      // shader
+      // shader (WGSL Blinn-Phong equivalent of standalone/res/shaders/BlinnPhong.shader)
       const char *shaderSource = R"(
 struct VertexInput {
-	@location(0) position: vec3f,
-	@location(1) color: vec3f,
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
 };
-/**
- * A structure with fields labeled with builtins and locations can also be used
- * as *output* of the vertex shader, which is also the input of the fragment
- * shader.
- */
+
 struct VertexOutput {
-	@builtin(position) position: vec4f,
-	// The location here does not refer to a vertex attribute, it just means
-	// that this field must be handled by the rasterizer.
-	// (It can also refer to another field of another struct that would be used
-	// as input to the fragment shader.)
-	@location(0) color: vec3f,
+  @builtin(position) position: vec4f,
+  @location(0) fragPos: vec3f,
+  @location(1) normal: vec3f,
 };
-// We add the declaration of 'uTime' to the shader prelude
-struct MyUniforms {
-	color: vec4f, // <-- this is now first!
-	time: f32,
+
+struct BPUniforms {
+  model: mat4x4<f32>,
+  view: mat4x4<f32>,
+  projection: mat4x4<f32>,
+  normalMatrix: mat4x4<f32>,
+  viewPos: vec4f,
+  lightPos: vec4f,
+  objectColor: vec4f,
+  lightColor: vec4f,
+  ambientColor: vec4f,
+  specularColor: vec4f,
+  params: vec4f, // x: constant, y: linear, z: quadratic, w: shininess
 };
 
 @group(0) @binding(0)
-var<uniform> uMyUniforms: MyUniforms;
+var<uniform> u: BPUniforms;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
-	var out: VertexOutput;
-	let ratio = 640.0 / 480.0;
-	let angle = uMyUniforms.time; // you can multiply it go rotate faster
-	let alpha = cos(angle);
-	let beta = sin(angle);
-	var position = vec3f(
-		in.position.x,
-		alpha * in.position.y + beta * in.position.z,
-		alpha * in.position.z - beta * in.position.y,
-	);
-	out.position = vec4f(position.x, position.y * ratio, 0.0, 1.0);
-	out.color = in.color;
-	return out;
+  var out: VertexOutput;
+  let worldPos = (u.model * vec4f(in.position, 1.0)).xyz;
+  out.fragPos = worldPos;
+  out.normal = normalize((u.normalMatrix * vec4f(in.normal, 0.0)).xyz);
+  out.position = u.projection * u.view * u.model * vec4f(in.position, 1.0);
+  return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-	// We multiply the scene's color with our global uniform (this is one
-	// possible use of the color uniform, among many others).
-	return vec4f(in.color, 1.0) * uMyUniforms.color;
+  let ambient = u.ambientColor.xyz * u.objectColor.xyz;
+
+  let distance = length(u.lightPos.xyz - in.fragPos);
+  let attenuation = 1.0 / (u.params.x + u.params.y * distance + u.params.z * distance * distance);
+  let attenuatedLight = u.lightColor.xyz * attenuation;
+
+  let n = normalize(in.normal);
+  let lightDir = normalize(u.lightPos.xyz - in.fragPos);
+  let diff = max(dot(n, lightDir), 0.0);
+  let diffuse = diff * attenuatedLight * u.objectColor.xyz;
+
+  let viewDir = normalize(u.viewPos.xyz - in.fragPos);
+  let halfwayDir = normalize(lightDir + viewDir);
+  let spec = max(pow(max(dot(n, halfwayDir), 0.0), u.params.w), 0.0);
+  let specular = spec * attenuatedLight * u.specularColor.xyz;
+
+  return vec4f(ambient + diffuse + specular, 1.0);
 }
       )";
 
@@ -848,7 +909,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       primitive.topology = WGPUPrimitiveTopology_TriangleList;
       primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
       primitive.frontFace = WGPUFrontFace_CCW;
-      primitive.cullMode = WGPUCullMode_None;
+      primitive.cullMode = WGPUCullMode_Back;  // cull back faces
       pipelineDesc.primitive = primitive;
 
       // Multisample state
@@ -857,13 +918,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       multisample.mask = 0xFFFFFFFF;
       multisample.alphaToCoverageEnabled = false;
       pipelineDesc.multisample = multisample;
+
+      // Depth-stencil state
+      WGPUDepthStencilState depthStencil = {};
+      depthStencil.format = webgpuRes->depthFormat;
+      depthStencil.depthWriteEnabled = WGPUOptionalBool_True;
+      depthStencil.depthCompare = WGPUCompareFunction_Less;
+      depthStencil.stencilReadMask = 0xFFFFFFFF;
+      depthStencil.stencilWriteMask = 0xFFFFFFFF;
+      pipelineDesc.depthStencil = &depthStencil;
       // Define binding layout for a uniform buffer used in VS/FS
       WGPUBindGroupLayoutEntry bindingLayout = {};
       bindingLayout.binding = 0;  // shader @binding(0)
       bindingLayout.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
       bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
       bindingLayout.buffer.hasDynamicOffset = false;
-      bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+      bindingLayout.buffer.minBindingSize = sizeof(BPUniforms);
 
       // Create a bind group layout
       WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
@@ -898,7 +968,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       WGPUBufferDescriptor uniformDesc = {};
       uniformDesc.nextInChain = nullptr;
       uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
-      uniformDesc.size = sizeof(MyUniforms);
+      uniformDesc.size = sizeof(BPUniforms);
       uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
       gpuMeshComponent.uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &uniformDesc);
 
@@ -906,7 +976,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       bgEntry.binding = 0;
       bgEntry.buffer = gpuMeshComponent.uniformBuffer;
       bgEntry.offset = 0;
-      bgEntry.size = sizeof(MyUniforms);
+      bgEntry.size = sizeof(BPUniforms);
 
       WGPUBindGroupDescriptor bgDesc = {};
       bgDesc.nextInChain = nullptr;
@@ -1005,7 +1075,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     renderPassDesc.nextInChain = nullptr;
     renderPassDesc.colorAttachmentCount = 1;
     renderPassDesc.colorAttachments = &renderPassColorAttachment;
-    renderPassDesc.depthStencilAttachment = nullptr;
+    WGPURenderPassDepthStencilAttachment depthAttach = {};
+    depthAttach.view = webgpuRes->depthView;
+    depthAttach.depthClearValue = 1.0f;
+    depthAttach.depthLoadOp = WGPULoadOp_Clear;
+    depthAttach.depthStoreOp = WGPUStoreOp_Store;
+    depthAttach.depthReadOnly = false;
+    depthAttach.stencilReadOnly = true;
+    renderPassDesc.depthStencilAttachment = &depthAttach;
     renderPassDesc.timestampWrites
         = nullptr;  // When measuring the performance of a render pass, it is not possible to use
                     // CPU-side timing functions, since the commands are not executed synchronously.
@@ -1014,28 +1091,87 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 
     // Use Render Pass
-    // Update time (seconds) for this frame
-    float timeSeconds = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+    // Build camera matrices and positions
+    glm::mat4 viewMatrix(1.0f);
+    glm::mat4 projectionMatrix(1.0f);
+    glm::vec3 viewPos(0.0f);
+    {
+      entt::entity mainCameraEntity = entt::null;
+      TransformComponent *mainCameraTransform = nullptr;
+      CameraComponent *mainCameraComponent = nullptr;
+      ViewportComponent *viewportComponent = nullptr;
+      auto cameraView = world.view<TransformComponent, CameraComponent, ViewportComponent>();
+      if (cameraView.size_hint() > 0) {
+        mainCameraEntity = cameraView.front();
+        mainCameraTransform = &cameraView.get<TransformComponent>(mainCameraEntity);
+        mainCameraComponent = &cameraView.get<CameraComponent>(mainCameraEntity);
+        viewportComponent = &cameraView.get<ViewportComponent>(mainCameraEntity);
+      }
+      if (mainCameraEntity != entt::null && mainCameraTransform && mainCameraComponent) {
+        viewPos = mainCameraTransform->Position;
+        if (world.any_of<CameraControllerComponent>(mainCameraEntity)) {
+          auto &controller = world.get<CameraControllerComponent>(mainCameraEntity);
+          glm::vec3 target = mainCameraTransform->Position + controller.Front;
+          viewMatrix = glm::lookAt(mainCameraTransform->Position, target, controller.Up);
+        } else {
+          viewMatrix = glm::lookAt(mainCameraTransform->Position,
+                                   mainCameraTransform->Position + glm::vec3(0, 0, -1),
+                                   glm::vec3(0, 1, 0));
+        }
+        projectionMatrix = mainCameraComponent->ProjectionMatrix;
+        if (projectionMatrix == glm::mat4(1.0f) && webgpuRes->configuredHeight > 0) {
+          float aspect = static_cast<float>(webgpuRes->configuredWidth)
+                         / static_cast<float>(webgpuRes->configuredHeight);
+          projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+        }
+      }
+    }
+
+    // Query first light
+    glm::vec3 lightPos(5.0f, 5.0f, 5.0f);
+    glm::vec3 lightColor(1.0f);
+    glm::vec3 ambientColor(0.2f);
+    float constant = 1.0f, linear = 0.09f, quadratic = 0.032f;
+    if (auto lightView = world.view<TransformComponent, LightComponent>();
+        lightView.size_hint() > 0) {
+      auto lightEntity = lightView.front();
+      auto &lightTransform = lightView.get<TransformComponent>(lightEntity);
+      auto &lightComponent = lightView.get<LightComponent>(lightEntity);
+      lightPos = lightTransform.Position;
+      lightColor = lightComponent.LightColor;
+      ambientColor = lightComponent.AmbientColor;
+      constant = lightComponent.Constant;
+      linear = lightComponent.Linear;
+      quadratic = lightComponent.Quadratic;
+    }
 
     // Iterate over all GPU meshes and draw
-    auto drawView = world.view<GpuMeshComponent>();
-    drawView.each([&](auto entity, const GpuMeshComponent &gpu) {
+    auto drawView = world.view<GpuMeshComponent, TransformComponent, MaterialComponent>();
+    drawView.each([&](auto entity, const GpuMeshComponent &gpu, const TransformComponent &transform,
+                      const MaterialComponent &material) {
       if (gpu.pipeline == nullptr || gpu.vertexBuffer == nullptr || gpu.indexBuffer == nullptr
           || gpu.indexCount == 0) {
         return;
       }
 
       // Prepare per-entity uniforms
-      MyUniforms uniforms = {};
-      uniforms.color = {1.0f, 1.0f, 1.0f, 1.0f};
-      uniforms.time = timeSeconds;
+      BPUniforms uniforms = {};
+      const glm::mat4 model = transform.GetTransform();
+      const glm::mat4 normalMat = glm::transpose(glm::inverse(model));
+      uniforms.model = model;
+      uniforms.view = viewMatrix;
+      uniforms.projection = projectionMatrix;
+      uniforms.normalMatrix = normalMat;
+      uniforms.viewPos = {viewPos.x, viewPos.y, viewPos.z, 0.0f};
+      uniforms.lightPos = {lightPos.x, lightPos.y, lightPos.z, 0.0f};
+      uniforms.objectColor
+          = {material.ObjectColor.r, material.ObjectColor.g, material.ObjectColor.b, 0.0f};
+      uniforms.lightColor = {lightColor.r, lightColor.g, lightColor.b, 0.0f};
+      uniforms.ambientColor = {ambientColor.r, ambientColor.g, ambientColor.b, 0.0f};
+      uniforms.specularColor
+          = {material.SpecularColor.r, material.SpecularColor.g, material.SpecularColor.b, 0.0f};
+      uniforms.params = {constant, linear, quadratic, material.Shininess};
 
-      if (auto material = world.try_get<MaterialComponent>(entity)) {
-        uniforms.color[0] = material->ObjectColor.x;
-        uniforms.color[1] = material->ObjectColor.y;
-        uniforms.color[2] = material->ObjectColor.z;
-        uniforms.color[3] = 1.0f;
-      }
       // Update per-entity uniform buffer content
       if (gpu.uniformBuffer != nullptr) {
         wgpuQueueWriteBuffer(webgpuRes->queue, gpu.uniformBuffer, 0, &uniforms, sizeof(uniforms));
@@ -1061,10 +1197,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     wgpuCommandEncoderRelease(encoder);  // release encoder after it's finished
 
     // Finally submit the command queue
-    std::cout << "Submitting command..." << std::endl;
+    // std::cout << "Submitting command..." << std::endl;
     wgpuQueueSubmit(webgpuRes->queue, 1, &command);
     wgpuCommandBufferRelease(command);
-    std::cout << "Command submitted." << std::endl;
+    // std::cout << "Command submitted." << std::endl;
 
     // [...] Present the surface onto the window
     wgpuTextureViewRelease(targetView);
@@ -1217,6 +1353,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     auto webgpuRes = res.get<WebGPUResources>();
     if (webgpuRes) {
+      if (webgpuRes->depthView) {
+        wgpuTextureViewRelease(webgpuRes->depthView);
+        webgpuRes->depthView = nullptr;
+      }
+      if (webgpuRes->depthTexture) {
+        wgpuTextureRelease(webgpuRes->depthTexture);
+        webgpuRes->depthTexture = nullptr;
+      }
       wgpuSurfaceRelease(webgpuRes->surface);
       // wgpuRenderPipelineRelease(webgpuRes->pipeline);
       wgpuQueueRelease(webgpuRes->queue);
