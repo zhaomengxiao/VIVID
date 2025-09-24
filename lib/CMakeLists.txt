@@ -141,6 +141,38 @@ find_package(GLEW REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 
+# ImGui for editor UI - using local vendor copy
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)
+# ImGui headers
+set(IMGUI_HEADERS
+    ${IMGUI_DIR}/imgui.h
+    ${IMGUI_DIR}/imgui_internal.h
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.h
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.h
+    ${IMGUI_DIR}/backends/imgui_impl_wgpu.h
+)
+# ImGui source files
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_wgpu.cpp
+)    
+
+
+# Create an interface target to expose ImGui include dirs to consumers
+add_library(vivid_imgui INTERFACE)
+target_include_directories(vivid_imgui INTERFACE
+  $<BUILD_INTERFACE:${IMGUI_DIR}>
+  $<BUILD_INTERFACE:${IMGUI_DIR}/backends>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
+)
+
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu ${CMAKE_CURRENT_BINARY_DIR}/sdl3webgpu)
 
@@ -177,7 +209,7 @@ file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/
 
 # Note: for header-only libraries change all PUBLIC flags to INTERFACE and create an interface
 # target: add_library(${PROJECT_NAME} INTERFACE)
-add_library(${PROJECT_NAME} ${headers} ${sources})
+add_library(${PROJECT_NAME} ${headers} ${sources} ${IMGUI_SOURCES} ${IMGUI_HEADERS})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
 # being a cross-platform target, we enforce standards conformance on MSVC
@@ -240,11 +272,12 @@ target_include_directories(vivid_glm INTERFACE
 target_link_libraries(${PROJECT_NAME} 
   PUBLIC
     vivid_glm  # Use our wrapper instead of glm::glm directly
+    vivid_imgui
     # glm::glm
     EnTT::EnTT
     GLEW::glew
     glfw
-    
+    webgpu
     OpenGL::GL
   PRIVATE
     # Existing libraries
@@ -252,7 +285,7 @@ target_link_libraries(${PROJECT_NAME}
     # raylib # Temporarily commented out, conflicts with glfw
     ${PHYSX_LIBS}
     # OptickCore
-    webgpu
+
     sdl3webgpu
 )
 
@@ -265,6 +298,9 @@ string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
 # # Install vivid_glm target along with VIVID
 install(TARGETS vivid_glm EXPORT ${PROJECT_NAME}Targets)
+
+# Install vivid_imgui interface target along with VIVID
+install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
 
 # Install and export sdl3webgpu along with VIVID
 install(
@@ -289,6 +325,14 @@ install(
   DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/glm
   COMPONENT "${PROJECT_NAME}_Development"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
+)
+
+# Install ImGui headers so consumers can use the exported include paths
+install(
+  DIRECTORY ${IMGUI_DIR}/
+  DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui
+  COMPONENT "${PROJECT_NAME}_Development"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
 )
 
 # The application's binary must find wgpu.dll or libwgpu.so at runtime,

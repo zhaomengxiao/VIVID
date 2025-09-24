@@ -10,7 +10,10 @@
 #include "vivid/log/log.h"
 #include "vivid/rendering/render_component.h"
 #include "vivid/window/window_systems.h"
-#include "webgpu/webgpu.h"
+// ImGui rendering backend
+#include <imgui.h>
+#include <imgui_impl_wgpu.h>
+
 // Camera controller helpers for view matrix
 #include "vivid/input/camera_controller.h"
 // glm helpers for matrix ops
@@ -107,25 +110,6 @@ void fetchBufferDataSync(WGPUInstance instance, WGPUBuffer buffer, size_t buffer
     processBufferData(bufferData);
   }
 }
-
-// Resources
-struct WebGPUResources {
-  WGPUInstance instance = nullptr;
-  WGPUAdapter adapter = nullptr;
-  bool adapterRequestEnded = false;
-  WGPUDevice device = nullptr;
-  bool deviceRequestEnded = false;
-  WGPUQueue queue = nullptr;
-  WGPURenderPipeline pipeline = nullptr;
-  WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-  WGPUSurface surface = nullptr;
-  uint32_t configuredWidth = 0;
-  uint32_t configuredHeight = 0;
-  // Depth resources
-  WGPUTexture depthTexture = nullptr;
-  WGPUTextureView depthView = nullptr;
-  WGPUTextureFormat depthFormat = WGPUTextureFormat_Depth24Plus;
-};
 
 // Components
 
@@ -1009,6 +993,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     if (pixel_width <= 0 || pixel_height <= 0) {
       // Minimized or not ready; skip this frame
+      ImGui::EndFrame();
       return;
     }
 
@@ -1017,6 +1002,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       ReconfigureSurface(res, world, static_cast<uint32_t>(pixel_width),
                          static_cast<uint32_t>(pixel_height));
       // Skip this frame after reconfiguration
+      ImGui::EndFrame();
       return;
     }
 
@@ -1036,6 +1022,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                            static_cast<uint32_t>(pixel_height));
       }
       // Skip this frame for any non-success status
+      ImGui::EndFrame();
       return;
     }
 
@@ -1185,6 +1172,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       wgpuRenderPassEncoderSetBindGroup(renderPass, 0, gpu.bindGroup, 0, nullptr);
       wgpuRenderPassEncoderDrawIndexed(renderPass, gpu.indexCount, 1, 0, 0, 0);
     });
+
+    // Render ImGui draw data within the same render pass (UI built earlier in Update stage)
+    ImGui::Render();
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 
     wgpuRenderPassEncoderEnd(renderPass);
     wgpuRenderPassEncoderRelease(renderPass);

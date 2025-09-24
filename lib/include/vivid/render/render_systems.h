@@ -1,10 +1,31 @@
 #pragma once
 
+#include <webgpu/webgpu.h>
+
 #include <glm/glm.hpp>
 #include <string>
 
 #include "vivid/app/App.h"
 #include "vivid/app/Plugin.h"
+
+// Resources
+struct WebGPUResources {
+  WGPUInstance instance = nullptr;
+  WGPUAdapter adapter = nullptr;
+  bool adapterRequestEnded = false;
+  WGPUDevice device = nullptr;
+  bool deviceRequestEnded = false;
+  WGPUQueue queue = nullptr;
+  WGPURenderPipeline pipeline = nullptr;
+  WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
+  WGPUSurface surface = nullptr;
+  uint32_t configuredWidth = 0;
+  uint32_t configuredHeight = 0;
+  // Depth resources
+  WGPUTexture depthTexture = nullptr;
+  WGPUTextureView depthView = nullptr;
+  WGPUTextureFormat depthFormat = WGPUTextureFormat_Depth24Plus;
+};
 struct ShaderProgramSource {
   std::string VertexSource;
   std::string FragmentSource;
@@ -22,6 +43,8 @@ void SetUniform4f(unsigned int program, const std::string &name, float v0, float
 void SetUniformMat4f(unsigned int program, const std::string &name, const glm::mat4 &matrix);
 
 namespace VIVID::Render {
+  static void ReconfigureSurface(Resources &res, entt::registry &world, uint32_t width,
+                                 uint32_t height);
 
   // Startup Stage Systems (one time initialization)
   void CreateWebGPUInstance(Resources &res, entt::registry &world);
