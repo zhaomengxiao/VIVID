@@ -5,6 +5,7 @@
 
 #include "vivid/app/SDL3App.h"
 #include "vivid/log/log.h"
+#include "vivid/rendering/render_component.h"
 #include "vivid/window/window_systems.h"
 
 // 如何在SDL3窗口中显示imgui: 1.添加imgui头文件
@@ -19,6 +20,34 @@ struct MyResource {
   int value;
   MyResource(int v) : value(v) {}
 };
+
+// Helper function to create a cube mesh component
+MeshComponent CreateCubeMesh() {
+  std::vector<float> vertices
+      = {// positions          // normals
+         -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.5f,  -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f,
+         0.5f,  0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, -0.5f, 0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f,
+
+         -0.5f, -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,  0.5f,  -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+         -0.5f, 0.5f,  0.5f,  -1.0f, 0.0f,  0.0f,  -0.5f, 0.5f,  -0.5f, -1.0f, 0.0f,  0.0f,
+         -0.5f, -0.5f, -0.5f, -1.0f, 0.0f,  0.0f,  -0.5f, -0.5f, 0.5f,  -1.0f, 0.0f,  0.0f,
+
+         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 1.0f,  0.0f,  0.0f,
+         0.5f,  -0.5f, -0.5f, 1.0f,  0.0f,  0.0f,  0.5f,  -0.5f, 0.5f,  1.0f,  0.0f,  0.0f,
+
+         -0.5f, -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,  0.5f,  -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,
+         0.5f,  -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,  -0.5f, -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,
+
+         -0.5f, 0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  1.0f,  0.0f};
+  std::vector<unsigned int> indices
+      = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
+         12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20};
+
+  return {vertices, indices, indices.size()};
+}
 
 // 如何在SDL3窗口中显示imgui: 2.初始化
 void initImGui(Resources& res, entt::registry& world) {
@@ -118,9 +147,29 @@ void ShutDownImGui(Resources& res, entt::registry& world) {
 void hello_startup_system(Resources&, entt::registry& world) {
   VividLogger::app_info("Hello from SDL3 startup system!");
 
-  // Create a simple entity
-  auto entity = world.create();
-  // Add components as needed...
+  // --- Create Entities ---
+  auto cubeEntity = world.create();
+  world.emplace<TagComponent>(cubeEntity, "MyCube");
+  world.emplace<TransformComponent>(cubeEntity);
+  world.emplace<MeshComponent>(cubeEntity, CreateCubeMesh());
+  world.emplace<MaterialComponent>(
+      cubeEntity, MaterialComponent{"D:/ClineWorkSpace/VIVID/build/release/standalone/Release/"
+                                    "res/shaders/BlinnPhong.shader",
+                                    {1.0f, 0.5f, 0.2f}});
+
+  auto lightEntity = world.create();
+  world.emplace<TagComponent>(lightEntity, "PointLight");
+  auto& lightTransform = world.emplace<TransformComponent>(lightEntity);
+  lightTransform.Position = {1.2f, 1.0f, 2.0f};
+  world.emplace<LightComponent>(lightEntity);
+
+  auto cameraEntity = world.create();
+  world.emplace<TagComponent>(cameraEntity, "MainCamera");
+  auto& camTransform = world.emplace<TransformComponent>(cameraEntity);
+  camTransform.Position = {0.0f, 0.0f, 5.0f};
+  world.emplace<CameraComponent>(cameraEntity);
+  world.emplace<ViewportComponent>(cameraEntity);
+  // world.emplace<CameraControllerComponent>(cameraEntity);
 }
 
 // Custom window creation system - demonstrates ECS approach
@@ -248,6 +297,7 @@ VIVID_SDL3_MAIN(
         .add_startup_system(VIVID::Render::InspectWebGPUDevice)
         .add_startup_system(VIVID::Render::TestCommandQueue)
         .add_startup_system(VIVID::Render::ConfigureSurface)
+        .add_startup_system(VIVID::Render::SyncScene)
         .add_system(ScheduleLabel::Update, VIVID::Render::Draw)
         .add_system(ScheduleLabel::Shutdown, VIVID::Render::ReleaseWebGPUResources)
     // .add_system(ScheduleLabel::Startup, initImGui)

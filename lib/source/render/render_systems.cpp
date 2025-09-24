@@ -2,13 +2,22 @@
 
 #include <SDL3/SDL.h>
 
+#include <fstream>
 #include <sstream>
 #include <thread>
 
 #include "sdl3webgpu.h"
 #include "vivid/log/log.h"
+#include "vivid/rendering/render_component.h"
 #include "vivid/window/window_systems.h"
 #include "webgpu/webgpu.h"
+
+// Internal structs
+struct MyUniforms {
+  std::array<float, 4> color;
+  float time;
+  float _pad[3];
+};
 
 // Utility functions
 std::string_view toStdStringView(WGPUStringView wgpuStringView) {
@@ -101,7 +110,20 @@ struct WebGPUResources {
   uint32_t configuredHeight = 0;
 };
 
+// Components
+
 namespace VIVID::Render {
+
+  struct GpuMeshComponent {
+    WGPUBuffer vertexBuffer = nullptr;
+    WGPUBuffer indexBuffer = nullptr;
+    uint32_t indexCount = 0;
+    WGPUVertexBufferLayout vertexBufferLayout = {};
+    WGPUPipelineLayout layout = nullptr;
+    WGPUBindGroupLayout bindGroupLayout = nullptr;
+    WGPURenderPipeline pipeline = nullptr;
+  };
+
   static void ReconfigureSurface(Resources &res, entt::registry &world, uint32_t width,
                                  uint32_t height) {
     auto webgpuRes = res.get<WebGPUResources>();
@@ -676,6 +698,206 @@ namespace VIVID::Render {
     VividLogger::app_debug("WebGPU surface configured");
   }
 
+  void SyncScene(Resources &res, entt::registry &world) {
+    // We only want to process entities that have the CPU-side data (Mesh, Material)
+    // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
+    // Using entt::exclude prevents us from re-processing entities and leaking resources.
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_error("Could not get WebGPU resources!");
+      return;
+    }
+    auto view = world.view<MeshComponent, MaterialComponent>(entt::exclude<GpuMeshComponent>);
+    view.each([&](auto entity, auto &mesh, auto &material) {
+      if (mesh.m_Vertices.empty() || mesh.m_Indices.empty() || material.ShaderPath.empty()) return;
+
+      // 创建和绑定VBO
+      // Create vertex buffer
+      WGPUBufferDescriptor bufferDesc = {};
+      bufferDesc.nextInChain = nullptr;
+      bufferDesc.label = toWgpuStringView("Vertex buffer");
+      bufferDesc.size = mesh.m_Vertices.size() * sizeof(float);
+      bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
+      WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &bufferDesc);
+
+      // Upload geometry data to the buffer
+      wgpuQueueWriteBuffer(webgpuRes->queue, vertexBuffer, 0, mesh.m_Vertices.data(),
+                           bufferDesc.size);
+
+      // 创建IBO
+      // Create index buffer (use 32-bit indices to match MeshComponent definition)
+      // (we reuse the bufferDesc initialized for the vertexBuffer)
+      bufferDesc.size = mesh.m_Indices.size() * sizeof(uint32_t);
+      bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+      bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
+      WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &bufferDesc);
+
+      wgpuQueueWriteBuffer(webgpuRes->queue, indexBuffer, 0, mesh.m_Indices.data(),
+                           bufferDesc.size);
+
+      // 创建和绑定VAO
+      WGPUVertexBufferLayout vertexBufferLayout = {};
+      std::vector<WGPUVertexAttribute> vertexAttribs(2);
+      // Describe the position attribute
+      vertexAttribs[0].shaderLocation = 0;  // @location(0)
+      vertexAttribs[0].format = WGPUVertexFormat_Float32x3;
+      vertexAttribs[0].offset = 0;
+      // Describe the color attribute
+      vertexAttribs[1].shaderLocation = 1;                   // @location(1)
+      vertexAttribs[1].format = WGPUVertexFormat_Float32x3;  // different type!
+      vertexAttribs[1].offset = 3 * sizeof(float);           // non null offset!
+
+      vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
+      vertexBufferLayout.attributes = vertexAttribs.data();
+
+      vertexBufferLayout.arrayStride = 6 * sizeof(float);
+      vertexBufferLayout.stepMode = WGPUVertexStepMode_Vertex;
+
+      // shader
+      const char *shaderSource = R"(
+struct VertexInput {
+	@location(0) position: vec3f,
+	@location(1) color: vec3f,
+};
+/**
+ * A structure with fields labeled with builtins and locations can also be used
+ * as *output* of the vertex shader, which is also the input of the fragment
+ * shader.
+ */
+struct VertexOutput {
+	@builtin(position) position: vec4f,
+	// The location here does not refer to a vertex attribute, it just means
+	// that this field must be handled by the rasterizer.
+	// (It can also refer to another field of another struct that would be used
+	// as input to the fragment shader.)
+	@location(0) color: vec3f,
+};
+// We add the declaration of 'uTime' to the shader prelude
+struct MyUniforms {
+	color: vec4f, // <-- this is now first!
+	time: f32,
+};
+
+@group(0) @binding(0)
+var<uniform> uMyUniforms: MyUniforms;
+
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+	var out: VertexOutput;
+	let ratio = 640.0 / 480.0;
+	let angle = uMyUniforms.time; // you can multiply it go rotate faster
+	let alpha = cos(angle);
+	let beta = sin(angle);
+	var position = vec3f(
+		in.position.x,
+		alpha * in.position.y + beta * in.position.z,
+		alpha * in.position.z - beta * in.position.y,
+	);
+	out.position = vec4f(position.x, position.y * ratio, 0.0, 1.0);
+	out.color = in.color;
+	return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+	// We multiply the scene's color with our global uniform (this is one
+	// possible use of the color uniform, among many others).
+	return vec4f(in.color, 1.0) * uMyUniforms.color;
+}
+      )";
+
+      // create the shader module
+      WGPUShaderSourceWGSL wgslDesc = {};
+      wgslDesc.chain.next = nullptr;
+      wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
+      wgslDesc.code = toWgpuStringView(shaderSource);
+      WGPUShaderModuleDescriptor shaderDesc = {};
+      shaderDesc.nextInChain = &wgslDesc.chain;  // connect the chained extension
+      shaderDesc.label = toWgpuStringView("Shader source");
+      WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(webgpuRes->device, &shaderDesc);
+
+      // When describing the render pipeline:
+      WGPURenderPipelineDescriptor pipelineDesc = {};
+      pipelineDesc.vertex.bufferCount = 1;
+      pipelineDesc.vertex.buffers = &vertexBufferLayout;
+      pipelineDesc.vertex.module = shaderModule;
+      pipelineDesc.vertex.entryPoint = toWgpuStringView("vs_main");
+
+      WGPUFragmentState fragmentState = {};
+      fragmentState.module = shaderModule;
+      fragmentState.entryPoint = toWgpuStringView("fs_main");
+      WGPUColorTargetState colorTarget = {};
+      colorTarget.format = webgpuRes->surfaceFormat;
+      WGPUBlendState blendState = {};
+      blendState.color.srcFactor = WGPUBlendFactor_One;
+      blendState.color.dstFactor = WGPUBlendFactor_Zero;
+      blendState.color.operation = WGPUBlendOperation_Add;
+      blendState.alpha.srcFactor = WGPUBlendFactor_One;
+      blendState.alpha.dstFactor = WGPUBlendFactor_Zero;
+      blendState.alpha.operation = WGPUBlendOperation_Add;
+      colorTarget.blend = &blendState;
+      colorTarget.writeMask = WGPUColorWriteMask_All;
+      fragmentState.targetCount = 1;
+      fragmentState.targets = &colorTarget;
+      pipelineDesc.fragment = &fragmentState;
+
+      // Primitive state
+      WGPUPrimitiveState primitive = {};
+      primitive.topology = WGPUPrimitiveTopology_TriangleList;
+      primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+      primitive.frontFace = WGPUFrontFace_CCW;
+      primitive.cullMode = WGPUCullMode_None;
+      pipelineDesc.primitive = primitive;
+
+      // Multisample state
+      WGPUMultisampleState multisample = {};
+      multisample.count = 1;
+      multisample.mask = 0xFFFFFFFF;
+      multisample.alphaToCoverageEnabled = false;
+      pipelineDesc.multisample = multisample;
+      // Define binding layout (don't forget to = Default)
+      WGPUBindGroupLayoutEntry bindingLayout = {};
+
+      // The binding index as used in the @binding attribute in the shader
+      bindingLayout.binding = 0;
+
+      // The stage that needs to access this resource
+      bindingLayout.visibility = WGPUShaderStage_Vertex;
+      bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+      bindingLayout.buffer.minBindingSize = 4 * sizeof(float);
+      bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+      bindingLayout.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+
+      // Create a bind group layout
+      WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
+      bindGroupLayoutDesc.entryCount = 1;
+      bindGroupLayoutDesc.entries = &bindingLayout;
+      WGPUBindGroupLayout bindGroupLayout
+          = wgpuDeviceCreateBindGroupLayout(webgpuRes->device, &bindGroupLayoutDesc);
+
+      // Create the pipeline layout
+      WGPUPipelineLayoutDescriptor layoutDesc = {};
+      layoutDesc.bindGroupLayoutCount = 1;
+      layoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout *)&bindGroupLayout;
+      WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(webgpuRes->device, &layoutDesc);
+
+      // Assign the PipelineLayout to the RenderPipelineDescriptor's layout field
+      pipelineDesc.layout = layout;
+      WGPURenderPipeline pipeline
+          = wgpuDeviceCreateRenderPipeline(webgpuRes->device, &pipelineDesc);
+      wgpuShaderModuleRelease(shaderModule);
+
+      // Now we use emplace, because we know the component doesn't exist yet.
+      GpuMeshComponent gpuMeshComponent;
+      gpuMeshComponent.vertexBuffer = vertexBuffer;
+      gpuMeshComponent.indexBuffer = indexBuffer;
+      gpuMeshComponent.indexCount = (unsigned int)mesh.m_Indices.size();
+      gpuMeshComponent.vertexBufferLayout = vertexBufferLayout;
+      gpuMeshComponent.pipeline = pipeline;
+      world.emplace<GpuMeshComponent>(entity, gpuMeshComponent);
+    });
+  }
+
   void Draw(Resources &res, entt::registry &world) {
     auto webgpuRes = res.get<WebGPUResources>();
     if (!webgpuRes) {
@@ -771,6 +993,76 @@ namespace VIVID::Render {
     WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 
     // Use Render Pass
+    // Update time (seconds) for this frame
+    float timeSeconds = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+
+    // Iterate over all GPU meshes and draw
+    auto drawView = world.view<GpuMeshComponent>();
+    drawView.each([&](auto entity, const GpuMeshComponent &gpu) {
+      if (gpu.pipeline == nullptr || gpu.vertexBuffer == nullptr || gpu.indexBuffer == nullptr
+          || gpu.indexCount == 0) {
+        return;
+      }
+
+      // Prepare per-entity uniforms
+      MyUniforms uniforms = {};
+      uniforms.color = {1.0f, 1.0f, 1.0f, 1.0f};
+      uniforms.time = timeSeconds;
+
+      if (auto material = world.try_get<MaterialComponent>(entity)) {
+        uniforms.color[0] = material->ObjectColor.x;
+        uniforms.color[1] = material->ObjectColor.y;
+        uniforms.color[2] = material->ObjectColor.z;
+        uniforms.color[3] = 1.0f;
+      }
+
+      // Create and upload uniform buffer (Uniform | CopyDst)
+      WGPUBufferDescriptor uniformDesc = {};
+      uniformDesc.nextInChain = nullptr;
+      uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
+      uniformDesc.size = sizeof(MyUniforms);
+      uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+      WGPUBuffer uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes->device, &uniformDesc);
+
+      wgpuQueueWriteBuffer(webgpuRes->queue, uniformBuffer, 0, &uniforms, sizeof(uniforms));
+
+      // Resolve bind group layout from component or pipeline
+      WGPUBindGroupLayout bindGroupLayout = gpu.bindGroupLayout;
+      bool layoutFromPipeline = false;
+      if (bindGroupLayout == nullptr) {
+        bindGroupLayout = wgpuRenderPipelineGetBindGroupLayout(gpu.pipeline, 0);
+        layoutFromPipeline = true;
+      }
+
+      // Create bind group for the uniform buffer
+      WGPUBindGroupEntry bgEntry = {};
+      bgEntry.binding = 0;
+      bgEntry.buffer = uniformBuffer;
+      bgEntry.offset = 0;
+      bgEntry.size = sizeof(MyUniforms);
+
+      WGPUBindGroupDescriptor bgDesc = {};
+      bgDesc.nextInChain = nullptr;
+      bgDesc.layout = bindGroupLayout;
+      bgDesc.entryCount = 1;
+      bgDesc.entries = &bgEntry;
+      WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(webgpuRes->device, &bgDesc);
+
+      // Bind pipeline and buffers, then draw
+      wgpuRenderPassEncoderSetPipeline(renderPass, gpu.pipeline);
+      wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, gpu.vertexBuffer, 0, WGPU_WHOLE_SIZE);
+      wgpuRenderPassEncoderSetIndexBuffer(renderPass, gpu.indexBuffer, WGPUIndexFormat_Uint32, 0,
+                                          WGPU_WHOLE_SIZE);
+      wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
+      wgpuRenderPassEncoderDrawIndexed(renderPass, gpu.indexCount, 1, 0, 0, 0);
+
+      // Release per-frame temporary resources
+      wgpuBindGroupRelease(bindGroup);
+      if (layoutFromPipeline) {
+        wgpuBindGroupLayoutRelease(bindGroupLayout);
+      }
+      wgpuBufferRelease(uniformBuffer);
+    });
 
     wgpuRenderPassEncoderEnd(renderPass);
     wgpuRenderPassEncoderRelease(renderPass);
@@ -836,6 +1128,8 @@ namespace VIVID::Render {
 
     // create the shader module
     WGPUShaderSourceWGSL wgslDesc = {};
+    wgslDesc.chain.next = nullptr;
+    wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
     wgslDesc.code = toWgpuStringView(shaderSource);
     WGPUShaderModuleDescriptor shaderDesc = {};
     shaderDesc.nextInChain = &wgslDesc.chain;  // connect the chained extension
@@ -859,13 +1153,34 @@ namespace VIVID::Render {
     fragmentState.entryPoint = toWgpuStringView("fs_main");
     pipelineDesc.fragment = &fragmentState;
 
-    WGPUColorTargetState colorTarget;
+    WGPUColorTargetState colorTarget = {};
     colorTarget.format = webgpuRes->surfaceFormat;
+    colorTarget.writeMask = WGPUColorWriteMask_All;
+    WGPUBlendState blendState = {};
+    blendState.color.srcFactor = WGPUBlendFactor_One;
+    blendState.color.dstFactor = WGPUBlendFactor_Zero;
+    blendState.color.operation = WGPUBlendOperation_Add;
+    blendState.alpha.srcFactor = WGPUBlendFactor_One;
+    blendState.alpha.dstFactor = WGPUBlendFactor_Zero;
+    blendState.alpha.operation = WGPUBlendOperation_Add;
+    colorTarget.blend = &blendState;
     fragmentState.targetCount = 1;
     fragmentState.targets = &colorTarget;
 
-    WGPUBlendState blendState;
-    colorTarget.blend = &blendState;
+    // Primitive state
+    WGPUPrimitiveState primitive = {};
+    primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+    primitive.frontFace = WGPUFrontFace_CCW;
+    primitive.cullMode = WGPUCullMode_None;
+    pipelineDesc.primitive = primitive;
+
+    // Multisample state
+    WGPUMultisampleState multisample = {};
+    multisample.count = 1;
+    multisample.mask = 0xFFFFFFFF;
+    multisample.alphaToCoverageEnabled = false;
+    pipelineDesc.multisample = multisample;
 
     webgpuRes->pipeline = wgpuDeviceCreateRenderPipeline(webgpuRes->device, &pipelineDesc);
 
@@ -900,3 +1215,31 @@ namespace VIVID::Render {
   }
 
 }  // namespace VIVID::Render
+
+ShaderProgramSource ParseShader(const std::string &filepath) {
+  //   std::ifstream file(filepath);
+  //   if (!file.is_open()) {
+  //     VividLogger::render_error("Failed to open shader file: {}", filepath);
+  //     return {"", ""};
+  //   }
+  //   file.seekg(0, std::ios::end);
+  //   size_t size = file.tellg();
+  //   std::string shaderSource(size, ' ');
+  //   file.seekg(0);
+  //   file.read(shaderSource.data(), size);
+
+  //   WGPUShaderModuleWGSLDescriptor shaderCodeDesc{};
+  //   shaderCodeDesc.chain.next = nullptr;
+  //   shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+  //   shaderCodeDesc.code = shaderSource.c_str();
+
+  //   WGPUShaderModuleDescriptor shaderDesc{};
+  //   shaderDesc.nextInChain = nullptr;
+  // #ifdef WEBGPU_BACKEND_WGPU
+  //   shaderDesc.hintCount = 0;
+  //   shaderDesc.hints = nullptr;
+  // #endif
+  //   shaderDesc.nextInChain = &shaderCodeDesc.chain;
+  //   return wgpuDeviceCreateShaderModule(device, &shaderDesc);
+  return {"", ""};
+}
