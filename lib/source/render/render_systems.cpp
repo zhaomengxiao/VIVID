@@ -1,12 +1,12 @@
 #include "vivid/render/render_systems.h"
 
 #include <SDL3/SDL.h>
+// #define __EMSCRIPTEN__
 
 #include <fstream>
 #include <sstream>
 #include <thread>
 
-#include "sdl3webgpu.h"
 #include "vivid/log/log.h"
 #include "vivid/rendering/render_component.h"
 #include "vivid/window/window_systems.h"
@@ -18,6 +18,19 @@
 #include "vivid/input/camera_controller.h"
 // glm helpers for matrix ops
 #include <glm/gtc/matrix_transform.hpp>
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#  include <emscripten/html5.h>
+#endif
+#include <webgpu/webgpu_cpp.h>
+// DATA
+WGPUInstance wgpu_instance = nullptr;
+WGPUDevice wgpu_device = nullptr;
+WGPUSurface wgpu_surface = nullptr;
+WGPUQueue wgpu_queue = nullptr;
+WGPUSurfaceConfiguration wgpu_surface_configuration{};
+int wgpu_surface_width = 800;
+int wgpu_surface_height = 600;
 
 // Internal structs
 // Uniforms for Blinn-Phong shading. Layout is 16-byte aligned for WGSL std140-like rules.
@@ -198,12 +211,8 @@ namespace VIVID::Render {
     WGPUInstanceDescriptor desc = {};
     desc.nextInChain = nullptr;
 
-// We create the instance using this descriptor
-#ifdef WEBGPU_BACKEND_EMSCRIPTEN
-    WGPUInstance instance = wgpuCreateInstance(nullptr);
-#else   //  WEBGPU_BACKEND_EMSCRIPTEN
+    // We create the instance using this descriptor
     WGPUInstance instance = wgpuCreateInstance(&desc);
-#endif  //  WEBGPU_BACKEND_EMSCRIPTEN
 
     // We can check whether there is actually an instance created
     if (!instance) {
@@ -230,18 +239,7 @@ namespace VIVID::Render {
       VividLogger::app_error("Could not get WebGPU resources!");
       return;
     }
-    // Set surface to sdl3 using SDL_GetWGPUSurface
-    auto view = world.view<VIVID::Window::WindowGpuComponent>();
-    if (view.empty()) {
-      VividLogger::app_error("Could not get Window GPU component!");
-      adapterOpts.compatibleSurface = nullptr;
-    } else {
-      view.each([&](auto entity, auto &gpu_comp) {
-        webgpuRes->surface = SDL_GetWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
 
-        adapterOpts.compatibleSurface = webgpuRes->surface;
-      });
-    }
     // A simple structure holding the local information shared with the
     // onAdapterRequestEnded callback.
     struct UserData {
@@ -258,18 +256,18 @@ namespace VIVID::Render {
     // is to convey what we want to capture through the pUserData pointer,
     // provided as the last argument of wgpuInstanceRequestAdapter and received
     // by the callback as its last argument.
-    WGPURequestAdapterCallback onAdapterRequestEnded
-        = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
-             void *userdata1, void *userdata2) {
-            UserData &userData = *reinterpret_cast<UserData *>(userdata1);
-            if (status == WGPURequestAdapterStatus_Success) {
-              userData.adapter = adapter;
-            } else {
-              VividLogger::app_error("Could not get WebGPU adapter: %s",
-                                     std::string(toStdStringView(message)));
-            }
-            userData.requestEnded = true;
-          };
+    WGPURequestAdapterCallback onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
+                                                          WGPUAdapter adapter,
+                                                          WGPUStringView message, void *userdata1,
+                                                          void *userdata2) {
+      UserData &userData = *reinterpret_cast<UserData *>(userdata1);
+      if (status == WGPURequestAdapterStatus_Success) {
+        userData.adapter = adapter;
+      } else {
+        VividLogger::app_error("Could not get WebGPU adapter: %s", toStdStringView(message).data());
+      }
+      userData.requestEnded = true;
+    };
 
     WGPURequestAdapterCallbackInfo callbackInfo = {
         nullptr, WGPUCallbackMode_AllowProcessEvents, onAdapterRequestEnded, (void *)&userData,
@@ -611,20 +609,20 @@ namespace VIVID::Render {
 
     // wait for completion
     //  Our callback invoked when GPU instructions have been executed
-    auto onQueuedWorkDone
-        = [](WGPUQueueWorkDoneStatus status, void *userdata1, void * /* userdata2 */
-          ) {
-            // Display a warning when status is not success
-            if (status != WGPUQueueWorkDoneStatus_Success) {
-              VividLogger::render_error(
-                  "Warning: wgpuQueueOnSubmittedWorkDone failed, this is suspicious!");
-            }
+    auto onQueuedWorkDone = [](WGPUQueueWorkDoneStatus status, WGPUStringView /* message */,
+                               void *userdata1, void * /* userdata2 */
+                            ) {
+      // Display a warning when status is not success
+      if (status != WGPUQueueWorkDoneStatus_Success) {
+        VividLogger::render_error(
+            "Warning: wgpuQueueOnSubmittedWorkDone failed, this is suspicious!");
+      }
 
-            // Interpret userdata1 as a pointer to a boolean (and turn it into a
-            // mutable reference), then turn it to 'true'
-            bool &workDone = *reinterpret_cast<bool *>(userdata1);
-            workDone = true;
-          };
+      // Interpret userdata1 as a pointer to a boolean (and turn it into a
+      // mutable reference), then turn it to 'true'
+      bool &workDone = *reinterpret_cast<bool *>(userdata1);
+      workDone = true;
+    };
 
     // Create the boolean that will be passed to the callback as userdata1
     // and initialize it to 'false'
@@ -675,8 +673,26 @@ namespace VIVID::Render {
       return;
     }
 
-    WGPUSurfaceConfiguration config = {};
-    config.nextInChain = nullptr;
+#ifdef __EMSCRIPTEN__
+    WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
+    canvasDesc.chain.next = nullptr;
+    canvasDesc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
+    canvasDesc.selector = toWgpuStringView("#canvas");
+
+    WGPUSurfaceDescriptor surfaceDesc = {};
+    surfaceDesc.nextInChain = &canvasDesc.chain;
+    VividLogger::app_debug("wgpuInstanceCreateSurface....!!");
+    webgpuRes->surface = wgpuInstanceCreateSurface(webgpuRes->instance, &surfaceDesc);
+    VividLogger::app_debug("wgpuInstanceCreateSurface.. created!!!");
+#else
+    webgpuRes->surface
+        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
+#endif
+
+    if (webgpuRes->surface == nullptr) {
+      VividLogger::render_error("Failed to create WebGPU surface!");
+      return;
+    }
 
     // Query current window pixel size instead of hard-coded values
     int pixel_width = 0;
@@ -698,6 +714,9 @@ namespace VIVID::Render {
       pixel_width = 1;
       pixel_height = 1;
     }
+
+    WGPUSurfaceConfiguration config = {};
+    config.nextInChain = nullptr;
 
     config.width = static_cast<uint32_t>(pixel_width);
     config.height = static_cast<uint32_t>(pixel_height);
@@ -1011,7 +1030,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     wgpuSurfaceGetCurrentTexture(webgpuRes->surface, &surfaceTexture);
     if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal
         && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
-#ifdef __EMSCRIPTEN__
+#if defined(WGPUSurfaceGetCurrentTextureStatus_Success)
         && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success
 #endif
     ) {
@@ -1201,11 +1220,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     wgpuTextureRelease(surfaceTexture.texture);
 #endif  // WEBGPU_BACKEND_WGPU
 
-// In the context of a Web browser, we do not present the surface texture ourselves. We rather rely
-// on emscripten_set_main_loop_arg (a.k.a. requestAnimationFrame in JavaScript) to call our
-// MainLoop() function right before presenting.
+    // In the context of a Web browser, we do not present the surface texture ourselves. We rather
+    // rely on emscripten_set_main_loop_arg (a.k.a. requestAnimationFrame in JavaScript) to call our
+    // MainLoop() function right before presenting.
 #ifndef __EMSCRIPTEN__
     wgpuSurfacePresent(webgpuRes->surface);
+#  if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+    wgpuDeviceTick(webgpuRes->device);
+#  endif
 #endif
 
 #ifdef WEBGPU_BACKEND_WGPU
@@ -1370,6 +1392,228 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       webgpuRes->deviceRequestEnded = false;
     }
   }
+
+  static WGPUAdapter GetAdapter(wgpu::Instance &instance) {
+    wgpu::Adapter acquiredAdapter;
+    wgpu::RequestAdapterOptions adapterOptions;
+
+    auto onRequestAdapter
+        = [&](wgpu::RequestAdapterStatus status, wgpu::Adapter adapter, wgpu::StringView message) {
+            if (status != wgpu::RequestAdapterStatus::Success) {
+              printf("Failed to get an adapter: %s\n", message.data);
+              return;
+            }
+            acquiredAdapter = std::move(adapter);  // FIXME-WGPU: no need to use std::move?
+          };
+
+    // Synchronously (wait until) acquire Adapter
+    wgpu::Future waitAdapterFunc{instance.RequestAdapter(
+        &adapterOptions, wgpu::CallbackMode::WaitAnyOnly, onRequestAdapter)};
+    wgpu::WaitStatus waitStatusAdapter = instance.WaitAny(waitAdapterFunc, UINT64_MAX);
+    IM_ASSERT(acquiredAdapter != nullptr && waitStatusAdapter == wgpu::WaitStatus::Success
+              && "Error on Adapter request");
+#ifndef NDEBUG
+    ImGui_ImplWGPU_PrintAdapterInfo_Helper(acquiredAdapter.Get());
+#endif
+    return acquiredAdapter.MoveToCHandle();
+  }
+
+  static WGPUDevice GetDevice(wgpu::Instance &instance, wgpu::Adapter &adapter) {
+    // Set device callback functions
+    wgpu::DeviceDescriptor deviceDesc;
+    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
+                                     ImGui_ImplWGPU_DAWN_DeviceLostCallback_Helper);
+    deviceDesc.SetUncapturedErrorCallback(ImGui_ImplWGPU_DAWN_ErrorCallback_Helper);
+
+    wgpu::Device acquiredDevice;
+    auto onRequestDevice = [&](wgpu::RequestDeviceStatus status, wgpu::Device localDevice,
+                               wgpu::StringView message) {
+      if (status != wgpu::RequestDeviceStatus::Success) {
+        printf("Failed to get an device: %s\n", message.data);
+        return;
+      }
+      acquiredDevice = std::move(localDevice);
+    };
+
+    // Synchronously (wait until) get Device
+    wgpu::Future waitDeviceFunc{
+        adapter.RequestDevice(&deviceDesc, wgpu::CallbackMode::WaitAnyOnly, onRequestDevice)};
+    wgpu::WaitStatus waitStatusDevice = instance.WaitAny(waitDeviceFunc, UINT64_MAX);
+    IM_ASSERT(acquiredDevice != nullptr && waitStatusDevice == wgpu::WaitStatus::Success
+              && "Error on Device request");
+    return acquiredDevice.MoveToCHandle();
+  }
+
+  void InitWebGPU(Resources &res, entt::registry &world) {
+    VividLogger::app_debug("Initializing WebGPU...");
+    auto webgpuRes = res.get<WebGPUResources>();
+    if (!webgpuRes) {
+      VividLogger::app_info("Create WebGPU resources!");
+      webgpuRes = &res.insert<WebGPUResources>();
+    }
+
+    WGPUTextureFormat preferred_fmt
+        = WGPUTextureFormat_Undefined;  // acquired from SurfaceCapabilities
+
+    // Google DAWN backend: Adapter and Device acquisition, Surface creation
+    wgpu::InstanceDescriptor instanceDescriptor = {};
+    static constexpr wgpu::InstanceFeatureName requiredInstanceFeatures[] = {
+        wgpu::InstanceFeatureName::TimedWaitAny,
+    };
+    instanceDescriptor.requiredFeatureCount = std::size(requiredInstanceFeatures);
+    instanceDescriptor.requiredFeatures = requiredInstanceFeatures;
+    wgpu::Instance instance = wgpu::CreateInstance(&instanceDescriptor);
+
+    // We can check whether there is actually an instance created
+    if (!instance) {
+      VividLogger::app_error("Could not initialize WebGPU!");
+      return;
+    }
+
+    // Display the object (WGPUInstance is a simple pointer, it may be
+    // copied around without worrying about its size).
+    VividLogger::app_info("WGPU instance: %p", &instance);
+
+    wgpu::Adapter adapter{GetAdapter(instance)};  // RequestWebGPUAdapterSync
+    webgpuRes->device = GetDevice(instance, adapter);
+
+    if (!webgpuRes->device) {
+      VividLogger::app_error("Failed to acquire WebGPU device");
+      return;
+    }
+
+    // webgpuRes->instance = instance.MoveToCHandle();
+
+    // Create the surface.
+#ifdef __EMSCRIPTEN__
+    wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
+    canvasDesc.selector = "#canvas";
+
+    wgpu::SurfaceDescriptor surfaceDesc = {};
+    surfaceDesc.nextInChain = &canvasDesc;
+    wgpu::Surface surface = instance.CreateSurface(&surfaceDesc);
+#else
+    wgpu::Surface surface = ImGui_ImplSDL3_CreateWGPUSurface(instance.Get(), (SDL_Window *)window);
+#endif
+    if (!surface) {
+      VividLogger::app_error("Could not create WebGPU surface!");
+      return;
+    }
+
+    // Moving Dawn objects into WGPU handles
+    // wgpu_instance = instance.MoveToCHandle();
+    // wgpu_surface = surface.MoveToCHandle();
+    webgpuRes->surface = surface.MoveToCHandle();
+    webgpuRes->instance = instance.MoveToCHandle();
+
+    WGPUSurfaceCapabilities surface_capabilities = {};
+    wgpuSurfaceGetCapabilities(webgpuRes->surface, adapter.Get(), &surface_capabilities);
+
+    // preferred_fmt = surface_capabilities.formats[0];
+    webgpuRes->surfaceFormat = surface_capabilities.formats[0];
+
+    webgpuRes->adapter = adapter.MoveToCHandle();
+    // webgpuRes->device = device.MoveToCHandle();
+    if (!webgpuRes->adapter) {
+      VividLogger::app_error("WebGPU device handle is null");
+      return;
+    }
+
+    webgpuRes->surfaceConfiguration.presentMode = WGPUPresentMode_Fifo;
+    webgpuRes->surfaceConfiguration.alphaMode = WGPUCompositeAlphaMode_Auto;
+    webgpuRes->surfaceConfiguration.usage = WGPUTextureUsage_RenderAttachment;
+
+    // Query current window pixel size instead of hard-coded values
+    int pixel_width = 0;
+    int pixel_height = 0;
+    {
+      auto view = world.view<VIVID::Window::WindowGpuComponent>();
+      view.each([&](auto entity, auto &gpu_comp) {
+        if (gpu_comp.window_handle) {
+          SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
+        }
+      });
+    }
+
+    // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
+    if (pixel_width <= 0 || pixel_height <= 0) {
+      VividLogger::app_warn(
+          "Window pixel size is %dx%d; using fallback size for surface configuration", pixel_width,
+          pixel_height);
+      pixel_width = 1;
+      pixel_height = 1;
+    }
+    webgpuRes->surfaceConfiguration.width = webgpuRes->configuredWidth = pixel_width;
+    webgpuRes->surfaceConfiguration.height = webgpuRes->configuredHeight = pixel_height;
+    webgpuRes->surfaceConfiguration.device = webgpuRes->device;
+    webgpuRes->surfaceConfiguration.format = webgpuRes->surfaceFormat;
+
+    wgpuSurfaceConfigure(webgpuRes->surface, &webgpuRes->surfaceConfiguration);
+    webgpuRes->queue = wgpuDeviceGetQueue(webgpuRes->device);
+    if (!webgpuRes->queue) {
+      VividLogger::app_error("Failed to acquire WebGPU device queue");
+      return;
+    }
+    ReconfigureSurface(res, world, pixel_width, pixel_height);
+    VividLogger::app_debug("WebGPU initialized successfully");
+  }
+  //   void InitWebGPU(Resources &res, entt::registry &world) {
+  //     WGPUTextureFormat preferred_fmt
+  //         = WGPUTextureFormat_Undefined;  // acquired from SurfaceCapabilities
+
+  //     // Google DAWN backend: Adapter and Device acquisition, Surface creation
+  //     wgpu::InstanceDescriptor instanceDescriptor = {};
+  //     static constexpr wgpu::InstanceFeatureName requiredInstanceFeatures[] = {
+  //         wgpu::InstanceFeatureName::TimedWaitAny,
+  //     };
+  //     instanceDescriptor.requiredFeatureCount = std::size(requiredInstanceFeatures);
+  //     instanceDescriptor.requiredFeatures = requiredInstanceFeatures;
+  //     wgpu::Instance instance = wgpu::CreateInstance(&instanceDescriptor);
+
+  //     wgpu::Adapter adapter{GetAdapter(instance)};  // RequestWebGPUAdapterSync
+  //     wgpu_device = GetDevice(instance, adapter);
+
+  //     // Create the surface.
+  // #ifdef __EMSCRIPTEN__
+  //     wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
+  //     canvasDesc.selector = "#canvas";
+
+  //     wgpu::SurfaceDescriptor surfaceDesc = {};
+  //     surfaceDesc.nextInChain = &canvasDesc;
+  //     wgpu::Surface surface = instance.CreateSurface(&surfaceDesc);
+  // #else
+  //     wgpu::Surface surface = ImGui_ImplSDL3_CreateWGPUSurface(instance.Get(), (SDL_Window
+  //     *)window);
+  // #endif
+  //     if (!surface) {
+  //       VividLogger::app_error("Could not create WebGPU surface!");
+  //       return;
+  //     }
+
+  //     // Moving Dawn objects into WGPU handles
+  //     wgpu_instance = instance.MoveToCHandle();
+  //     wgpu_surface = surface.MoveToCHandle();
+
+  //     WGPUSurfaceCapabilities surface_capabilities = {};
+  //     wgpuSurfaceGetCapabilities(wgpu_surface, adapter.Get(), &surface_capabilities);
+
+  //     preferred_fmt = surface_capabilities.formats[0];
+
+  //     // WGPU backend: Adapter and Device acquisition, Surface creation
+
+  //     wgpu_surface_configuration.presentMode = WGPUPresentMode_Fifo;
+  //     wgpu_surface_configuration.alphaMode = WGPUCompositeAlphaMode_Auto;
+  //     wgpu_surface_configuration.usage = WGPUTextureUsage_RenderAttachment;
+  //     wgpu_surface_configuration.width = wgpu_surface_width;
+  //     wgpu_surface_configuration.height = wgpu_surface_height;
+  //     wgpu_surface_configuration.device = wgpu_device;
+  //     wgpu_surface_configuration.format = preferred_fmt;
+
+  //     wgpuSurfaceConfigure(wgpu_surface, &wgpu_surface_configuration);
+  //     wgpu_queue = wgpuDeviceGetQueue(wgpu_device);
+
+  //     VividLogger::app_debug("WebGPU initialized successfully");
+  //   }
 
 }  // namespace VIVID::Render
 

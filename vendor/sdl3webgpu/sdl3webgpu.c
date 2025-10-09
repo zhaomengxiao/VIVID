@@ -34,6 +34,9 @@
 
 #include <webgpu/webgpu.h>
 
+// #define __EMSCRIPTEN__
+// #define IMGUI_IMPL_WEBGPU_BACKEND_DAWN
+
 #if defined(SDL_PLATFORM_MACOS)
 #  include <Cocoa/Cocoa.h>
 #  include <Foundation/Foundation.h>
@@ -190,21 +193,15 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window *window) {
   }
 #elif defined(__EMSCRIPTEN__)
   {
-#  ifdef WEBGPU_BACKEND_DAWN
-    WGPUSurfaceSourceCanvasHTMLSelector_Emscripten fromCanvasHTMLSelector;
-    fromCanvasHTMLSelector.chain.sType = WGPUSType_SurfaceSourceCanvasHTMLSelector_Emscripten;
-#  else
-    WGPUSurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
-    fromCanvasHTMLSelector.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-#  endif
-    fromCanvasHTMLSelector.chain.next = NULL;
-    fromCanvasHTMLSelector.selector = "canvas";
+    WGPUSurfaceDescriptorFromCanvasHTMLSelector html_surface_desc = {};
+    html_surface_desc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+    html_surface_desc.selector = "#canvas";
 
-    WGPUSurfaceDescriptor surfaceDescriptor;
-    surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector.chain;
-    surfaceDescriptor.label = NULL;
+    WGPUSurfaceDescriptor surface_desc = {};
+    surface_desc.nextInChain = &html_surface_desc.chain;
 
-    return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+    // Create the surface.
+    return wgpuInstanceCreateSurface(instance, &surface_desc);
   }
 #else
   // TODO: See SDL_syswm.h for other possible enum values!

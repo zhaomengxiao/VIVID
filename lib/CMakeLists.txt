@@ -80,67 +80,6 @@ else()
   message(WARNING "✗ EnTT package failed to add")
 endif()
 
-# message(STATUS "Adding GLFW...")
-# CPMAddPackage(
-#   NAME glfw
-#   GIT_TAG 3.3.8
-#   GITHUB_REPOSITORY glfw/glfw
-#   OPTIONS
-#     "GLFW_BUILD_EXAMPLES OFF"
-#     "GLFW_BUILD_TESTS OFF"
-#     "GLFW_BUILD_DOCS OFF"
-#     "GLFW_INSTALL ON"
-# )
-
-# # Check if glfw was added successfully
-# if(TARGET glfw)
-#   message(STATUS "✓ GLFW package added successfully")
-#   message(STATUS "  GLFW source dir: ${glfw_SOURCE_DIR}")
-#   message(STATUS "  GLFW binary dir: ${glfw_BINARY_DIR}")
-# else()
-#   message(WARNING "✗ GLFW package failed to add")
-# endif()
-
-# message(STATUS "Adding GLEW...")
-# # CPMAddPackage(
-# #   NAME glew
-# #   GIT_TAG glew-2.2.0
-# #   GITHUB_REPOSITORY Perlmint/glew-cmake
-# #   OPTIONS
-# #     "GLEW_INSTALL ON"
-# # )
-# CPMAddPackage(NAME glew SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/glew-src/build/cmake)
-
-# Check if glew was added successfully
-# if(TARGET glew)
-#   message(STATUS "✓ GLEW package added successfully")
-#   message(STATUS "  GLEW source dir: ${glew_SOURCE_DIR}")
-#   message(STATUS "  GLEW binary dir: ${glew_BINARY_DIR}")
-# else()
-#   message(WARNING "✗ GLEW package failed to add")
-# endif()
-
-# --- Dependencies ---
-# Using FetchContent to get GLM and EnTT
-# include(FetchContent)
-# FetchContent_Declare(
-#     glm
-#     GIT_REPOSITORY https://github.com/g-truc/glm.git
-#     GIT_TAG 0.9.9.8
-# )
-# FetchContent_Declare(
-#     EnTT
-#     GIT_REPOSITORY https://github.com/skypjack/entt.git
-#     GIT_TAG master
-# )
-# FetchContent_MakeAvailable(glm EnTT)
-
-# OpenGL and GLEW libraries
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(glfw3 3.3 REQUIRED)
-find_package(SDL3 CONFIG REQUIRED)
-
 # ImGui for editor UI - using local vendor copy
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)
 # ImGui headers
@@ -163,7 +102,51 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_wgpu.cpp
 )    
 
+# set(SDL3WEBGPU_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu)
+# set(SDL3WEBGPU_HEADERS
+#     ${SDL3WEBGPU_DIR}/sdl3webgpu.h
+# )
+# set(SDL3WEBGPU_SOURCES
+#     ${SDL3WEBGPU_DIR}/sdl3webgpu.c
+# )
 
+# libraries
+
+
+if(NOT EMSCRIPTEN)# Native build
+  find_package(SDL3 CONFIG REQUIRED)
+  
+  if(APPLE)
+    set_source_files_properties(${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
+    set(OS_LIBRARIES "-framework CoreFoundation -framework QuartzCore -framework Metal -framework MetalKit -framework Cocoa")
+  endif()
+
+  # todo find native webgpu backend here
+
+# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu ${CMAKE_CURRENT_BINARY_DIR}/sdl3webgpu)
+
+
+# add_library(vivid_sdl3webgpu INTERFACE)
+# # Ensure sdl3webgpu has proper include paths when installed
+# target_include_directories(vivid_sdl3webgpu INTERFACE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>
+# )
+
+# # Override vendor's '.' include path in INTERFACE to avoid source-prefixed paths in export
+# set_target_properties(vivid_sdl3webgpu PROPERTIES
+#   INTERFACE_INCLUDE_DIRECTORIES
+#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>;$<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>"
+# )
+endif()
+
+# Create a wrapper interface library for glm to enable export
+add_library(vivid_glm INTERFACE)
+# Don't link to glm::glm, just set the include directories directly
+target_include_directories(vivid_glm INTERFACE 
+  $<BUILD_INTERFACE:${glm_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
+)
 # Create an interface target to expose ImGui include dirs to consumers
 add_library(vivid_imgui INTERFACE)
 target_include_directories(vivid_imgui INTERFACE
@@ -173,30 +156,15 @@ target_include_directories(vivid_imgui INTERFACE
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
 )
 
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu ${CMAKE_CURRENT_BINARY_DIR}/sdl3webgpu)
-
-# Ensure sdl3webgpu has proper include paths when installed
-target_include_directories(sdl3webgpu PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>
-)
-
-# Override vendor's '.' include path in INTERFACE to avoid source-prefixed paths in export
-set_target_properties(sdl3webgpu PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu>;$<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu>"
-)
-
 # PhysX and Optick (pre-compiled binaries)
-set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
-set(PHYSX_ROOT "${VENDOR_DIR}/PhysX/physx/install/vc17win64/PhysX")
-set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
-set(PHYSX_LIB_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/release")
+# set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
+# set(PHYSX_ROOT "${VENDOR_DIR}/PhysX/physx/install/vc17win64/PhysX")
+# set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
+# set(PHYSX_LIB_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/release")
 
-set(OPTICK_ROOT "${VENDOR_DIR}/optick")
-set(OPTICK_INCLUDE_DIR "${OPTICK_ROOT}/src")
-set(OPTICK_LIB_DIR "${OPTICK_ROOT}/lib")
+# set(OPTICK_ROOT "${VENDOR_DIR}/optick")
+# set(OPTICK_INCLUDE_DIR "${OPTICK_ROOT}/src")
+# set(OPTICK_LIB_DIR "${OPTICK_ROOT}/lib")
 
 # ---- Add source files ----
 
@@ -210,6 +178,7 @@ file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/
 # Note: for header-only libraries change all PUBLIC flags to INTERFACE and create an interface
 # target: add_library(${PROJECT_NAME} INTERFACE)
 add_library(${PROJECT_NAME} ${headers} ${sources} ${IMGUI_SOURCES} ${IMGUI_HEADERS})
+
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
 # being a cross-platform target, we enforce standards conformance on MSVC
@@ -221,10 +190,14 @@ target_include_directories(
   PUBLIC 
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    # glm
+    ${glm_SOURCE_DIR}
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source
-    ${PHYSX_INCLUDE_DIR}
-    ${OPTICK_INCLUDE_DIR}
+    # ${PHYSX_INCLUDE_DIR}
+    # ${OPTICK_INCLUDE_DIR}
 )
 
 
@@ -249,15 +222,9 @@ endif()
 # )
 
 # Link directories for PhysX and Optick
-link_directories(${PHYSX_LIB_DIR} ${OPTICK_LIB_DIR})
+# link_directories(${PHYSX_LIB_DIR} ${OPTICK_LIB_DIR})
 
-# Create a wrapper interface library for glm to enable export
-add_library(vivid_glm INTERFACE)
-# Don't link to glm::glm, just set the include directories directly
-target_include_directories(vivid_glm INTERFACE 
-  $<BUILD_INTERFACE:${glm_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
-)
+
 
 # # set(WEBGPU_BACKEND "DAWN")
 
@@ -269,85 +236,128 @@ target_include_directories(vivid_glm INTERFACE
 # target_link_libraries(vivid_webgpu INTERFACE webgpu)
 
 # Update target link libraries to include PhysX, Optick, and GLEW
-target_link_libraries(${PROJECT_NAME} 
-  PUBLIC
-    vivid_glm  # Use our wrapper instead of glm::glm directly
-    vivid_imgui
-    # glm::glm
-    EnTT::EnTT
-    GLEW::glew
-    glfw
-    webgpu
-    OpenGL::GL
-  PRIVATE
-    # Existing libraries
-    SDL3::SDL3
-    # raylib # Temporarily commented out, conflicts with glfw
-    ${PHYSX_LIBS}
-    # OptickCore
 
-    sdl3webgpu
-)
+# native settings
+if(NOT EMSCRIPTEN)
+  target_link_libraries(${PROJECT_NAME} 
+    PUBLIC
+      vivid_glm  # Use our wrapper instead of glm::glm directly
+      vivid_imgui
+      # glm::glm
+      EnTT::EnTT
+      # GLEW::glew
+      # glfw
+      webgpu
+      # OpenGL::GL
+    PRIVATE
+      # Existing libraries
+      SDL3::SDL3
+      # raylib # Temporarily commented out, conflicts with glfw
+      # ${PHYSX_LIBS}
+      # OptickCore
 
-# ---- Create an installable target ----
-# this allows users to install and find the library via `find_package()`.
+      vivid_sdl3webgpu
+  )
 
-# the location where the project's version header will be placed should match the project's regular
-# header paths
-string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
-# # Install vivid_glm target along with VIVID
-install(TARGETS vivid_glm EXPORT ${PROJECT_NAME}Targets)
+  # ---- Create an installable target ----
+  # this allows users to install and find the library via `find_package()`.
 
-# Install vivid_imgui interface target along with VIVID
-install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
+  # the location where the project's version header will be placed should match the project's regular
+  # header paths
+  string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
-# Install and export sdl3webgpu along with VIVID
-install(
-  TARGETS sdl3webgpu
-  EXPORT ${PROJECT_NAME}Targets
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-  INCLUDES DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
-)
+  # # Install vivid_glm target along with VIVID
+  install(TARGETS vivid_glm EXPORT ${PROJECT_NAME}Targets)
 
-# Install sdl3webgpu public headers
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu/sdl3webgpu.h
-  DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
-  COMPONENT "${PROJECT_NAME}_Development"
-)
+  # Install vivid_imgui interface target along with VIVID
+  install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
 
-# Install glm headers
-install(
-  DIRECTORY ${glm_SOURCE_DIR}/glm/
-  DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/glm
-  COMPONENT "${PROJECT_NAME}_Development"
-  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-)
+  # # Install and export sdl3webgpu along with VIVID
+  # install(
+  #   TARGETS sdl3webgpu
+  #   EXPORT ${PROJECT_NAME}Targets
+  #   ARCHIVE DESTINATION lib
+  #   LIBRARY DESTINATION lib
+  #   RUNTIME DESTINATION bin
+  #   INCLUDES DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
+  # )
 
-# Install ImGui headers so consumers can use the exported include paths
-install(
-  DIRECTORY ${IMGUI_DIR}/
-  DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui
-  COMPONENT "${PROJECT_NAME}_Development"
-  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
-)
+  # Install sdl3webgpu public headers
+  install(
+    FILES ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu/sdl3webgpu.h
+    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
+    COMPONENT "${PROJECT_NAME}_Development"
+  )
 
-# The application's binary must find wgpu.dll or libwgpu.so at runtime,
-# so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
-# next to the binary.
-# target_copy_webgpu_binaries(${PROJECT_NAME})
+  # Install glm headers
+  install(
+    DIRECTORY ${glm_SOURCE_DIR}/glm/
+    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/glm
+    COMPONENT "${PROJECT_NAME}_Development"
+    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
+  )
 
-packageProject(
-  NAME ${PROJECT_NAME}
-  VERSION ${PROJECT_VERSION}
-  NAMESPACE ${PROJECT_NAME}
-  BINARY_DIR ${PROJECT_BINARY_DIR}
-  INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include
-  INCLUDE_DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}
-  VERSION_HEADER "${VERSION_HEADER_LOCATION}"
-  COMPATIBILITY SameMajorVersion
-  DEPENDENCIES "EnTT master" "glm 0.9.9.8"
-)
+  # Install ImGui headers so consumers can use the exported include paths
+  install(
+    DIRECTORY ${IMGUI_DIR}/
+    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui
+    COMPONENT "${PROJECT_NAME}_Development"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
+  )
+
+  # Install sdl3webgpu headers
+
+  install(
+    DIRECTORY ${SDL3WEBGPU_DIR}/
+    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
+    COMPONENT "${PROJECT_NAME}_Development"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
+  )
+
+  # The application's binary must find wgpu.dll or libwgpu.so at runtime,
+  # so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
+  # next to the binary.
+  # target_copy_webgpu_binaries(${PROJECT_NAME})
+
+  packageProject(
+    NAME ${PROJECT_NAME}
+    VERSION ${PROJECT_VERSION}
+    NAMESPACE ${PROJECT_NAME}
+    BINARY_DIR ${PROJECT_BINARY_DIR}
+    INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include
+    INCLUDE_DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}
+    VERSION_HEADER "${VERSION_HEADER_LOCATION}"
+    COMPATIBILITY SameMajorVersion
+    DEPENDENCIES "EnTT master" "glm 0.9.9.8"
+  )
+# EMSCRIPTEN build
+else()
+  # set(CMAKE_EXECUTABLE_SUFFIX ".html") # this is a lib not an executable so we don't need to set the executable suffix
+  target_compile_options(${PROJECT_NAME} PUBLIC "-sUSE_SDL=3" "--use-port=emdawnwebgpu")
+  add_compile_options(-sDISABLE_EXCEPTION_CATCHING=1 -DIMGUI_DISABLE_FILE_FUNCTIONS=1)
+  target_link_options(${PROJECT_NAME} PRIVATE
+    "--use-port=emdawnwebgpu"
+    "-sUSE_SDL=3"  # There is currently no official support internally at emscripten
+    "-sWASM=1"
+    "-sASYNCIFY=1"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sNO_EXIT_RUNTIME=0"
+    "-sASSERTIONS=1"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
+    #"-sNO_FILESYSTEM=1"  # sdl3 integrates a filesystem, you need to disable it at SDL3 build time
+    "--shell-file=${CMAKE_CURRENT_LIST_DIR}/../emscripten/shell_minimal.html"
+  )
+  set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "index")
+
+  target_link_libraries(${PROJECT_NAME} 
+    PUBLIC
+      vivid_glm  # Use our wrapper instead of glm::glm directly
+      vivid_imgui
+      EnTT::EnTT
+    PRIVATE
+    # vivid_sdl3webgpu
+    
+  )
+  add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+endif()

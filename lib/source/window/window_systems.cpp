@@ -20,6 +20,9 @@ namespace VIVID::Window {
           return;
         }
       }
+      float main_scale
+          = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());  // FIXME-WGPU: Test this?
+      SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
 
       // Create SDL window
       SDL_Window* window_handle = SDL_CreateWindow(window_comp.title.c_str(), window_comp.width,
@@ -29,15 +32,15 @@ namespace VIVID::Window {
         return;  // 错误已记录到日志
       }
 
-      // TODO: =======move to render==========================================================
-      SDL_GLContext gl_context = SDL_GL_CreateContext(window_handle);
+      // // TODO: =======move to render==========================================================
+      // SDL_GLContext gl_context = SDL_GL_CreateContext(window_handle);
 
-      if (!VividErrorHandler::check_sdl_pointer(gl_context, "SDL_GL_CreateContext")) {
-        return;  // 错误已记录到日志
-      }
+      // if (!VividErrorHandler::check_sdl_pointer(gl_context, "SDL_GL_CreateContext")) {
+      //   return;  // 错误已记录到日志
+      // }
 
-      SDL_GL_MakeCurrent(window_handle, gl_context);
-      SDL_GL_SetSwapInterval(1);  // Enable vsync
+      // SDL_GL_MakeCurrent(window_handle, gl_context);
+      // SDL_GL_SetSwapInterval(1);  // Enable vsync
 
       //=====================================================================================
 
@@ -51,7 +54,7 @@ namespace VIVID::Window {
       // Add GPU component to mark as initialized
       auto& gpu_comp = registry.emplace<WindowGpuComponent>(entity);
       gpu_comp.window_handle = window_handle;
-      gpu_comp.gl_context = gl_context;
+      // gpu_comp.gl_context = gl_context;
       gpu_comp.initialized = true;
 
       // Initialize cache with current values

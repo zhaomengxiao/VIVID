@@ -17,30 +17,13 @@ include(../cmake/CPM.cmake)
 # VIVID engine
 CPMAddPackage(NAME VIVID SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/../lib)
 
-# ImGui for editor UI - using local vendor copy
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)    
-
-# OpenGL libraries
-# find_package(OpenGL REQUIRED)
-
 
 # ---- Create standalone executable ----
 
 # Collect all source files including editor
 file(GLOB_RECURSE sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp)
 
-# ImGui source files
-set(IMGUI_SOURCES
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
-)
-
-add_executable(${PROJECT_NAME} ${sources} ${IMGUI_SOURCES})
+add_executable(${PROJECT_NAME} ${sources})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 OUTPUT_NAME "HelloSDL3")
 
@@ -49,10 +32,30 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
+
+if(EMSCRIPTEN)
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "index")
+    add_compile_options(-sDISABLE_EXCEPTION_CATCHING=1 -DIMGUI_DISABLE_FILE_FUNCTIONS=1)
+   
+    target_link_options(${PROJECT_NAME} PRIVATE
+        "--use-port=emdawnwebgpu"
+        "-sUSE_SDL=3"  # There is currently no official support internally at emscripten
+        "-sWASM=1"
+        "-sASYNCIFY=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sSTACK_SIZE=1mb"
+        "-sEXPORTED_RUNTIME_METHODS=cwrap"
+        # "-sMODULARIZE=1"
+        "-sNO_EXIT_RUNTIME=0"
+        "-sASSERTIONS=1"
+        "-sDISABLE_EXCEPTION_CATCHING=1"
+        #"-sNO_FILESYSTEM=1"  # sdl3 integrates a filesystem, you need to disable it at SDL3 build time
+        "--shell-file=${CMAKE_CURRENT_LIST_DIR}/../emscripten/shell_minimal.html"
+    )
+endif()
 
 # Copy resources to build directory
 # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

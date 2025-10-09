@@ -7,17 +7,19 @@ include(utils.cmake)
 
 # Dependencies
 if (EMSCRIPTEN)
-
+  set(CMAKE_EXECUTABLE_SUFFIX ".html")
   add_library(SDL3_SDL3 INTERFACE)
-  target_compile_options(SDL3_SDL3 INTERFACE --use-port=sdl3) # NB: This port does not exist yet, emscripten is not supported
+  target_link_options(SDL3_SDL3 INTERFACE -sUSE_SDL=3)
   add_library(SDL3::SDL3 ALIAS SDL3_SDL3)
   function(target_copy_sdl3_binaries)
   endfunction()
 
   add_library(webgpu INTERFACE)
-  target_link_options(webgpu INTERFACE -sUSE_WEBGPU=1)
+  target_link_options(webgpu INTERFACE --use-port=emdawnwebgpu)
   function(target_copy_webgpu_binaries)
   endfunction()
+
+  
 
 else()
 
@@ -54,6 +56,10 @@ add_subdirectory(.. sdl3webgpu)
 
 # Example
 add_executable(hello-sdl3webgpu hello-sdl3webgpu.c)
+
+if(EMSCRIPTEN)
+  set_target_properties(hello-sdl3webgpu PROPERTIES OUTPUT_NAME "index")
+endif()
 target_link_libraries(hello-sdl3webgpu PRIVATE SDL3::SDL3 webgpu sdl3webgpu)
 set_target_properties(hello-sdl3webgpu PROPERTIES CXX_STANDARD 17)
 target_treat_all_warnings_as_errors(hello-sdl3webgpu)

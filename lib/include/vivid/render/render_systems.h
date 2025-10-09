@@ -18,6 +18,7 @@ struct WebGPUResources {
   WGPUQueue queue = nullptr;
   WGPURenderPipeline pipeline = nullptr;
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
+  WGPUSurfaceConfiguration surfaceConfiguration = {};
   WGPUSurface surface = nullptr;
   uint32_t configuredWidth = 0;
   uint32_t configuredHeight = 0;
@@ -69,4 +70,6 @@ namespace VIVID::Render {
   void CreatePipeline(Resources &res, entt::registry &world);
 
   void ReleaseWebGPUResources(Resources &res, entt::registry &world);
+
+  void InitWebGPU(Resources &res, entt::registry &world);
 }  // namespace VIVID::Render

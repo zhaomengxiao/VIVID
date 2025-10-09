@@ -13,7 +13,7 @@
 #    include <emscripten/html5_webgpu.h>
 #  endif
 
-#  include "../libs/emscripten/emscripten_mainloop_stub.h"
+// #  include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
 #include <webgpu/webgpu.h>
@@ -27,39 +27,39 @@
 #endif
 #include <vivid/app/SDL3App.h>
 
-bool ImGui_ImplWGPU_CheckSurfaceTextureOptimalStatus_Helper(
-    WGPUSurfaceGetCurrentTextureStatus status) {
-  switch (status) {
-#if defined(__EMSCRIPTEN__) && !defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-    case WGPUSurfaceGetCurrentTextureStatus_Success:
-      return true;
-#else
-    case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
-      return true;
-    case WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
-#endif
-    case WGPUSurfaceGetCurrentTextureStatus_Timeout:
-    case WGPUSurfaceGetCurrentTextureStatus_Outdated:
-    case WGPUSurfaceGetCurrentTextureStatus_Lost:
-      // if the status is NOT Optimal it's necessary try to reconfigure the surface
-      return false;
-      // Unrecoverable errors
-#if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-    case WGPUSurfaceGetCurrentTextureStatus_Error:
-#else  // IMGUI_IMPL_WEBGPU_BACKEND_WGPU
-    case WGPUSurfaceGetCurrentTextureStatus_OutOfMemory:
-    case WGPUSurfaceGetCurrentTextureStatus_DeviceLost:
-#endif
-    case WGPUSurfaceGetCurrentTextureStatus_Force32:
-      // Fatal error
-      fprintf(stderr, "Unrecoverable Error Check Surface Texture status=%#.8x\n", status);
-      abort();
+// bool ImGui_ImplWGPU_CheckSurfaceTextureOptimalStatus_Helper(
+//     WGPUSurfaceGetCurrentTextureStatus status) {
+//   switch (status) {
+// #if defined(__EMSCRIPTEN__) && !defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+//     case WGPUSurfaceGetCurrentTextureStatus_Success:
+//       return true;
+// #else
+//     case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
+//       return true;
+//     case WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
+// #endif
+//     case WGPUSurfaceGetCurrentTextureStatus_Timeout:
+//     case WGPUSurfaceGetCurrentTextureStatus_Outdated:
+//     case WGPUSurfaceGetCurrentTextureStatus_Lost:
+//       // if the status is NOT Optimal it's necessary try to reconfigure the surface
+//       return false;
+//       // Unrecoverable errors
+// #if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+//     case WGPUSurfaceGetCurrentTextureStatus_Error:
+// #else  // IMGUI_IMPL_WEBGPU_BACKEND_WGPU
+//     case WGPUSurfaceGetCurrentTextureStatus_OutOfMemory:
+//     case WGPUSurfaceGetCurrentTextureStatus_DeviceLost:
+// #endif
+//     case WGPUSurfaceGetCurrentTextureStatus_Force32:
+//       // Fatal error
+//       fprintf(stderr, "Unrecoverable Error Check Surface Texture status=%#.8x\n", status);
+//       abort();
 
-    default:  // should never be reached
-      fprintf(stderr, "Unexpected Error Check Surface Texture status=%#.8x\n", status);
-      abort();
-  }
-}
+//     default:  // should never be reached
+//       fprintf(stderr, "Unexpected Error Check Surface Texture status=%#.8x\n", status);
+//       abort();
+//   }
+// }
 
 namespace VIVID::UI {
   // 如何在SDL3窗口中显示imgui: 2.初始化
@@ -76,6 +76,9 @@ namespace VIVID::UI {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // IF using Docking Branch
+#ifdef __EMSCRIPTEN__
+    io.IniFilename = nullptr;
+#endif
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -142,8 +145,7 @@ namespace VIVID::UI {
   // For an Emscripten build we are disabling file-system access, so let's not attempt to do a
   // fopen() of the imgui.ini file. You may manually call LoadIniSettingsFromMemory() to load
   // settings from your own storage.
-  io.IniFilename = nullptr;
-  EMSCRIPTEN_MAINLOOP_BEGIN
+  // io.IniFilename = nullptr;
 #else
 //   while (!canCloseWindow)
 #endif
@@ -203,9 +205,6 @@ namespace VIVID::UI {
 
     // Do not call ImGui::Render() here; it will be invoked in Render::Draw
   }
-#ifdef __EMSCRIPTEN__
-  EMSCRIPTEN_MAINLOOP_END;
-#endif
 
   void ShutDownImGui(Resources& res, entt::registry& world) {
     ImGui_ImplWGPU_Shutdown();

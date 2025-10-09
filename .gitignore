@@ -5,6 +5,7 @@
 /all/build*
 /test/build*
 /documentation/build*
+/hello_sdl3/build*
 
 # IDE and Editor files
 /.vscode
