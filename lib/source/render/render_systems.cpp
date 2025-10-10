@@ -8,10 +8,11 @@
 #include <thread>
 
 #include "vivid/log/log.h"
-#include "vivid/rendering/render_component.h"
+#include "vivid/render/render_component.h"
 #include "vivid/window/window_systems.h"
 // ImGui rendering backend
 #include <imgui.h>
+#include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
 
 // Camera controller helpers for view matrix
@@ -665,7 +666,7 @@ namespace VIVID::Render {
     VividLogger::app_debug("WebGPU command queue tested");
   }
 
-  void ConfigureSurface(Resources &res, entt::registry &world) {
+  /* void ConfigureSurface(Resources &res, entt::registry &world) {
     VividLogger::app_debug("Configuring WebGPU surface...");
     auto webgpuRes = res.get<WebGPUResources>();
     if (!webgpuRes) {
@@ -684,9 +685,6 @@ namespace VIVID::Render {
     VividLogger::app_debug("wgpuInstanceCreateSurface....!!");
     webgpuRes->surface = wgpuInstanceCreateSurface(webgpuRes->instance, &surfaceDesc);
     VividLogger::app_debug("wgpuInstanceCreateSurface.. created!!!");
-#else
-    webgpuRes->surface
-        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
 #endif
 
     if (webgpuRes->surface == nullptr) {
@@ -701,6 +699,10 @@ namespace VIVID::Render {
       auto view = world.view<VIVID::Window::WindowGpuComponent>();
       view.each([&](auto entity, auto &gpu_comp) {
         if (gpu_comp.window_handle) {
+#ifdef IMGUI_IMPL_WEBGPU_BACKEND_DAWN
+          webgpuRes->surface
+              = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
+#endif
           SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
         }
       });
@@ -755,7 +757,7 @@ namespace VIVID::Render {
     ReconfigureSurface(res, world, config.width, config.height);
 
     VividLogger::app_debug("WebGPU surface configured");
-  }
+  } */
 
   void SyncScene(Resources &res, entt::registry &world) {
     // We only want to process entities that have the CPU-side data (Mesh, Material)
@@ -1492,10 +1494,37 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     wgpu::SurfaceDescriptor surfaceDesc = {};
     surfaceDesc.nextInChain = &canvasDesc;
     wgpu::Surface surface = instance.CreateSurface(&surfaceDesc);
-#else
-    wgpu::Surface surface = ImGui_ImplSDL3_CreateWGPUSurface(instance.Get(), (SDL_Window *)window);
-#endif
     if (!surface) {
+      VividLogger::app_error("Could not create WebGPU surface!");
+      return;
+    }
+    webgpuRes->surface = surface.MoveToCHandle();
+#endif
+    // Query current window pixel size instead of hard-coded values
+    int pixel_width = 0;
+    int pixel_height = 0;
+    {
+      auto view = world.view<VIVID::Window::WindowGpuComponent>();
+      view.each([&](auto entity, auto &gpu_comp) {
+        if (gpu_comp.window_handle) {
+#ifndef __EMSCRIPTEN__
+          webgpuRes->surface
+              = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes->instance, gpu_comp.window_handle);
+#endif
+          SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
+        }
+      });
+    }
+
+    // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
+    if (pixel_width <= 0 || pixel_height <= 0) {
+      VividLogger::app_warn(
+          "Window pixel size is %dx%d; using fallback size for surface configuration", pixel_width,
+          pixel_height);
+      pixel_width = 1;
+      pixel_height = 1;
+    }
+    if (!webgpuRes->surface) {
       VividLogger::app_error("Could not create WebGPU surface!");
       return;
     }
@@ -1503,7 +1532,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // Moving Dawn objects into WGPU handles
     // wgpu_instance = instance.MoveToCHandle();
     // wgpu_surface = surface.MoveToCHandle();
-    webgpuRes->surface = surface.MoveToCHandle();
+
     webgpuRes->instance = instance.MoveToCHandle();
 
     WGPUSurfaceCapabilities surface_capabilities = {};
@@ -1523,26 +1552,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     webgpuRes->surfaceConfiguration.alphaMode = WGPUCompositeAlphaMode_Auto;
     webgpuRes->surfaceConfiguration.usage = WGPUTextureUsage_RenderAttachment;
 
-    // Query current window pixel size instead of hard-coded values
-    int pixel_width = 0;
-    int pixel_height = 0;
-    {
-      auto view = world.view<VIVID::Window::WindowGpuComponent>();
-      view.each([&](auto entity, auto &gpu_comp) {
-        if (gpu_comp.window_handle) {
-          SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
-        }
-      });
-    }
-
-    // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
-    if (pixel_width <= 0 || pixel_height <= 0) {
-      VividLogger::app_warn(
-          "Window pixel size is %dx%d; using fallback size for surface configuration", pixel_width,
-          pixel_height);
-      pixel_width = 1;
-      pixel_height = 1;
-    }
     webgpuRes->surfaceConfiguration.width = webgpuRes->configuredWidth = pixel_width;
     webgpuRes->surfaceConfiguration.height = webgpuRes->configuredHeight = pixel_height;
     webgpuRes->surfaceConfiguration.device = webgpuRes->device;

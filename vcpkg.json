@@ -6,12 +6,6 @@
     "license": "MIT",
     "dependencies": [
         {
-            "name": "glew"
-        },
-        {
-            "name": "glfw3"
-        },
-        {
             "name": "sdl3"
         }
     ]

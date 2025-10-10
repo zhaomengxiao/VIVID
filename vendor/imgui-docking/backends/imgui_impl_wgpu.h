@@ -31,8 +31,6 @@
 #include "imgui.h"  // IMGUI_IMPL_API
 #ifndef IMGUI_DISABLE
 
-#  define IMGUI_IMPL_WEBGPU_BACKEND_DAWN
-
 #  include <webgpu/webgpu.h>
 #  if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 #    include <webgpu/webgpu_cpp.h>  // for wgpu::Device, wgpu::DeviceLostReason, wgpu::ErrorType used by validation layer callbacks.

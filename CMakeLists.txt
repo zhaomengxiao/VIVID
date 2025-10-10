@@ -10,7 +10,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tools.cmake)
 # needed to generate test target
 enable_testing()
 # Include webgpu directory, to define the 'webgpu' target
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/webgpu)
+# set(WEBGPU_BACKEND "DAWN")
+# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/webgpu)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/standalone ${CMAKE_BINARY_DIR}/standalone)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/xr ${CMAKE_BINARY_DIR}/xr)

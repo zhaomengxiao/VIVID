@@ -21,6 +21,7 @@ desktop.ini
 /vendor/optick
 /vendor/PhysX
 /vendor/rlImGui
+/vendor/dawn
 # /lib/vendor/
 
 # Package managers and dependencies

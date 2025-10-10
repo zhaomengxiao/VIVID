@@ -207,6 +207,7 @@ namespace VIVID::UI {
   }
 
   void ShutDownImGui(Resources& res, entt::registry& world) {
+    ImGui::DestroyPlatformWindows();
     ImGui_ImplWGPU_Shutdown();
     ImGui_ImplSDL3_Shutdown();
 

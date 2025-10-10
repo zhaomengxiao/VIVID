@@ -5,7 +5,7 @@
 
 #include "vivid/app/SDL3App.h"
 #include "vivid/log/log.h"
-#include "vivid/rendering/render_component.h"
+#include "vivid/render/render_component.h"
 #include "vivid/window/window_systems.h"
 
 // 如何在SDL3窗口中显示imgui: 1.添加imgui头文件
