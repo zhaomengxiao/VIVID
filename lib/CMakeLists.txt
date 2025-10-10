@@ -54,6 +54,9 @@ CPMAddPackage(
   NAME glm
   GIT_TAG 1.0.1
   GITHUB_REPOSITORY g-truc/glm
+  OPTIONS
+    "GLM_BUILD_INSTALL ON"
+    "GLM_BUILD_LIBRARY OFF"
   )
 
 # Check if glm was added successfully
@@ -87,114 +90,63 @@ endif()
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)
 # ImGui headers
 set(IMGUI_HEADERS
-    ${IMGUI_DIR}/imgui.h
-    ${IMGUI_DIR}/imgui_internal.h
-    ${IMGUI_DIR}/backends/imgui_impl_sdl3.h
-    ${IMGUI_DIR}/backends/imgui_impl_wgpu.h
+  ${IMGUI_DIR}/imgui.h
+  ${IMGUI_DIR}/imgui_internal.h
+  ${IMGUI_DIR}/backends/imgui_impl_sdl3.h
+  ${IMGUI_DIR}/backends/imgui_impl_wgpu.h
 )
 # ImGui source files
 set(IMGUI_SOURCES
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_wgpu.cpp
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_demo.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_wgpu.cpp
 )    
 
-# set(SDL3WEBGPU_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu)
-# set(SDL3WEBGPU_HEADERS
-#     ${SDL3WEBGPU_DIR}/sdl3webgpu.h
-# )
-# set(SDL3WEBGPU_SOURCES
-#     ${SDL3WEBGPU_DIR}/sdl3webgpu.c
-# )
+# DAWN and SDL3 SETUP
+set(VIVID_DAWN_VERSION "20250927.170548")
+set(VIVID_DAWN_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../vendor/dawn")
+set(VIVID_DAWN_DOWNLOAD_DIR "${PROJECT_BINARY_DIR}/_deps/dawn")
+
+if(EMSCRIPTEN)
+  # download reomoteport file
+  set(remoteport_filename "emdawnwebgpu-v${VIVID_DAWN_VERSION}.remoteport.py")
+  set(remoteport_url "https://github.com/google/dawn/releases/download/v${VIVID_DAWN_VERSION}/${remoteport_filename}")
+  set(remoteport_path "${VIVID_DAWN_OUTPUT_DIR}/${remoteport_filename}")
+  _vivid_dawn_download("${remoteport_url}" "${remoteport_path}" "")
+
+  set(VIVID_EMDAWN_REMOTEPORT "${remoteport_path}" CACHE FILEPATH "Path to emdawnwebgpu remote port file")
 
 
-
-# libraries
-
-
-if(NOT EMSCRIPTEN)# Native build
+else()# Native build
   find_package(SDL3 CONFIG REQUIRED)
 
   # Dawn assets configuration
 
-if(NOT VIVID_USE_SYSTEM_DAWN)
-if(NOT DEFINED VIVID_DAWN_VERSION)
-set(VIVID_DAWN_VERSION "20250927.170548")
-endif()
-
-if(NOT DEFINED VIVID_DAWN_OUTPUT_DIR)
-  set(VIVID_DAWN_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../vendor/dawn")
-endif()
-
-if(NOT DEFINED VIVID_DAWN_DOWNLOAD_DIR)
-  set(VIVID_DAWN_DOWNLOAD_DIR "${PROJECT_BINARY_DIR}/_deps/dawn")
-endif()
-
-fetch_dawn_assets(
-  VERSION ${VIVID_DAWN_VERSION}
-  OUTPUT_DIR ${VIVID_DAWN_OUTPUT_DIR}
-  DOWNLOAD_DIR ${VIVID_DAWN_DOWNLOAD_DIR}
-)
-
-set(VIVID_DAWN_ROOT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/dawn-${VIVID_DAWN_VERSION}")
-set(VIVID_DAWN_ROOT "${VIVID_DAWN_ROOT_DEFAULT}" CACHE PATH "Path to the Dawn source checkout to integrate")
-set(VIVID_EMDAWN_REMOTEPORT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/emdawnwebgpu-v${VIVID_DAWN_VERSION}.remoteport.py")
-set(VIVID_EMDAWN_REMOTEPORT "${VIVID_EMDAWN_REMOTEPORT_DEFAULT}" CACHE FILEPATH "Path to emdawnwebgpu remote port file")
-
-file(TO_CMAKE_PATH "${VIVID_DAWN_ROOT}" VIVID_DAWN_ROOT)
-file(TO_CMAKE_PATH "${VIVID_EMDAWN_REMOTEPORT}" VIVID_EMDAWN_REMOTEPORT)
-else()
-# Rely on a Dawn installation that provides DawnConfig.cmake
-find_package(Threads REQUIRED)
-find_package(dawn CONFIG REQUIRED)
-
-if(TARGET dawn::webgpu_dawn)
-  get_target_property(_dawn_debug_location dawn::webgpu_dawn IMPORTED_LOCATION_DEBUG)
-  if(_dawn_debug_location AND NOT _dawn_debug_location STREQUAL "NOTFOUND")
-    foreach(_config RELEASE RELWITHDEBINFO MINSIZEREL)
-      get_target_property(_dawn_location dawn::webgpu_dawn IMPORTED_LOCATION_${_config})
-      if(NOT _dawn_location OR _dawn_location STREQUAL "NOTFOUND")
-        set_target_properties(dawn::webgpu_dawn PROPERTIES MAP_IMPORTED_CONFIG_${_config} Debug)
-      endif()
-    endforeach()
-  endif()
-  unset(_dawn_debug_location)
-  unset(_dawn_location)
-endif()
-
-set(VIVID_DAWN_ROOT "${dawn_PACKAGE_PREFIX_DIR}" CACHE PATH "Path to the Dawn installation" FORCE)
-set(VIVID_EMDAWN_REMOTEPORT "${VIVID_DAWN_ROOT}/share/dawn/emdawnwebgpu.remoteport.py" CACHE FILEPATH "Path to emdawnwebgpu remote port file" FORCE)
-endif()
-  
   if(NOT VIVID_USE_SYSTEM_DAWN)
+
+
+    fetch_dawn_assets(
+      VERSION ${VIVID_DAWN_VERSION}
+      OUTPUT_DIR ${VIVID_DAWN_OUTPUT_DIR}
+      DOWNLOAD_DIR ${VIVID_DAWN_DOWNLOAD_DIR}
+    )
+
+    set(VIVID_DAWN_ROOT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/dawn-${VIVID_DAWN_VERSION}")
+    set(VIVID_DAWN_ROOT "${VIVID_DAWN_ROOT_DEFAULT}" CACHE PATH "Path to the Dawn source checkout to integrate")
+    set(VIVID_EMDAWN_REMOTEPORT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/emdawnwebgpu-v${VIVID_DAWN_VERSION}.remoteport.py")
+    set(VIVID_EMDAWN_REMOTEPORT "${VIVID_EMDAWN_REMOTEPORT_DEFAULT}" CACHE FILEPATH "Path to emdawnwebgpu remote port file")
+
+    file(TO_CMAKE_PATH "${VIVID_DAWN_ROOT}" VIVID_DAWN_ROOT)
+    file(TO_CMAKE_PATH "${VIVID_EMDAWN_REMOTEPORT}" VIVID_EMDAWN_REMOTEPORT)
+
     if(NOT EXISTS "${VIVID_DAWN_ROOT}")
       message(FATAL_ERROR "VIVID_DAWN_ROOT '${VIVID_DAWN_ROOT}' does not exist. Please set it to a valid Dawn checkout.")
     endif()
-  endif()
-
-  if(APPLE)
-    set_source_files_properties(${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
-    
-    set(VIVID_DAWN_PLATFORM_LIBS
-      "-framework CoreFoundation"
-      "-framework QuartzCore"
-      "-framework Metal"
-      "-framework MetalKit"
-      "-framework Cocoa"
-    )
-  elseif(WIN32)
-    set(VIVID_DAWN_PLATFORM_LIBS d3dcompiler ws2_32 userenv bcrypt ntdll opengl32 Propsys RuntimeObject)
-  elseif(UNIX)
-    set(VIVID_DAWN_PLATFORM_LIBS m dl)
-  else()
-    set(VIVID_DAWN_PLATFORM_LIBS)
-  endif()
-
-  if(NOT VIVID_USE_SYSTEM_DAWN)
+    # DAWN CMake options
     set(DAWN_USE_GLFW OFF CACHE BOOL "Disable Dawn GLFW helpers when using SDL" FORCE)
     set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "Disable Dawn dependency downloads" FORCE)
     set(DAWN_BUILD_MONOLITHIC_LIBRARY "STATIC" CACHE STRING "Build Dawn monolithic library as static" FORCE)
@@ -216,45 +168,76 @@ endif()
       set(TINT_BUILD_SPV_WRITER ON CACHE BOOL "Enable Tint SPIR-V writer" FORCE)
       set(TINT_BUILD_WGSL_WRITER ON CACHE BOOL "Enable Tint WGSL writer" FORCE)
     endif()
-  endif()
-  # check if WAYLAND is the current Session Type and enable DAWN_USE_WAYLAND Wayland option @compile time
-  # You can override this using: cmake -DDAWN_USE_WAYLAND=X (X = ON | OFF)
-  if(LINUX)
-    if($ENV{XDG_SESSION_TYPE} MATCHES wayland)
-        option(DAWN_USE_WAYLAND "Enable support for Wayland surface" ON)
+    # check if WAYLAND is the current Session Type and enable DAWN_USE_WAYLAND Wayland option @compile time
+    # You can override this using: cmake -DDAWN_USE_WAYLAND=X (X = ON | OFF)
+    if(LINUX)
+      if($ENV{XDG_SESSION_TYPE} MATCHES wayland)
+          option(DAWN_USE_WAYLAND "Enable support for Wayland surface" ON)
+      endif()
     endif()
-  endif()
-
-  if(NOT VIVID_USE_SYSTEM_DAWN)
+    # Integrate Dawn build
     add_subdirectory("${VIVID_DAWN_ROOT}" ${PROJECT_BINARY_DIR}/dawn EXCLUDE_FROM_ALL)
+  # Rely on a Dawn installation that provides DawnConfig.cmake
+  else()
+    find_package(Threads REQUIRED)
+    find_package(dawn CONFIG REQUIRED)
+
+    if(TARGET dawn::webgpu_dawn)
+      get_target_property(_dawn_debug_location dawn::webgpu_dawn IMPORTED_LOCATION_DEBUG)
+      if(_dawn_debug_location AND NOT _dawn_debug_location STREQUAL "NOTFOUND")
+        foreach(_config RELEASE RELWITHDEBINFO MINSIZEREL)
+          get_target_property(_dawn_location dawn::webgpu_dawn IMPORTED_LOCATION_${_config})
+          if(NOT _dawn_location OR _dawn_location STREQUAL "NOTFOUND")
+            set_target_properties(dawn::webgpu_dawn PROPERTIES MAP_IMPORTED_CONFIG_${_config} Debug)
+          endif()
+        endforeach()
+      endif()
+      unset(_dawn_debug_location)
+      unset(_dawn_location)
+    endif()
+
+    set(VIVID_DAWN_ROOT "${dawn_PACKAGE_PREFIX_DIR}" CACHE PATH "Path to the Dawn installation" FORCE)
+    set(VIVID_EMDAWN_REMOTEPORT "${VIVID_DAWN_ROOT}/share/dawn/emdawnwebgpu.remoteport.py" CACHE FILEPATH "Path to emdawnwebgpu remote port file" FORCE)
+  endif()
+  
+
+  # VIVID_DAWN_PLATFORM_LIBS
+  if(APPLE)
+    set_source_files_properties(${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
+    
+    set(VIVID_DAWN_PLATFORM_LIBS
+      "-framework CoreFoundation"
+      "-framework QuartzCore"
+      "-framework Metal"
+      "-framework MetalKit"
+      "-framework Cocoa"
+    )
+  elseif(WIN32)
+    set(VIVID_DAWN_PLATFORM_LIBS d3dcompiler ws2_32 userenv bcrypt ntdll opengl32 Propsys RuntimeObject)
+  elseif(UNIX)
+    set(VIVID_DAWN_PLATFORM_LIBS m dl)
+  else()
+    set(VIVID_DAWN_PLATFORM_LIBS)
   endif()
 
   # if(NOT TARGET webgpu_dawn OR NOT TARGET webgpu_cpp)
   #   message(FATAL_ERROR "Dawn integration failed: expected targets 'webgpu_dawn' and 'webgpu_cpp' not found.")
   # endif()
 
-  add_library(vivid_webgpu INTERFACE)
-  # target_link_libraries(vivid_webgpu INTERFACE webgpu_dawn webgpu_cpp ${VIVID_DAWN_PLATFORM_LIBS})
-  if(VIVID_USE_SYSTEM_DAWN)
-    target_link_libraries(vivid_webgpu INTERFACE dawn::dawn_public_config)
-  else()
-    target_include_directories(vivid_webgpu INTERFACE
-      $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include>
-      $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include/webgpu>
-      $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/webgpu>
-    )
-  endif()
-endif()
+  # add_library(vivid_webgpu INTERFACE)
+  # # target_link_libraries(vivid_webgpu INTERFACE webgpu_dawn webgpu_cpp ${VIVID_DAWN_PLATFORM_LIBS})
+  # if(VIVID_USE_SYSTEM_DAWN)
+  #   target_link_libraries(vivid_webgpu INTERFACE dawn::dawn_public_config)
+  # else()
+  #   target_include_directories(vivid_webgpu INTERFACE
+  #     $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include>
+  #     $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include/webgpu>
+  #     $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/webgpu>
+  #   )
+  # endif()
+endif() # end NOT EMSCRIPTEN
 
-# Create a wrapper interface library for glm to enable export
-add_library(vivid_glm INTERFACE)
-# Don't link to glm::glm, just set the include directories directly
-target_include_directories(
-  vivid_glm
-  INTERFACE
-    $<BUILD_INTERFACE:${glm_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/glm>
-)
+
 # Create an interface target to expose ImGui include dirs to consumers
 add_library(vivid_imgui INTERFACE)
 target_include_directories(vivid_imgui INTERFACE
@@ -264,16 +247,6 @@ target_include_directories(vivid_imgui INTERFACE
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
 )
 target_compile_definitions(vivid_imgui INTERFACE IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-
-# PhysX and Optick (pre-compiled binaries)
-# set(VENDOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
-# set(PHYSX_ROOT "${VENDOR_DIR}/PhysX/physx/install/vc17win64/PhysX")
-# set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
-# set(PHYSX_LIB_DIR "${PHYSX_ROOT}/bin/win.x86_64.vc143.md/release")
-
-# set(OPTICK_ROOT "${VENDOR_DIR}/optick")
-# set(OPTICK_INCLUDE_DIR "${OPTICK_ROOT}/src")
-# set(OPTICK_LIB_DIR "${OPTICK_ROOT}/lib")
 
 # ---- Add source files ----
 
@@ -300,51 +273,17 @@ target_include_directories(
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/source
-    # ${PHYSX_INCLUDE_DIR}
-    # ${OPTICK_INCLUDE_DIR}
 )
-
-
 
 if(NOT APPLE)
   target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
-# PhysX libraries
-# set(PHYSX_LIBS
-#     PhysXFoundation_64
-#     PhysXCommon_64
-#     PhysX_64
-#     PhysXExtensions_static_64
-#     PhysXPvdSDK_static_64
-#     PhysXGpu_64
-#     PhysXCooking_64
-#     PhysXCharacterKinematic_static_64
-#     PhysXTask_static_64
-#     PhysXVehicle2_static_64
-#     PVDRuntime_64
-# )
-
-# Link directories for PhysX and Optick
-# link_directories(${PHYSX_LIB_DIR} ${OPTICK_LIB_DIR})
-
-
-
-# # set(WEBGPU_BACKEND "DAWN")
-
-# Include webgpu directory, to define the 'webgpu' target
-
-
-# Update target link libraries to include PhysX, Optick, and GLEW
-
 # native settings
 if(NOT EMSCRIPTEN)
-  target_link_libraries(${PROJECT_NAME} 
-      
+  target_link_libraries(${PROJECT_NAME}      
     PUBLIC
-      vivid_glm
-        # Use our wrapper instead of glm::glm directly
+      glm::glm
       vivid_imgui
       EnTT::EnTT
       $<$<BOOL:${VIVID_USE_SYSTEM_DAWN}>:dawn::webgpu_dawn>
@@ -352,9 +291,6 @@ if(NOT EMSCRIPTEN)
       ${VIVID_DAWN_PLATFORM_LIBS}
       SDL3::SDL3
     PRIVATE
-      
-      # ${PHYSX_LIBS}
-      # OptickCore
   )
 
 
@@ -365,39 +301,9 @@ if(NOT EMSCRIPTEN)
   # header paths
   string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
-  # # Install vivid_glm target along with VIVID
-  install(TARGETS vivid_glm EXPORT ${PROJECT_NAME}Targets)
-
   # Install vivid_imgui interface target along with VIVID
   install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
 
-  # Install vivid_webgpu interface target along with VIVID
-  install(TARGETS vivid_webgpu EXPORT ${PROJECT_NAME}Targets)
-
-  # # Install and export sdl3webgpu along with VIVID
-  # install(
-  #   TARGETS sdl3webgpu
-  #   EXPORT ${PROJECT_NAME}Targets
-  #   ARCHIVE DESTINATION lib
-  #   LIBRARY DESTINATION lib
-  #   RUNTIME DESTINATION bin
-  #   INCLUDES DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
-  # )
-
-  # Install sdl3webgpu public headers
-  # install(
-  #   FILES ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/sdl3webgpu/sdl3webgpu.h
-  #   DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
-  #   COMPONENT "${PROJECT_NAME}_Development"
-  # )
-
-  # Install glm headers
-  install(
-    DIRECTORY ${glm_SOURCE_DIR}/glm/
-    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/glm
-    COMPONENT "${PROJECT_NAME}_Development"
-    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  )
 
   # Install ImGui headers so consumers can use the exported include paths
   install(
@@ -406,34 +312,6 @@ if(NOT EMSCRIPTEN)
     COMPONENT "${PROJECT_NAME}_Development"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
   )
-
-  # Install sdl3webgpu headers
-
-  # install(
-  #   DIRECTORY ${SDL3WEBGPU_DIR}/
-  #   DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/sdl3webgpu
-  #   COMPONENT "${PROJECT_NAME}_Development"
-  #   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
-  # )
-
-  # Install webgpu headers required by vivid_webgpu interface
-  install(
-    DIRECTORY ${VIVID_DAWN_ROOT}/include/
-    DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}/webgpu
-    COMPONENT "${PROJECT_NAME}_Development"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-  )
-
-  # install(
-  #   FILES ${VIVID_EMDAWN_REMOTEPORT}
-  #   DESTINATION share/${PROJECT_NAME}-${PROJECT_VERSION}/emscripten
-  #   COMPONENT "${PROJECT_NAME}_Development"
-  # )
-
-  # The application's binary must find wgpu.dll or libwgpu.so at runtime,
-  # so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
-  # next to the binary.
-  # target_copy_webgpu_binaries(${PROJECT_NAME})
 
   packageProject(
     NAME ${PROJECT_NAME}
@@ -472,11 +350,10 @@ else()
 
   target_link_libraries(${PROJECT_NAME} 
     PUBLIC
-      vivid_glm  # Use our wrapper instead of glm::glm directly
+      glm::glm
       vivid_imgui
       EnTT::EnTT
     PRIVATE
-    # vivid_sdl3webgpu
     
   )
   add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
