@@ -5,8 +5,9 @@
     "homepage": "https://github.com/your-repo/vivid",
     "license": "MIT",
     "dependencies": [
+        "sdl3",
         {
-            "name": "sdl3"
+            "name": "dawn"
         }
     ]
 }

@@ -35,6 +35,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
 
+# Copy required system DLLs to executable directory
+# This is necessary because Dawn requires DLLs in the same directory as the executable
+vivid_copy_system_dlls_to_target(${PROJECT_NAME})
+
 if(EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "index")
@@ -56,36 +60,3 @@ if(EMSCRIPTEN)
         "--shell-file=${CMAKE_CURRENT_LIST_DIR}/../emscripten/shell_minimal.html"
     )
 endif()
-
-# Copy resources to build directory
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy_directory
-#     "${CMAKE_CURRENT_SOURCE_DIR}/res"
-#     "$<TARGET_FILE_DIR:${PROJECT_NAME}>/res"
-#     COMMENT "Copying resources to build directory"
-# )
-
-# Copy required DLLs to executable directory
-# if(WIN32)
-#     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#         "$<TARGET_FILE:glfw>"
-#         "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-#         COMMENT "Copying GLFW DLL to executable directory"
-#     )
-    
-#     # Copy GLEW DLL if GLEW target exists
-#     if(TARGET GLEW::GLEW)
-#         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#             "$<TARGET_FILE:GLEW::GLEW>"
-#             "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-#             COMMENT "Copying GLEW DLL to executable directory"
-#         )
-#     endif()
-# endif()
-
-# # Set working directory to executable directory for VS debugging
-# set_target_properties(${PROJECT_NAME} PROPERTIES
-#     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-# )

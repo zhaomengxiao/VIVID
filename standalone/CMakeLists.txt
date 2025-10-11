@@ -57,6 +57,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
 
+# Copy required system DLLs to executable directory
+vivid_copy_system_dlls_to_target(${PROJECT_NAME})
+
 # Copy resources to build directory
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

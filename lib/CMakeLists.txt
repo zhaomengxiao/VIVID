@@ -30,8 +30,45 @@ endif()
 include(../cmake/CPM.cmake)
 include(../cmake/DawnAssets.cmake)
 
-option(VIVID_USE_SYSTEM_DAWN "Use a system-installed Dawn package instead of fetching prebuilt assets" ON)
-set(dawn_DIR d:/Dawn/lib/cmake/Dawn)
+if(WIN32)
+  set(_VIVID_SYSTEM32 "$ENV{SystemRoot}/System32")
+  set(VIVID_SYSTEM_DLL_PATHS)
+  if(NOT EXISTS "${_VIVID_SYSTEM32}")
+    message(WARNING "VIVID: System32 directory not found at '${_VIVID_SYSTEM32}'")
+  else()
+    set(_VIVID_REQUIRED_SYSTEM_DLLS
+      d3dcompiler_47.dll
+      vulkan-1.dll
+    )
+    foreach(_VIVID_DLL IN LISTS _VIVID_REQUIRED_SYSTEM_DLLS)
+      # Use unique variable name for each DLL to avoid cache issues
+      unset(_VIVID_FOUND_DLL CACHE)
+      find_file(_VIVID_FOUND_DLL
+        NAMES ${_VIVID_DLL}
+        PATHS "${_VIVID_SYSTEM32}"
+        NO_DEFAULT_PATH
+      )
+      if(_VIVID_FOUND_DLL)
+        message(STATUS "VIVID: Found system DLL: ${_VIVID_FOUND_DLL}")
+        list(APPEND VIVID_SYSTEM_DLL_PATHS "${_VIVID_FOUND_DLL}")
+      else()
+        message(WARNING "VIVID: Required system DLL '${_VIVID_DLL}' not found in ${_VIVID_SYSTEM32}")
+      endif()
+      unset(_VIVID_FOUND_DLL CACHE)
+    endforeach()
+    
+    if(VIVID_SYSTEM_DLL_PATHS)
+      list(REMOVE_DUPLICATES VIVID_SYSTEM_DLL_PATHS)
+      message(STATUS "VIVID: System DLL paths to be copied: ${VIVID_SYSTEM_DLL_PATHS}")
+    else()
+      message(WARNING "VIVID: No system DLLs found")
+    endif()
+  endif()
+endif()
+
+# option(VIVID_USE_SYSTEM_DAWN "Use a system-installed Dawn package instead of fetching prebuilt assets" ON)
+# set(dawn_DIR d:/Dawn/lib/cmake/Dawn)
+
 # # Enable CPM debug output
 # set(CPM_DEBUG ON)
 
@@ -127,56 +164,56 @@ else()# Native build
   # Dawn assets configuration
 
   if(NOT VIVID_USE_SYSTEM_DAWN)
+    find_package(dawn CONFIG REQUIRED) #vcpkg
 
+    # fetch_dawn_assets(
+    #   VERSION ${VIVID_DAWN_VERSION}
+    #   OUTPUT_DIR ${VIVID_DAWN_OUTPUT_DIR}
+    #   DOWNLOAD_DIR ${VIVID_DAWN_DOWNLOAD_DIR}
+    # )
 
-    fetch_dawn_assets(
-      VERSION ${VIVID_DAWN_VERSION}
-      OUTPUT_DIR ${VIVID_DAWN_OUTPUT_DIR}
-      DOWNLOAD_DIR ${VIVID_DAWN_DOWNLOAD_DIR}
-    )
+    # set(VIVID_DAWN_ROOT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/dawn-${VIVID_DAWN_VERSION}")
+    # set(VIVID_DAWN_ROOT "${VIVID_DAWN_ROOT_DEFAULT}" CACHE PATH "Path to the Dawn source checkout to integrate")
+    # set(VIVID_EMDAWN_REMOTEPORT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/emdawnwebgpu-v${VIVID_DAWN_VERSION}.remoteport.py")
+    # set(VIVID_EMDAWN_REMOTEPORT "${VIVID_EMDAWN_REMOTEPORT_DEFAULT}" CACHE FILEPATH "Path to emdawnwebgpu remote port file")
 
-    set(VIVID_DAWN_ROOT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/dawn-${VIVID_DAWN_VERSION}")
-    set(VIVID_DAWN_ROOT "${VIVID_DAWN_ROOT_DEFAULT}" CACHE PATH "Path to the Dawn source checkout to integrate")
-    set(VIVID_EMDAWN_REMOTEPORT_DEFAULT "${VIVID_DAWN_OUTPUT_DIR}/emdawnwebgpu-v${VIVID_DAWN_VERSION}.remoteport.py")
-    set(VIVID_EMDAWN_REMOTEPORT "${VIVID_EMDAWN_REMOTEPORT_DEFAULT}" CACHE FILEPATH "Path to emdawnwebgpu remote port file")
+    # file(TO_CMAKE_PATH "${VIVID_DAWN_ROOT}" VIVID_DAWN_ROOT)
+    # file(TO_CMAKE_PATH "${VIVID_EMDAWN_REMOTEPORT}" VIVID_EMDAWN_REMOTEPORT)
 
-    file(TO_CMAKE_PATH "${VIVID_DAWN_ROOT}" VIVID_DAWN_ROOT)
-    file(TO_CMAKE_PATH "${VIVID_EMDAWN_REMOTEPORT}" VIVID_EMDAWN_REMOTEPORT)
-
-    if(NOT EXISTS "${VIVID_DAWN_ROOT}")
-      message(FATAL_ERROR "VIVID_DAWN_ROOT '${VIVID_DAWN_ROOT}' does not exist. Please set it to a valid Dawn checkout.")
-    endif()
-    # DAWN CMake options
-    set(DAWN_USE_GLFW OFF CACHE BOOL "Disable Dawn GLFW helpers when using SDL" FORCE)
-    set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "Disable Dawn dependency downloads" FORCE)
-    set(DAWN_BUILD_MONOLITHIC_LIBRARY "STATIC" CACHE STRING "Build Dawn monolithic library as static" FORCE)
-    set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "Disable Dawn samples" FORCE)
-    set(DAWN_BUILD_TESTS OFF CACHE BOOL "Disable Dawn tests" FORCE)
-    set(TINT_BUILD_CMD_TOOLS OFF CACHE BOOL "Disable Tint command line tools" FORCE)
-    set(TINT_BUILD_DOCS OFF CACHE BOOL "Disable Tint documentation" FORCE)
-    set(TINT_BUILD_TESTS OFF CACHE BOOL "Disable Tint tests" FORCE)
-    set(DAWN_ENABLE_INSTALL ON CACHE BOOL "Enable Dawn installation" FORCE)
-    if(NOT APPLE)
-      set(TINT_BUILD_MSL_WRITER OFF CACHE BOOL "Disable Tint MSL writer" FORCE)
-    endif()
-    if(WIN32)
-      set(DAWN_FORCE_SYSTEM_COMPONENT_LOAD ON CACHE BOOL "Allow Dawn system component fallback on Windows" FORCE)
-      set(TINT_BUILD_SPV_READER OFF CACHE BOOL "Disable Tint SPIR-V reader" FORCE)
-      set(TINT_BUILD_WGSL_READER ON CACHE BOOL "Enable Tint WGSL reader" FORCE)
-      set(TINT_BUILD_GLSL_WRITER OFF CACHE BOOL "Disable Tint GLSL writer" FORCE)
-      set(TINT_BUILD_GLSL_VALIDATOR OFF CACHE BOOL "Disable Tint GLSL validator" FORCE)
-      set(TINT_BUILD_SPV_WRITER ON CACHE BOOL "Enable Tint SPIR-V writer" FORCE)
-      set(TINT_BUILD_WGSL_WRITER ON CACHE BOOL "Enable Tint WGSL writer" FORCE)
-    endif()
-    # check if WAYLAND is the current Session Type and enable DAWN_USE_WAYLAND Wayland option @compile time
-    # You can override this using: cmake -DDAWN_USE_WAYLAND=X (X = ON | OFF)
-    if(LINUX)
-      if($ENV{XDG_SESSION_TYPE} MATCHES wayland)
-          option(DAWN_USE_WAYLAND "Enable support for Wayland surface" ON)
-      endif()
-    endif()
-    # Integrate Dawn build
-    add_subdirectory("${VIVID_DAWN_ROOT}" ${PROJECT_BINARY_DIR}/dawn EXCLUDE_FROM_ALL)
+    # if(NOT EXISTS "${VIVID_DAWN_ROOT}")
+    #   message(FATAL_ERROR "VIVID_DAWN_ROOT '${VIVID_DAWN_ROOT}' does not exist. Please set it to a valid Dawn checkout.")
+    # endif()
+    # # DAWN CMake options
+    # set(DAWN_USE_GLFW OFF CACHE BOOL "Disable Dawn GLFW helpers when using SDL" FORCE)
+    # set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "Disable Dawn dependency downloads" FORCE)
+    # set(DAWN_BUILD_MONOLITHIC_LIBRARY "STATIC" CACHE STRING "Build Dawn monolithic library as static" FORCE)
+    # set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "Disable Dawn samples" FORCE)
+    # set(DAWN_BUILD_TESTS OFF CACHE BOOL "Disable Dawn tests" FORCE)
+    # set(TINT_BUILD_CMD_TOOLS OFF CACHE BOOL "Disable Tint command line tools" FORCE)
+    # set(TINT_BUILD_DOCS OFF CACHE BOOL "Disable Tint documentation" FORCE)
+    # set(TINT_BUILD_TESTS OFF CACHE BOOL "Disable Tint tests" FORCE)
+    # set(DAWN_ENABLE_INSTALL ON CACHE BOOL "Enable Dawn installation" FORCE)
+    # if(NOT APPLE)
+    #   set(TINT_BUILD_MSL_WRITER OFF CACHE BOOL "Disable Tint MSL writer" FORCE)
+    # endif()
+    # if(WIN32)
+    #   set(DAWN_FORCE_SYSTEM_COMPONENT_LOAD ON CACHE BOOL "Allow Dawn system component fallback on Windows" FORCE)
+    #   set(TINT_BUILD_SPV_READER OFF CACHE BOOL "Disable Tint SPIR-V reader" FORCE)
+    #   set(TINT_BUILD_WGSL_READER ON CACHE BOOL "Enable Tint WGSL reader" FORCE)
+    #   set(TINT_BUILD_GLSL_WRITER OFF CACHE BOOL "Disable Tint GLSL writer" FORCE)
+    #   set(TINT_BUILD_GLSL_VALIDATOR OFF CACHE BOOL "Disable Tint GLSL validator" FORCE)
+    #   set(TINT_BUILD_SPV_WRITER ON CACHE BOOL "Enable Tint SPIR-V writer" FORCE)
+    #   set(TINT_BUILD_WGSL_WRITER ON CACHE BOOL "Enable Tint WGSL writer" FORCE)
+    # endif()
+    # # check if WAYLAND is the current Session Type and enable DAWN_USE_WAYLAND Wayland option @compile time
+    # # You can override this using: cmake -DDAWN_USE_WAYLAND=X (X = ON | OFF)
+    # if(LINUX)
+    #   if($ENV{XDG_SESSION_TYPE} MATCHES wayland)
+    #       option(DAWN_USE_WAYLAND "Enable support for Wayland surface" ON)
+    #   endif()
+    # endif()
+    # # Integrate Dawn build
+    # add_subdirectory("${VIVID_DAWN_ROOT}" ${PROJECT_BINARY_DIR}/dawn EXCLUDE_FROM_ALL)
   # Rely on a Dawn installation that provides DawnConfig.cmake
   else()
     find_package(Threads REQUIRED)
@@ -286,13 +323,60 @@ if(NOT EMSCRIPTEN)
       glm::glm
       vivid_imgui
       EnTT::EnTT
-      $<$<BOOL:${VIVID_USE_SYSTEM_DAWN}>:dawn::webgpu_dawn>
-      $<$<NOT:$<BOOL:${VIVID_USE_SYSTEM_DAWN}>>:webgpu_dawn>
+      dawn::webgpu_dawn
       ${VIVID_DAWN_PLATFORM_LIBS}
       SDL3::SDL3
     PRIVATE
   )
 
+  # ---- Define helper function for copying system DLLs to executable targets ----
+  # Users can call vivid_copy_system_dlls_to_target(target_name) to automatically
+  # copy required system DLLs to their executable's output directory.
+  # This is necessary because Dawn's DynamicLib uses LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+  # which doesn't search System32 by default for security reasons.
+  
+  if(WIN32 AND VIVID_SYSTEM_DLL_PATHS)
+    # Make VIVID_SYSTEM_DLL_PATHS available globally so it can be accessed in subdirectories
+    set(VIVID_SYSTEM_DLL_PATHS "${VIVID_SYSTEM_DLL_PATHS}" CACHE INTERNAL "System DLL paths for VIVID")
+    
+    function(vivid_copy_system_dlls_to_target TARGET_NAME)
+      if(NOT TARGET ${TARGET_NAME})
+        message(WARNING "VIVID: Target '${TARGET_NAME}' does not exist. Cannot copy system DLLs.")
+        return()
+      endif()
+      
+      get_target_property(_TARGET_TYPE ${TARGET_NAME} TYPE)
+      if(NOT _TARGET_TYPE STREQUAL "EXECUTABLE")
+        message(WARNING "VIVID: Target '${TARGET_NAME}' is not an executable. System DLLs are only needed for executables.")
+        return()
+      endif()
+      
+      message(STATUS "VIVID: Setting up DLL copy for target '${TARGET_NAME}'")
+      message(STATUS "VIVID: DLL paths: ${VIVID_SYSTEM_DLL_PATHS}")
+      
+      foreach(_VIVID_DLL_PATH IN LISTS VIVID_SYSTEM_DLL_PATHS)
+        get_filename_component(_VIVID_DLL_NAME "${_VIVID_DLL_PATH}" NAME)
+        message(STATUS "VIVID: Will copy ${_VIVID_DLL_NAME} to ${TARGET_NAME} output directory")
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_VIVID_DLL_PATH}"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/${_VIVID_DLL_NAME}"
+          COMMENT "VIVID: Copying ${_VIVID_DLL_NAME} to $<TARGET_FILE_DIR:${TARGET_NAME}>"
+        )
+      endforeach()
+    endfunction()
+    
+    # Install system DLLs for package distribution
+    install(FILES ${VIVID_SYSTEM_DLL_PATHS} DESTINATION bin)
+  else()
+    # Provide empty function for non-Windows or when DLLs not found
+    if(WIN32)
+      message(WARNING "VIVID: No system DLLs found. The function vivid_copy_system_dlls_to_target() will do nothing.")
+    endif()
+    function(vivid_copy_system_dlls_to_target TARGET_NAME)
+      # Do nothing on non-Windows platforms or when DLLs not found
+    endfunction()
+  endif()
 
   # ---- Create an installable target ----
   # this allows users to install and find the library via `find_package()`.
