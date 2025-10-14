@@ -102,7 +102,7 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .without<GpuMeshComponent>()
       .term_at(2)
       .src<WebGPUResources>()
-      .kind(flecs::OnStart)
+      .kind(flecs::PreUpdate)
       .each(syncSceneImpl);
 
   // Drawing - runs every frame
