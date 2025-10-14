@@ -5,6 +5,9 @@
 
 #include <iostream>
 
+namespace VIVID {
+namespace APP {
+
 // 前向声明用户定义的应用创建函数
 extern SDL3AppBuilder create_app_instance();
 
@@ -48,7 +51,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     // 初始化应用
     VIVID_ASSERT(state->app != nullptr);
-    if (state->app && state->app->initialize(argc, argv)) {
+    if (state->app && state->app->Initialize(argc, argv)) {
       state->initialized = true;
       *appstate = state;
       VividLogger::app_info("SDL3 application initialized successfully");
@@ -85,7 +88,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   try {
     // 执行一帧迭代
-    if (state->app->iterate()) {
+    if (state->app->Iterate()) {
       return SDL_APP_CONTINUE;
     } else {
       // 应用请求退出
@@ -123,20 +126,20 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     // 处理特殊事件
     if (event->type == SDL_EVENT_QUIT) {
       VividLogger::app_info("Received SDL_EVENT_QUIT");
-      state->app->exit();
+      state->app->Exit();
       return SDL_APP_SUCCESS;
     }
 
-    // 如果没有EventQueues，则创建一个
-    auto event_queues = state->app->resources().get<EventQueues>();
-    if (!event_queues) {
-      event_queues = &state->app->resources().insert<EventQueues>();
-    }
+    // ensure确保资源存在,如果没有EventQueues，则创建一个
+    state->app->GetWorld().ensure<EventQueues>();
+    // get_mut returns a pointer to the mutable singleton
+    auto& event_queues = state->app->GetWorld().get_mut<EventQueues>();
 
-    event_queues->raw_sdl_events.push(*event);
-
+    event_queues.raw_sdl_events.push(*event);
+    VividLogger::app_info("SDL_AppEvent: %d", event->type);
+    VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());
     // 让应用处理事件
-    if (state->app->handle_event()) {
+    if (state->app->HandleEvent(event)) {
       return SDL_APP_CONTINUE;
     } else {
       return SDL_APP_SUCCESS;
@@ -162,7 +165,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     try {
       if (state->app && state->initialized) {
         VividLogger::app_info("Shutting down application");
-        state->app->shutdown();
+        state->app->Shutdown();
 
         // 安全关闭SDL子系统
         SDL_QuitSubSystem(SDL_INIT_EVENTS | SDL_INIT_VIDEO);
@@ -286,3 +289,5 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
 
   VividLogger::app_debug("SDL3 metadata application completed");
 }
+}  // namespace APP
+}  // namespace VIVID

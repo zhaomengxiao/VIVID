@@ -1,29 +1,15 @@
 #pragma once
 
-// #include <GLFW/glfw3.h>
-#include <entt/entt.hpp>
+#include <flecs.h>
+
 #include <glm/glm.hpp>
 
 #include "../rendering/render_component.h"
 #include "camera_controller.h"
 
+// InputSystem class - currently a placeholder
+// Input handling is done through SDL3 events in WindowPlugin
 class InputSystem {
-  // public:
-  //     static void Initialize(GLFWwindow* window);
-  //     static void Update(entt::registry& registry);
-  //     static void Shutdown();
-
-  //     static void SetWindow(GLFWwindow* window) { s_Window = window; }
-
-  // private:
-  //     static void MousePositionCallback(GLFWwindow* window, double xpos, double ypos);
-  //     static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-  //     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-  //     static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-
-  //     static GLFWwindow* s_Window;
-  //     static glm::vec2 s_MousePosition;
-  //     static glm::vec2 s_LastMousePosition;
-  //     static bool s_MousePressed;
-  //     static bool s_FirstMouse;
+  // Input system methods would go here if needed
+  // Currently handled through SDL3 event processing in window systems
 };

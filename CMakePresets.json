@@ -15,7 +15,8 @@
                     "type": "FILEPATH"
                 },
                 "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
-                "VCPKG_FEATURE_FLAGS": "manifests"
+                "VCPKG_FEATURE_FLAGS": "manifests",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             },
             "environment": {
                 "VCPKG_ROOT": "D:/ClineWorkSpace/StartOpenGL/ep/vcpkg"

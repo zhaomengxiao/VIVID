@@ -1,16 +1,30 @@
 #pragma once
-#include "PxPhysicsAPI.h" // PhysX header
 
-// 简单的变换组件（位置）
-struct TransformComponent
-{
-    physx::PxVec3 position{0.0f, 0.0f, 0.0f};
-    // 可扩展旋转等
+#include <flecs.h>
+
+namespace VIVID {
+namespace PHYSICS {
+struct Position {
+  float x;
+  float y;
+  float z;
+};
+struct Velocity {
+  float x;
+  float y;
+  float z;
 };
 
-// 代表一个刚体物理对象
-struct RigidBodyComponent
-{
-    physx::PxRigidActor *actor = nullptr;
-    // 这里可以添加更多属性，如质量、阻尼等
+struct PhysicsComponents {
+  PhysicsComponents(flecs::world& world) {
+    // Register module
+    world.module<PhysicsComponents>();
+
+    // Register components
+    world.component<Position>();
+    world.component<Velocity>();
+  };
 };
+
+}  // namespace PHYSICS
+}  // namespace VIVID

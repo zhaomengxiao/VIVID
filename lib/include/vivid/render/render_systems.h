@@ -1,15 +1,19 @@
 #pragma once
 
+#include <flecs.h>
 #include <webgpu/webgpu.h>
 
 #include <glm/glm.hpp>
 #include <string>
 
-#include "vivid/app/App.h"
-#include "vivid/app/Plugin.h"
+#include "render_component.h"
+#include "vivid/log/log.h"
 
-// Resources
+namespace VIVID::RENDER {
+
+// WebGPU Resources (singleton/resource)
 struct WebGPUResources {
+  bool initialized = false;  // Flag to ensure one-time initialization
   WGPUInstance instance = nullptr;
   WGPUAdapter adapter = nullptr;
   bool adapterRequestEnded = false;
@@ -27,49 +31,75 @@ struct WebGPUResources {
   WGPUTextureView depthView = nullptr;
   WGPUTextureFormat depthFormat = WGPUTextureFormat_Depth24Plus;
 };
-struct ShaderProgramSource {
-  std::string VertexSource;
-  std::string FragmentSource;
+
+// GPU资源组件 - WebGPU version
+struct GpuMeshComponent {
+  WGPUBuffer vertexBuffer = nullptr;
+  WGPUBuffer indexBuffer = nullptr;
+  uint32_t indexCount = 0;
+  WGPUBuffer uniformBuffer = nullptr;
+  WGPUBindGroup bindGroup = nullptr;
+  WGPUVertexBufferLayout vertexBufferLayout = {};
+  WGPUPipelineLayout layout = nullptr;
+  WGPUBindGroupLayout bindGroupLayout = nullptr;
+  WGPURenderPipeline pipeline = nullptr;
 };
-// helper functions
-ShaderProgramSource ParseShader(const std::string &filepath);
-unsigned int CreateShader(const std::string &vertexShader, const std::string &fragmentShader);
-unsigned int CompileShader(unsigned int type, const std::string &source);
-int GetUniformLocation(unsigned int program, const std::string &name);
-void SetUniform1i(unsigned int program, const std::string &name, int value);
-void SetUniform1f(unsigned int program, const std::string &name, float value);
-void SetUniform3f(unsigned int program, const std::string &name, float v0, float v1, float v2);
-void SetUniform4f(unsigned int program, const std::string &name, float v0, float v1, float v2,
-                  float v3);
-void SetUniformMat4f(unsigned int program, const std::string &name, const glm::mat4 &matrix);
 
-namespace VIVID::Render {
-  static void ReconfigureSurface(Resources &res, entt::registry &world, uint32_t width,
-                                 uint32_t height);
+// Forward declarations
+struct ShutdownPhase {};  // Custom phase for cleanup systems
 
-  // Startup Stage Systems (one time initialization)
-  void CreateWebGPUInstance(Resources &res, entt::registry &world);
+// Render Systems Module - manages WebGPU initialization, scene sync, and drawing
+struct RenderSystems {
+  RenderSystems(flecs::world& world);
 
-  void RequestWebGPUAdapterSync(Resources &res, entt::registry &world);
+private:
+  // Actually used system implementations (registered in constructor)
+  static void initWebGPUImpl(flecs::iter& it);
+  static void syncSceneImpl(flecs::iter& it);
+  static void drawImpl(flecs::iter& it);
+  static void releaseWebGPUResourcesImpl(flecs::iter& it);
 
-  void RequestWebGPUDeviceSync(Resources &res, entt::registry &world);
+  // Additional system implementations (not registered, but converted to Flecs format)
+  static void createWebGPUInstanceImpl(flecs::iter& it);
+  static void requestWebGPUAdapterSyncImpl(flecs::iter& it);
+  static void inspectWebGPUAdapterImpl(flecs::iter& it);
+  static void requestWebGPUDeviceSyncImpl(flecs::iter& it);
+  static void inspectWebGPUDeviceImpl(flecs::iter& it);
+  static void testCommandQueueImpl(flecs::iter& it);
+  static void createPipelineImpl(flecs::iter& it);
 
-  void InspectWebGPUAdapter(Resources &res, entt::registry &world);
+  // Helper functions
+  // static void reconfigureSurface(flecs::world world, uint32_t width, uint32_t height);
+  // static WGPUAdapter getAdapter(wgpu::Instance& instance);
+  // static WGPUDevice getDevice(wgpu::Instance& instance, wgpu::Adapter& adapter);
+};
 
-  void InspectWebGPUDevice(Resources &res, entt::registry &world);
+inline RenderSystems::RenderSystems(flecs::world& world) {
+  // Register module
+  world.module<RenderSystems>();
 
-  void TestCommandQueue(Resources &res, entt::registry &world);
+  // Import component modules
+  world.import <RenderComponents>();
+  // world.import <VIVID::WINDOW::WindowComponents>();  // Import window components for querying
 
-  void ConfigureSurface(Resources &res, entt::registry &world);
+  VividLogger::app_info("Registering RenderSystems...");
+  world.set<WebGPUResources>({});
+  world.component<GpuMeshComponent>();
 
-  // Resouces Sync Stage Systems (increment)
-  void SyncScene(Resources &res, entt::registry &world);
+  // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
+  // OnStart systems' changes are only visible after the OnStart phase completes
+  world.system("InitWebGPU").kind(flecs::PreUpdate).run(initWebGPUImpl);
 
-  void Draw(Resources &res, entt::registry &world);
+  // Scene sync - runs every frame before update
+  world.system("SyncScene").kind(flecs::OnStart).run(syncSceneImpl);
 
-  void CreatePipeline(Resources &res, entt::registry &world);
+  // Drawing - runs every frame
+  world.system("Draw").kind(flecs::OnUpdate).run(drawImpl);
 
-  void ReleaseWebGPUResources(Resources &res, entt::registry &world);
+  // Cleanup - runs once at shutdown
+  world.system("ReleaseWebGPUResources").kind<ShutdownPhase>().run(releaseWebGPUResourcesImpl);
 
-  void InitWebGPU(Resources &res, entt::registry &world);
-}  // namespace VIVID::Render
+  VividLogger::app_info("RenderSystems registered successfully");
+}
+
+}  // namespace VIVID::RENDER

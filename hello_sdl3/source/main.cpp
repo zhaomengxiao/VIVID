@@ -5,8 +5,8 @@
 
 #include "vivid/app/SDL3App.h"
 #include "vivid/log/log.h"
-#include "vivid/render/render_component.h"
-#include "vivid/window/window_systems.h"
+// #include "vivid/render/render_component.h"
+// #include "vivid/window/window_systems.h"
 
 // 如何在SDL3窗口中显示imgui: 1.添加imgui头文件
 // #include <SDL3/SDL_opengl.h>
@@ -14,16 +14,22 @@
 // #include <imgui_impl_opengl3.h>
 // #include <imgui_impl_sdl3.h>
 // #include <imgui_impl_wgpu.h>
+// #include "vivid/render/render_systems.h"
+// #include "vivid/ui/ui_system.h"
+#include <iostream>
+
+#include "vivid/physics/physics_component.h"
+#include "vivid/physics/physics_system.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
+#include "vivid/window/window_component.h"
+#include "vivid/window/window_systems.h"
 
 struct MyResource {
   int value;
-  MyResource(int v) : value(v) {}
 };
 
-// Helper function to create a cube mesh component
-MeshComponent CreateCubeMesh() {
+VIVID::RENDER::MeshComponent CreateCubeMesh() {
   std::vector<float> vertices
       = {// positions          // normals
          -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.5f,  -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f,
@@ -49,6 +55,161 @@ MeshComponent CreateCubeMesh() {
 
   return {vertices, indices, indices.size()};
 }
+
+/* struct Setup {
+  Setup(flecs::world& world) {
+    using namespace VIVID::PHYSICS;
+    // Register module
+    world.module<Setup>();
+
+    // Create entity with imported components
+    flecs::entity e = world.entity().set<Position>({10, 20}).set<Velocity>({1, 1});
+
+    std::cout << "Setup entity: " << e.name() << std::endl;
+    std::cout << "Position: " << e.get<Position>().x << ", " << e.get<Position>().y << std::endl;
+    std::cout << "Velocity: " << e.get<Velocity>().x << ", " << e.get<Velocity>().y << std::endl;
+
+    // Register shutdown system
+    world.system<Position, Velocity>("SetupSystem")
+        .kind<ShutdownPhase>()
+        .each([](Position& pos, Velocity& vel) {
+          std::cout << "SetupSystem" << std::endl;
+          std::cout << "Position: " << pos.x << ", " << pos.y << std::endl;
+          std::cout << "Velocity: " << vel.x << ", " << vel.y << std::endl;
+        });
+  };
+}; */
+
+// Window setup module - creates custom window before WindowSystems
+struct WindowSetup {
+  WindowSetup(flecs::world& world) {
+    using namespace VIVID::WINDOW;
+
+    // Register module
+    world.module<WindowSetup>();
+
+    // Import WindowComponents first to register component types
+    world.import <WindowComponents>();
+
+    // Create custom window entity with specific configuration
+    WindowComponent window_config;
+    window_config.title = "VIVID Hello SDL3 with WebGPU Rendering";
+    window_config.width = 1024;
+    window_config.height = 768;
+    window_config.x = SDL_WINDOWPOS_CENTERED;
+    window_config.y = SDL_WINDOWPOS_CENTERED;
+    window_config.flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+    window_config.visible = true;
+    window_config.should_close = false;
+
+    world.entity("MainWindow").set<WindowComponent>(window_config);
+
+    VividLogger::app_info("Custom window entity 'MainWindow' created (1024x768)");
+  }
+};
+
+// Scene initialization module - creates cube, light, and camera entities
+struct Setup {
+  Setup(flecs::world& world) {
+    using namespace VIVID::RENDER;
+    using namespace VIVID::PHYSICS;
+
+    // Register module
+    world.module<Setup>();
+
+    // Import required components
+    world.import <RenderComponents>();
+
+    // Register scene initialization system (runs at startup)
+    world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
+  }
+
+private:
+  // Scene initialization system implementation
+  static void sceneInitializationImpl(flecs::iter& it) {
+    auto world = it.world();
+    VividLogger::app_info("Initializing scene entities...");
+
+    // --- Create Cube Entity ---
+    auto cubeEntity = world.entity("MyCube");
+    cubeEntity.set<VIVID::RENDER::TagComponent>({"MyCube"})
+        .set<VIVID::RENDER::TransformComponent>({})
+        .set<VIVID::RENDER::MeshComponent>(CreateCubeMesh())
+        .set<VIVID::RENDER::MaterialComponent>({
+            "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
+            "BlinnPhong.shader",
+            {1.0f, 0.5f, 0.2f}  // Orange color
+        });
+
+    VividLogger::app_info("Created cube entity");
+
+    // --- Create Light Entity ---
+    auto lightEntity = world.entity("PointLight");
+    VIVID::RENDER::TransformComponent lightTransform;
+    lightTransform.Position = {1.2f, 1.0f, 2.0f};
+
+    lightEntity.set<VIVID::RENDER::TagComponent>({"PointLight"})
+        .set<VIVID::RENDER::TransformComponent>(lightTransform)
+        .set<VIVID::RENDER::LightComponent>({});
+
+    VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
+
+    // --- Create Camera Entity ---
+    auto cameraEntity = world.entity("MainCamera");
+    VIVID::RENDER::TransformComponent camTransform;
+    camTransform.Position = {0.0f, 0.0f, 5.0f};
+
+    cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
+        .set<VIVID::RENDER::TransformComponent>(camTransform)
+        .set<VIVID::RENDER::CameraComponent>({})
+        .set<VIVID::RENDER::ViewportComponent>({});
+
+    VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
+    VividLogger::app_info("Scene initialization completed!");
+  }
+};
+
+VIVID_SDL3_MAIN(
+        .set_app_info("VIVID Hello SDL3 with WebGPU Rendering", "1.0.0", "com.vivid.hello_sdl3")
+        // 使用枚举设置其他元数据
+        .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
+        .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
+        .set_metadata(SDL3MetadataProperty::Url, "https://github.com/vivid-engine/vivid")
+        .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+        // 自定义属性
+        .set_custom_metadata("custom_property", "custom_value")
+        // 配置日志系统 - 设置为Debug级别以显示详细日志
+        .set_default_log_level(VividLogLevel::Debug)
+        .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
+        // 应用配置
+        .insert_resource<MyResource>(100)
+        // Import core modules (Flecs module system)
+        // EXECUTION ORDER:
+        // 1. WindowSetup creates window entity (with WindowComponent)
+        // 2. WindowSystems.WindowInitialization (OnStart) creates real SDL window
+        // 3. Setup.SceneInitialization (OnStart) creates scene entities
+        // .add_plugin<VIVID::Window::WindowPlugin>()
+        // .add_startup_system(hello_startup_system)
+        // .add_startup_system(create_custom_window_system)
+        // .add_startup_system(VIVID::Render::InitWebGPU)
+        // .add_startup_system(VIVID::Render::SyncScene)
+        // .add_startup_system(VIVID::UI::initImGui)
+        // .add_system(ScheduleLabel::Update, VIVID::UI::ShowImGuiDemo)
+        // .add_system(ScheduleLabel::Update, VIVID::Render::Draw)
+        // .add_system(ScheduleLabel::Event, VIVID::UI::ProcessImGuiEvent)
+        // .add_system(ScheduleLabel::Shutdown, VIVID::Render::ReleaseWebGPUResources)
+        // .add_system(ScheduleLabel::Shutdown, VIVID::UI::ShutDownImGui)
+
+        .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create default)
+        .import_module<Setup>()                         // Scene initialization (after window)
+        // .import_module<WindowSetup>()                   // Create custom window entity first
+        .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to PreUpdate)
+        .import_module<VIVID::UI::UISystems>()          // ImGui UI
+    // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
+
+)
+
+// Helper function to create a cube mesh component
 
 // // 如何在SDL3窗口中显示imgui: 2.初始化
 // void initImGui(Resources& res, entt::registry& world) {
@@ -147,7 +308,7 @@ MeshComponent CreateCubeMesh() {
 // }
 
 // Simple startup system
-void hello_startup_system(Resources&, entt::registry& world) {
+/* void hello_startup_system(Resources&, entt::registry& world) {
   VividLogger::app_info("Hello from SDL3 startup system!");
 
   // --- Create Entities ---
@@ -173,10 +334,10 @@ void hello_startup_system(Resources&, entt::registry& world) {
   world.emplace<CameraComponent>(cameraEntity);
   world.emplace<ViewportComponent>(cameraEntity);
   // world.emplace<CameraControllerComponent>(cameraEntity);
-}
+} */
 
 // Custom window creation system - demonstrates ECS approach
-void create_custom_window_system(Resources&, entt::registry& world) {
+/* void create_custom_window_system(Resources&, entt::registry& world) {
   VividLogger::app_info("Creating custom window entity with ECS components");
 
   // Create a custom window entity with specific configuration
@@ -191,10 +352,10 @@ void create_custom_window_system(Resources&, entt::registry& world) {
   window_comp.visible = true;
 
   VividLogger::app_info("Custom window entity created with title: %s", window_comp.title.c_str());
-}
+} */
 
 // Simple update system
-void hello_update_system(Resources& res, entt::registry& world) {
+/* void hello_update_system(Resources& res, entt::registry& world) {
   static int frame_count = 0;
   frame_count++;
 
@@ -222,13 +383,13 @@ void hello_update_system(Resources& res, entt::registry& world) {
         }
       }
     }
-  }
+  } */
 
-  // Exit after 300 frames (about 5 seconds at 60 FPS)
-  // if (frame_count > 300) {
-  //   VividLogger::app_info("Exiting SDL3 application...");
-  // }
-}
+// Exit after 300 frames (about 5 seconds at 60 FPS)
+// if (frame_count > 300) {
+//   VividLogger::app_info("Exiting SDL3 application...");
+// }
+// }
 
 #define MAIN_HELLO_WEBGPU
 
@@ -243,6 +404,8 @@ void hello_update_system(Resources& res, entt::registry& world) {
 // Method 2: Direct function with chain calls and metadata (新的简化API)
 
 #ifdef MAIN_HELLO_SDL3
+namespace VIVID {
+namespace APP {
 SDL3AppBuilder create_app_instance() {
   return std::move(
       create_sdl3_app()
@@ -271,9 +434,11 @@ SDL3AppBuilder create_app_instance() {
           .add_system(ScheduleLabel::Event, ProcessImGuiEvent)
           .add_system(ScheduleLabel::Shutdown, ShutDownImGui));
 }
+}  // namespace APP
+}  // namespace VIVID
 #endif
 
-// Hello WebGPU
+/* // Hello WebGPU
 #ifdef MAIN_HELLO_WEBGPU
 VIVID_SDL3_MAIN(
         .set_app_info("VIVID Hello SDL3 with ECS Window", "1.0.0", "com.vivid.hello_sdl3")
@@ -293,14 +458,6 @@ VIVID_SDL3_MAIN(
         .add_plugin<VIVID::Window::WindowPlugin>()
         .add_startup_system(hello_startup_system)
         .add_startup_system(create_custom_window_system)
-        // .add_startup_system(VIVID::Render::CreateWebGPUInstance)
-        // .add_startup_system(VIVID::Render::RequestWebGPUAdapterSync)
-        // .add_startup_system(VIVID::Render::InspectWebGPUAdapter)
-        // .add_startup_system(VIVID::Render::RequestWebGPUDeviceSync)
-        // .add_startup_system(VIVID::Render::InspectWebGPUDevice)
-        // .add_startup_system(VIVID::Render::TestCommandQueue)
-        // .add_startup_system(VIVID::Render::ConfigureSurface)
-
         .add_startup_system(VIVID::Render::InitWebGPU)
         .add_startup_system(VIVID::Render::SyncScene)
         .add_startup_system(VIVID::UI::initImGui)
@@ -309,13 +466,20 @@ VIVID_SDL3_MAIN(
         .add_system(ScheduleLabel::Event, VIVID::UI::ProcessImGuiEvent)
         .add_system(ScheduleLabel::Shutdown, VIVID::Render::ReleaseWebGPUResources)
         .add_system(ScheduleLabel::Shutdown, VIVID::UI::ShutDownImGui)
+    // .add_startup_system(VIVID::Render::CreateWebGPUInstance)
+    // .add_startup_system(VIVID::Render::RequestWebGPUAdapterSync)
+    // .add_startup_system(VIVID::Render::InspectWebGPUAdapter)
+    // .add_startup_system(VIVID::Render::RequestWebGPUDeviceSync)
+    // .add_startup_system(VIVID::Render::InspectWebGPUDevice)
+    // .add_startup_system(VIVID::Render::TestCommandQueue)
+    // .add_startup_system(VIVID::Render::ConfigureSurface)
     // .add_system(ScheduleLabel::Startup, initImGui)
     // .add_system(ScheduleLabel::Update, ShowImGuiDemo)
     // .add_system(ScheduleLabel::Update, hello_update_system)
     // .add_system(ScheduleLabel::Event, ProcessImGuiEvent)
     // .add_system(ScheduleLabel::Shutdown, ShutDownImGui))
 )
-#endif
+#endif */
 
 // Method 3: Step-by-step building
 // SDL3AppBuilder create_app_instance() {

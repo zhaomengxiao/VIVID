@@ -1,178 +1,164 @@
 #pragma once
 
-#include <functional>
+#include <flecs.h>
+#include <vivid/log/log.h>
+
 #include <iostream>
-#include <memory>
-#include <type_traits>
-#include <vector>
 
-#include "Plugin.h"
-#include "Resources.h"
-#include "Schedule.h"
+struct ShutdownPhase {};
 
-// 应用程序主类
+namespace VIVID {
+namespace APP {
+
+// Main application class
 class App {
 private:
-  entt::registry world_;
-  Resources resources_;
-  Schedule schedule_;
-  std::vector<std::unique_ptr<Plugin>> plugins_;
+  flecs::world world_;
+  // std::vector<std::unique_ptr<Plugin>> plugins_;
   bool running_ = true;
   bool initialized_ = false;
 
-public:
-  App() = default;
+  flecs::entity
+      builtin_pipeline_;  // see:
+                          // https://www.flecs.dev/flecs/md_docs_2Systems.html#builtin-pipeline
+  flecs::entity
+      shutdown_pipeline_;  // see:
+                           // https://www.flecs.dev/flecs/md_docs_2Systems.html#custom-pipeline
 
-  // 链式调用入口
-  static App &new_app() {
+public:
+  App() {
+    // store default pipeline
+    builtin_pipeline_ = world_.get_pipeline();
+    // setup custom ShutDown pipeline,Create a pipeline that matches systems with
+    // Shutdown
+    shutdown_pipeline_ = world_.pipeline()
+                             .with(flecs::System)    // Mandatory, must always match systems
+                             .with<ShutdownPhase>()  // or .with<Foo>() if a type
+                             .build();
+  }
+
+  // Chain call entry point
+  static App& new_app() {
     static App instance;
     return instance;
   }
 
-  // 添加插件
-  template <typename T, typename... Args> App &add_plugin(Args &&...args) {
-    static_assert(std::is_base_of_v<Plugin, T>, "T must inherit from Plugin");
-    auto plugin = std::make_unique<T>(std::forward<Args>(args)...);
-    std::cout << "Adding plugin: " << plugin->name() << std::endl;
-    plugin->build(*this);
-    plugins_.push_back(std::move(plugin));
+  // Import flecs native module
+  // Supports standard flecs module system with world.module<T>()
+  // Usage: app.import_module<MyModule>(args...)
+  template <typename Module, typename... Args> App& ImportModule(Args&&... args) {
+    VividLogger::app_info("Importing flecs module: %s", typeid(Module).name());
+    world_.import <Module>(std::forward<Args>(args)...);
     return *this;
   }
 
-  // 添加系统
-  //   template <typename Fn> App &add_system(ScheduleLabel label, Fn &&fn) {
-  //     schedule_.add_system(
-  //         label, [fn = std::forward<Fn>(fn)](Resources &res, entt::registry &reg) { fn(res, reg);
-  //         });
-  //     return *this;
-  //   }
+  // // Import pre-built system bundle
+  // // SystemBundle groups related systems together for modular organization
+  // // Usage: app.import_systems<MySystemBundle>(args...)
+  // template <typename T, typename... Args> App& ImportSystems(Args&&... args) {
+  //   static_assert(std::is_base_of_v<SystemBundle, T>, "T must inherit from
+  //   SystemBundle"); T bundle(std::forward<Args>(args)...); std::cout << "Importing
+  //   system bundle: " << bundle.name() << std::endl; bundle.build(world_); return *this;
+  // }
 
-  // 添加无资源访问的系统，以保持兼容性
-  //   App &add_system(ScheduleLabel label, std::function<void(entt::registry &)> fn) {
-  //     schedule_.add_system(label,
-  //                          [fn = std::move(fn)](Resources &, entt::registry &reg) { fn(reg); });
-  //     return *this;
-  //   }
-  template <typename Fn> App &add_system(ScheduleLabel label, Fn &&fn) {
-    if constexpr (std::is_invocable_v<Fn, Resources &, entt::registry &>) {
-      // 双参数系统
-      schedule_.add_system(label, [fn = std::forward<Fn>(fn)](Resources &res, entt::registry &reg) {
-        fn(res, reg);
-      });
-    } else if constexpr (std::is_invocable_v<Fn, entt::registry &>) {
-      // 单参数系统
-      schedule_.add_system(
-          label, [fn = std::forward<Fn>(fn)](Resources &, entt::registry &reg) { fn(reg); });
-    } else {
-      static_assert(
-          std::is_invocable_v<Fn, entt::registry &>
-              || std::is_invocable_v<Fn, Resources &, entt::registry &>,
-          "System function must accept either (entt::registry&) or (Resources&, entt::registry&)");
-    }
+  // Insert resource (singleton)
+  template <typename T, typename... Args> App& InsertResource(Args&&... args) {
+    world_.set<T>({std::forward<Args>(args)...});
     return *this;
   }
 
-  // 添加启动系统
-  template <typename Fn> App &add_startup_system(Fn &&fn) {
-    return add_system(ScheduleLabel::Startup, std::forward<Fn>(fn));
-  }
+  // Get resource (singleton) - const version
+  template <typename T> const T* GetResource() const { return world_.get<T>(); }
 
-  // 插入资源
-  template <typename T, typename... Args> App &insert_resource(Args &&...args) {
-    resources_.insert<T>(std::forward<Args>(args)...);
-    return *this;
-  }
+  // Get mutable resource (singleton)
+  template <typename T> T* GetResourceMut() { return world_.get_mut<T>(); }
 
-  // 获取资源
-  template <typename T> T *resource() { return resources_.get<T>(); }
+  // Get world
+  flecs::world& GetWorld() { return world_; }
+  const flecs::world& GetWorld() const { return world_; }
 
-  // 获取世界
-  entt::registry &world() { return world_; }
-  const entt::registry &world() const { return world_; }
+  // Exit application
+  void Exit() { running_ = false; }
 
-  // 获取资源管理器
-  Resources &resources() { return resources_; }
-
-  // 获取调度器
-  Schedule &schedule() { return schedule_; }
-
-  // 退出应用
-  void exit() { running_ = false; }
-
-  // 传统运行模式（保持向后兼容）
-  void run() {
+  // Traditional run mode (backward compatible)
+  void Run() {
     std::cout << "Starting application..." << std::endl;
 
-    // 运行启动系统
-    schedule_.run_schedule(ScheduleLabel::Startup, resources_, world_);
+    // Run startup systems
+    world_.progress(0);
     initialized_ = true;
 
-    // 主循环
+    // Main loop
     while (running_) {
-      schedule_.run_schedule(ScheduleLabel::PreUpdate, resources_, world_);
-      schedule_.run_schedule(ScheduleLabel::Update, resources_, world_);
-      schedule_.run_schedule(ScheduleLabel::PostUpdate, resources_, world_);
-      schedule_.run_schedule(ScheduleLabel::Render, resources_, world_);
-      schedule_.run_schedule(ScheduleLabel::Cleanup, resources_, world_);
+      world_.progress();
     }
 
-    // --- Application Shutdown ---
+    // Application shutdown
     std::cout << "Application shutting down..." << std::endl;
-    schedule_.run_schedule(ScheduleLabel::Shutdown, resources_, world_);
-
+    // Shutdown systems using custom pipeline
+    world_.set_pipeline(shutdown_pipeline_);
+    world_.progress();
     std::cout << "Application finished." << std::endl;
   }
 
-  // SDL3 Callback 模式支持
+  // SDL3 Callback mode support
 
-  // 初始化应用（对应 SDL_AppInit）
-  bool initialize(int argc, char **argv) {
+  // Initialize application (corresponds to SDL_AppInit)
+  bool Initialize(int argc, char** argv) {
     if (initialized_) return true;
 
     std::cout << "Initializing SDL3 application..." << std::endl;
 
-    // 运行启动系统
-    schedule_.run_schedule(ScheduleLabel::Startup, resources_, world_);
+    // Run startup systems
+    world_.progress(0);
     initialized_ = true;
 
     return true;
   }
 
-  // 单次迭代（对应 SDL_AppIterate）
-  bool iterate() {
+  // Single iteration (corresponds to SDL_AppIterate)
+  bool Iterate() {
     if (!initialized_ || !running_) return false;
 
-    // 运行一帧的系统调度
-    schedule_.run_schedule(ScheduleLabel::PreUpdate, resources_, world_);
-    schedule_.run_schedule(ScheduleLabel::Update, resources_, world_);
-    schedule_.run_schedule(ScheduleLabel::PostUpdate, resources_, world_);
-    schedule_.run_schedule(ScheduleLabel::Render, resources_, world_);
-    schedule_.run_schedule(ScheduleLabel::Cleanup, resources_, world_);
+    static int frame_count = 0;
+    if (frame_count == 0) {
+      VividLogger::app_info("Starting main loop...");
+    }
+    frame_count++;
+
+    // Run one frame of system schedule
+    world_.progress();
 
     return running_;
   }
 
-  // 处理事件（对应 SDL_AppEvent）
-  bool handle_event() {
-    // 这里可以添加事件处理逻辑
-    // 具体的事件处理可以通过系统或插件来实现
-    schedule_.run_schedule(ScheduleLabel::Event, resources_, world_);
+  // Handle event (corresponds to SDL_AppEvent)
+  bool HandleEvent(SDL_Event* event) {
+    // Event handling can be implemented through systems in EventPhase
+    // Or handled directly here
     return running_;
   }
 
-  // 关闭应用（对应 SDL_AppQuit）
-  void shutdown() {
+  // Close application (corresponds to SDL_AppQuit)
+  void Shutdown() {
     if (!initialized_) return;
 
     std::cout << "SDL3 application shutting down..." << std::endl;
-    schedule_.run_schedule(ScheduleLabel::Shutdown, resources_, world_);
+    // Shutdown systems using custom pipeline
+    world_.set_pipeline(shutdown_pipeline_);
+    world_.progress();
 
     std::cout << "SDL3 application finished." << std::endl;
   }
 
-  // 检查应用是否正在运行
-  bool is_running() const { return running_; }
+  // Check if application is running
+  bool IsRunning() const { return running_; }
 
-  // 检查应用是否已初始化
-  bool is_initialized() const { return initialized_; }
+  // Check if application is initialized
+  bool IsInitialized() const { return initialized_; }
+
+private:
 };
+
+}  // namespace APP
+}  // namespace VIVID

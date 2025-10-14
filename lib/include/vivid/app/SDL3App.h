@@ -18,6 +18,9 @@
 #include "App.h"
 #include "vivid/log/log.h"
 
+namespace VIVID {
+namespace APP {
+
 // TODO: 事件系统
 struct EventQueues {
   std::queue<SDL_Event> raw_sdl_events;  // 原始SDL事件
@@ -88,9 +91,9 @@ enum class SDL3MetadataProperty {
 
 // SDL3 应用类型常量（符合官方规范）
 namespace SDL3AppType {
-  constexpr const char* Game = "game";                // 视频游戏
-  constexpr const char* MediaPlayer = "mediaplayer";  // 媒体播放器
-  constexpr const char* Application = "application";  // 通用应用程序（默认）
+constexpr const char* Game = "game";                // 视频游戏
+constexpr const char* MediaPlayer = "mediaplayer";  // 媒体播放器
+constexpr const char* Application = "application";  // 通用应用程序（默认）
 }  // namespace SDL3AppType
 
 // SDL3 应用元数据结构
@@ -179,27 +182,15 @@ public:
   SDL3AppBuilder(SDL3AppBuilder&&) = default;
   SDL3AppBuilder& operator=(SDL3AppBuilder&&) = default;
 
-  // 添加插件
-  template <typename T, typename... Args> SDL3AppBuilder& add_plugin(Args&&... args) {
-    app_->add_plugin<T>(std::forward<Args>(args)...);
-    return *this;
-  }
-
-  // 添加系统
-  template <typename Fn> SDL3AppBuilder& add_system(ScheduleLabel label, Fn&& fn) {
-    app_->add_system(label, std::forward<Fn>(fn));
-    return *this;
-  }
-
-  // 添加启动系统
-  template <typename Fn> SDL3AppBuilder& add_startup_system(Fn&& fn) {
-    app_->add_startup_system(std::forward<Fn>(fn));
+  // 添加模组
+  template <typename T, typename... Args> SDL3AppBuilder& import_module(Args&&... args) {
+    app_->ImportModule<T>(std::forward<Args>(args)...);
     return *this;
   }
 
   // 插入资源
   template <typename T, typename... Args> SDL3AppBuilder& insert_resource(Args&&... args) {
-    app_->insert_resource<T>(std::forward<Args>(args)...);
+    app_->InsertResource<T>(std::forward<Args>(args)...);
     return *this;
   }
 
@@ -355,6 +346,8 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata);
 // 用法: VIVID_SDL3_MAIN(.add_plugin<DefaultPlugin>().add_system(...))
 // 示例: VIVID_SDL3_MAIN(.add_plugin<DefaultPlugin>().add_startup_system(my_system))
 #define VIVID_SDL3_MAIN(chain_calls)                                       \
+  namespace VIVID {                                                        \
+  namespace APP {                                                          \
   SDL3AppBuilder create_app_instance() {                                   \
     try {                                                                  \
       auto builder = create_sdl3_app();                                    \
@@ -363,6 +356,8 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata);
       std::cerr << "Failed to create SDL3 app: " << e.what() << std::endl; \
       throw;                                                               \
     }                                                                      \
+  }                                                                        \
+  }                                                                        \
   }
 
 // 注意：SDL3应用通过回调系统自动运行
@@ -375,3 +370,5 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata);
 //       .add_plugin<DefaultPlugin>()
 //       .add_startup_system(my_system)
 //   )
+}  // namespace APP
+}  // namespace VIVID
