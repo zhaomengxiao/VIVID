@@ -88,7 +88,7 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
   // OnStart systems' changes are only visible after the OnStart phase completes
-  world.system("InitWebGPU").kind(flecs::PreUpdate).run(initWebGPUImpl);
+  world.system("InitWebGPU").kind(flecs::OnStart).run(initWebGPUImpl);
 
   // Scene sync - runs every frame before update
   world.system("SyncScene").kind(flecs::OnStart).run(syncSceneImpl);

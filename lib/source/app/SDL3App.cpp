@@ -130,15 +130,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
       return SDL_APP_SUCCESS;
     }
 
-    // ensure确保资源存在,如果没有EventQueues，则创建一个
-    state->app->GetWorld().ensure<EventQueues>();
-    // get_mut returns a pointer to the mutable singleton
-    auto& event_queues = state->app->GetWorld().get_mut<EventQueues>();
-
-    event_queues.raw_sdl_events.push(*event);
-    VividLogger::app_info("SDL_AppEvent: %d", event->type);
-    VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());
-    // 让应用处理事件
+    // Let the application handle events
     if (state->app->HandleEvent(event)) {
       return SDL_APP_CONTINUE;
     } else {

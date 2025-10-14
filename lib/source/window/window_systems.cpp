@@ -19,9 +19,9 @@ void WindowSystems::windowInitializationImpl(flecs::iter& it) {
   VividLogger::app_debug("WindowInitialization system executing...");
 
   // Find all entities with WindowComponent but without WindowGpuComponent (uninitialized windows)
-  auto query = world.query_builder<WindowComponent>().without<WindowGpuComponent>().build();
+  auto query = world.query<WindowComponent, WindowGpuComponent>();
 
-  query.each([&](flecs::entity entity, WindowComponent& window_comp) {
+  query.each([&](flecs::entity entity, WindowComponent& window_comp, WindowGpuComponent& gpu_comp) {
     // Initialize SDL video subsystem if not already initialized
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
       if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -60,7 +60,6 @@ void WindowSystems::windowInitializationImpl(flecs::iter& it) {
     }
 
     // Add GPU component to mark as initialized
-    WindowGpuComponent gpu_comp{};
     gpu_comp.window_handle = window_handle;
     // gpu_comp.gl_context = gl_context;
     gpu_comp.initialized = true;

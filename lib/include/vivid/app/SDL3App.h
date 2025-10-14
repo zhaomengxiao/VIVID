@@ -11,7 +11,6 @@
 
 #include <functional>
 #include <memory>
-#include <queue>
 #include <string>
 #include <unordered_map>
 
@@ -22,13 +21,6 @@ namespace VIVID {
 namespace APP {
 
 // TODO: 事件系统
-struct EventQueues {
-  std::queue<SDL_Event> raw_sdl_events;  // 原始SDL事件
-  // std::queue<InputEvent> input_events;            // 输入事件
-  // std::queue<WindowEvent> window_events;          // 窗口事件
-  // std::queue<SystemEvent> system_events;          // 系统事件
-  // ... 更多特定事件队列
-};
 
 // 为了向后兼容，创建别名
 using SDL3LogLevel = VividLogLevel;

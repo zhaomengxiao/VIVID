@@ -35,6 +35,7 @@ void UISystems::initImGuiImpl(flecs::iter& it) {
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
   if (ImGui::GetCurrentContext() != nullptr) {
+    VividLogger::app_warn("ImGui already initialized, skipping...");
     return;  // Already initialized, skip
   }
 
@@ -49,8 +50,8 @@ void UISystems::initImGuiImpl(flecs::iter& it) {
 
   // Check if WebGPU is initialized
   if (webgpuRes.device == nullptr) {
-    VividLogger::app_debug("WebGPU not yet initialized, deferring ImGui init...");
-    return;  // Wait for WebGPU to initialize
+    VividLogger::app_error("WebGPU not yet initialized, import RenderSystems first!");
+    return;
   }
 
   // Setup Dear ImGui context
@@ -130,15 +131,12 @@ void UISystems::processImGuiEventImpl(flecs::iter& it) {
   if (world.has<VIVID::APP::EventQueues>()) {
     auto& eventQueues = world.get_mut<VIVID::APP::EventQueues>();
     if (!eventQueues.raw_sdl_events.empty()) {
-      VividLogger::app_info("Processing ImGui event: %d", eventQueues.raw_sdl_events.front().type);
+      // VividLogger::app_info("Processing ImGui event: %d",
+      // eventQueues.raw_sdl_events.front().type);
       ImGui_ImplSDL3_ProcessEvent(&eventQueues.raw_sdl_events.front());
       eventQueues.raw_sdl_events
           .pop();  // Note:Maybe Don't pop here, let the window system handle it
-    } else {
-      VividLogger::app_info("No ImGui event to process!");
     }
-  } else {
-    VividLogger::app_error("Could not get EventQueues!");
   }
 }
 

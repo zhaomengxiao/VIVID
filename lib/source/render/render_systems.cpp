@@ -1462,12 +1462,13 @@ void RenderSystems::initWebGPUImpl(flecs::iter& it) {
   // Check if already initialized (this system runs in PreUpdate, so it runs every frame)
   auto& webgpuRes = world.get_mut<WebGPUResources>();
   if (webgpuRes.initialized) {
+    VividLogger::app_warn("WebGPU already initialized, skipping...");
     return;  // Already initialized, skip
   }
 
   VividLogger::app_debug("Initializing WebGPU...");
   if (!world.has<WebGPUResources>()) {
-    VividLogger::app_info("Create WebGPU resources!");
+    VividLogger::app_debug("Create WebGPU resources!");
     world.set<WebGPUResources>({});
     webgpuRes = world.get_mut<WebGPUResources>();
   }

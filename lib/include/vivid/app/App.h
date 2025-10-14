@@ -4,11 +4,20 @@
 #include <vivid/log/log.h>
 
 #include <iostream>
+#include <queue>
 
 struct ShutdownPhase {};
 
 namespace VIVID {
 namespace APP {
+
+struct EventQueues {
+  std::queue<SDL_Event> raw_sdl_events;  // 原始SDL事件
+  // std::queue<InputEvent> input_events;            // 输入事件
+  // std::queue<WindowEvent> window_events;          // 窗口事件
+  // std::queue<SystemEvent> system_events;          // 系统事件
+  // ... 更多特定事件队列
+};
 
 // Main application class
 class App {
@@ -136,6 +145,14 @@ public:
   bool HandleEvent(SDL_Event* event) {
     // Event handling can be implemented through systems in EventPhase
     // Or handled directly here
+
+    // push event to event queues
+    // ensure ensure resource exists, if not, create one
+    auto& event_queues = world_.ensure<EventQueues>();
+
+    event_queues.raw_sdl_events.push(*event);
+    // VividLogger::app_info("SDL_AppEvent: %d", event->type);
+    // VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());
     return running_;
   }
 

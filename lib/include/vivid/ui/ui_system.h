@@ -3,6 +3,7 @@
 #include <flecs.h>
 
 #include "ui_component.h"
+#include "vivid/render/render_systems.h"
 
 namespace VIVID {
 namespace UI {
@@ -31,7 +32,7 @@ inline UISystems::UISystems(flecs::world& world) {
 
   // Register systems
   // 1. Initialize ImGui - deferred to PreUpdate to see OnStart changes and after WebGPU init
-  world.system("InitImGui").kind(flecs::PreUpdate).run(initImGuiImpl);
+  world.system("InitImGui").kind(flecs::OnStart).run(initImGuiImpl);
 
   // 2. Process ImGui events - runs every frame in PreUpdate
   world.system("ProcessImGuiEvent").kind(flecs::PreUpdate).run(processImGuiEventImpl);

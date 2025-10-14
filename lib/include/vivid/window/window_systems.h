@@ -37,7 +37,9 @@ inline WindowSystems::WindowSystems(flecs::world& world) {
 
   if (!has_window) {
     // Create default window entity
-    world.entity().set<WindowComponent>({});
+    auto mainWindow
+        = world.entity("MainWindow").set<WindowComponent>({}).set<WindowGpuComponent>({});
+    // add GPU component must be here,not in windowInitializationImpl, see Defer mechanism
     VividLogger::app_info("Created default window entity");
   }
 
