@@ -1146,41 +1146,46 @@ void RenderSystems::drawImpl(flecs::iter& it) {
   glm::mat4 viewMatrix(1.0f);
   glm::mat4 projectionMatrix(1.0f);
   glm::vec3 viewPos(0.0f);
-  {
-    flecs::entity mainCameraEntity;
-    TransformComponent* mainCameraTransform = nullptr;
-    CameraComponent* mainCameraComponent = nullptr;
-    ViewportComponent* viewportComponent = nullptr;
-    auto cameraQuery = world.query<TransformComponent, CameraComponent, ViewportComponent>();
-    cameraQuery.each([&](flecs::entity entity, TransformComponent& transform,
-                         CameraComponent& camera, ViewportComponent& viewport) {
-      // Use first camera found
-      if (!mainCameraEntity.is_valid()) {
-        mainCameraEntity = entity;
-        mainCameraTransform = &transform;
-        mainCameraComponent = &camera;
-        viewportComponent = &viewport;
-      }
-    });
 
-    if (mainCameraEntity.is_valid() && mainCameraTransform && mainCameraComponent) {
-      viewPos = mainCameraTransform->Position;
-      if (mainCameraEntity.has<CameraControllerComponent>()) {
-        auto controller = mainCameraEntity.get<CameraControllerComponent>();
-        glm::vec3 target = mainCameraTransform->Position + controller.Front;
-        viewMatrix = glm::lookAt(mainCameraTransform->Position, target, controller.Up);
-      } else {
-        viewMatrix
-            = glm::lookAt(mainCameraTransform->Position,
-                          mainCameraTransform->Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-      }
-      projectionMatrix = mainCameraComponent->ProjectionMatrix;
-      if (projectionMatrix == glm::mat4(1.0f) && webgpuRes.configuredHeight > 0) {
-        float aspect = static_cast<float>(webgpuRes.configuredWidth)
-                       / static_cast<float>(webgpuRes.configuredHeight);
-        projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-      }
+  // Find the first camera entity
+  flecs::entity mainCameraEntity;
+  {
+    auto cameraQuery = world.query<TransformComponent, CameraComponent>();
+    cameraQuery.each(
+        [&](flecs::entity entity, TransformComponent& transform, CameraComponent& camera) {
+          if (!mainCameraEntity.is_valid()) {
+            mainCameraEntity = entity;
+          }
+        });
+  }
+
+  if (mainCameraEntity.is_valid()) {
+    const auto& mainCameraTransform = mainCameraEntity.get<TransformComponent>();
+    const auto& mainCameraComponent = mainCameraEntity.get<CameraComponent>();
+
+    viewPos = mainCameraTransform.Position;
+    if (mainCameraEntity.has<CameraControllerComponent>()) {
+      const auto& controller = mainCameraEntity.get<CameraControllerComponent>();
+      glm::vec3 target = mainCameraTransform.Position + controller.Front;
+      viewMatrix = glm::lookAt(mainCameraTransform.Position, target, controller.Up);
+      VividLogger::app_debug("Camera controller component found, using view matrix");
+    } else {
+      viewMatrix
+          = glm::lookAt(mainCameraTransform.Position,
+                        mainCameraTransform.Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+      VividLogger::app_debug("No camera controller component found, using default view matrix");
     }
+    VividLogger::app_debug("Using view matrix");
+    projectionMatrix = mainCameraComponent.ProjectionMatrix;
+    if (projectionMatrix == glm::mat4(1.0f) && webgpuRes.configuredHeight > 0) {
+      float aspect = static_cast<float>(webgpuRes.configuredWidth)
+                     / static_cast<float>(webgpuRes.configuredHeight);
+      projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+    } else {
+      VividLogger::app_debug("Using default projection matrix");
+    }
+  } else {
+    VividLogger::app_debug("No camera found");
   }
 
   // Query first light
@@ -1188,18 +1193,28 @@ void RenderSystems::drawImpl(flecs::iter& it) {
   glm::vec3 lightColor(1.0f);
   glm::vec3 ambientColor(0.2f);
   float constant = 1.0f, linear = 0.09f, quadratic = 0.032f;
+
+  flecs::entity lightEntity;
   {
     auto lightQuery = world.query<TransformComponent, LightComponent>();
     lightQuery.each([&](flecs::entity entity, TransformComponent& lightTransform,
                         LightComponent& lightComponent) {
-      // Use first light found
-      lightPos = lightTransform.Position;
-      lightColor = lightComponent.LightColor;
-      ambientColor = lightComponent.AmbientColor;
-      constant = lightComponent.Constant;
-      linear = lightComponent.Linear;
-      quadratic = lightComponent.Quadratic;
+      if (!lightEntity.is_valid()) {
+        lightEntity = entity;
+      }
     });
+  }
+
+  if (lightEntity.is_valid()) {
+    const auto& lightTransform = lightEntity.get<TransformComponent>();
+    const auto& lightComponent = lightEntity.get<LightComponent>();
+
+    lightPos = lightTransform.Position;
+    lightColor = lightComponent.LightColor;
+    ambientColor = lightComponent.AmbientColor;
+    constant = lightComponent.Constant;
+    linear = lightComponent.Linear;
+    quadratic = lightComponent.Quadratic;
   }
 
   // Iterate over all GPU meshes and draw

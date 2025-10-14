@@ -18,6 +18,7 @@
 // #include "vivid/ui/ui_system.h"
 #include <iostream>
 
+#include "vivid/input/camera_controller.h"
 #include "vivid/physics/physics_component.h"
 #include "vivid/physics/physics_system.h"
 #include "vivid/render/render_systems.h"
@@ -162,7 +163,8 @@ private:
     cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
         .set<VIVID::RENDER::TransformComponent>(camTransform)
         .set<VIVID::RENDER::CameraComponent>({})
-        .set<VIVID::RENDER::ViewportComponent>({});
+        .set<VIVID::RENDER::ViewportComponent>({})
+        .set<CameraControllerComponent>({});
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
     VividLogger::app_info("Scene initialization completed!");
@@ -183,23 +185,6 @@ VIVID_SDL3_MAIN(
         .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
         // 应用配置
         .insert_resource<MyResource>(100)
-        // Import core modules (Flecs module system)
-        // EXECUTION ORDER:
-        // 1. WindowSetup creates window entity (with WindowComponent)
-        // 2. WindowSystems.WindowInitialization (OnStart) creates real SDL window
-        // 3. Setup.SceneInitialization (OnStart) creates scene entities
-        // .add_plugin<VIVID::Window::WindowPlugin>()
-        // .add_startup_system(hello_startup_system)
-        // .add_startup_system(create_custom_window_system)
-        // .add_startup_system(VIVID::Render::InitWebGPU)
-        // .add_startup_system(VIVID::Render::SyncScene)
-        // .add_startup_system(VIVID::UI::initImGui)
-        // .add_system(ScheduleLabel::Update, VIVID::UI::ShowImGuiDemo)
-        // .add_system(ScheduleLabel::Update, VIVID::Render::Draw)
-        // .add_system(ScheduleLabel::Event, VIVID::UI::ProcessImGuiEvent)
-        // .add_system(ScheduleLabel::Shutdown, VIVID::Render::ReleaseWebGPUResources)
-        // .add_system(ScheduleLabel::Shutdown, VIVID::UI::ShutDownImGui)
-
         .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create default)
         .import_module<Setup>()                         // Scene initialization (after window)
         // .import_module<WindowSetup>()                   // Create custom window entity first
