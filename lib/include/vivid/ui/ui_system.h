@@ -3,7 +3,9 @@
 #include <flecs.h>
 
 #include "ui_component.h"
+#include "vivid/app/App.h"
 #include "vivid/render/render_systems.h"
+#include "vivid/window/window_component.h"
 
 namespace VIVID {
 namespace UI {
@@ -16,8 +18,9 @@ struct UISystems {
 
 private:
   // Static member functions for system implementations
-  static void initImGuiImpl(flecs::iter& it);
-  static void processImGuiEventImpl(flecs::iter& it);
+  static void initImGuiImpl(flecs::entity e, WINDOW::WindowGpuComponent& gpu_comp,
+                            RENDER::WebGPUResources& webgpuRes);
+  static void processImGuiEventImpl(flecs::entity e, VIVID::APP::EventQueues& eventQueues);
   static void showImGuiDemoImpl(flecs::iter& it);
   static void shutDownImGuiImpl(flecs::iter& it);
 };
@@ -32,10 +35,19 @@ inline UISystems::UISystems(flecs::world& world) {
 
   // Register systems
   // 1. Initialize ImGui - deferred to PreUpdate to see OnStart changes and after WebGPU init
-  world.system("InitImGui").kind(flecs::OnStart).run(initImGuiImpl);
+  world.system<WINDOW::WindowGpuComponent, RENDER::WebGPUResources>("InitImGui")
+      .term_at(1)
+      .src<RENDER::WebGPUResources>()
+      .kind(flecs::OnStart)
+      .each(initImGuiImpl);
 
   // 2. Process ImGui events - runs every frame in PreUpdate
-  world.system("ProcessImGuiEvent").kind(flecs::PreUpdate).run(processImGuiEventImpl);
+  world
+      .system<VIVID::APP::EventQueues>("ProcessImGuiEvent")
+      // .term_at(0)
+      // .src<VIVID::APP::EventQueues>()
+      .kind(flecs::PreUpdate)
+      .each(processImGuiEventImpl);
 
   // 3. Show ImGui demo - runs every frame in Update
   world.system("ShowImGuiDemo").kind(flecs::PreUpdate).run(showImGuiDemoImpl);

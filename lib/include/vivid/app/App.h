@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL3/SDL.h>
 #include <flecs.h>
 #include <vivid/log/log.h>
 
@@ -118,6 +119,9 @@ public:
 
     std::cout << "Initializing SDL3 application..." << std::endl;
 
+    // ensure ensure resource exists, if not, create one
+    world_.set<EventQueues>({});
+
     // Run startup systems
     world_.progress(0);
     initialized_ = true;
@@ -147,9 +151,7 @@ public:
     // Or handled directly here
 
     // push event to event queues
-    // ensure ensure resource exists, if not, create one
-    auto& event_queues = world_.ensure<EventQueues>();
-
+    auto& event_queues = world_.get_mut<EventQueues>();
     event_queues.raw_sdl_events.push(*event);
     // VividLogger::app_info("SDL_AppEvent: %d", event->type);
     // VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());

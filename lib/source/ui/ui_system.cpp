@@ -22,16 +22,15 @@
 #  include <webgpu/webgpu_cpp.h>
 #endif
 
-#include "vivid/app/SDL3App.h"
-
 namespace VIVID {
 namespace UI {
 
 // Static member function implementations
 
 // Initialize ImGui system
-void UISystems::initImGuiImpl(flecs::iter& it) {
-  auto world = it.world();
+void UISystems::initImGuiImpl(flecs::entity e, WINDOW::WindowGpuComponent& gpu_comp,
+                              RENDER::WebGPUResources& webgpuRes) {
+  auto world = e.world();
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
   if (ImGui::GetCurrentContext() != nullptr) {
@@ -40,13 +39,6 @@ void UISystems::initImGuiImpl(flecs::iter& it) {
   }
 
   VividLogger::app_debug("Initializing ImGui...");
-
-  // Get WebGPU resources from world singleton
-  if (!world.has<RENDER::WebGPUResources>()) {
-    VividLogger::app_error("Could not get WebGPU resources!");
-    return;
-  }
-  auto& webgpuRes = world.get<RENDER::WebGPUResources>();
 
   // Check if WebGPU is initialized
   if (webgpuRes.device == nullptr) {
@@ -78,25 +70,19 @@ void UISystems::initImGuiImpl(flecs::iter& it) {
   // purpose) Setup Platform/Renderer backends
 
   // Setup Platform/Renderer backends
-  // Query for window entities with WindowGpuComponent
-  auto query = world.query<WINDOW::WindowGpuComponent>();
 
-  bool initialized = false;  // TODO: 这里都能移到resource中
-  query.each([&](flecs::entity e, WINDOW::WindowGpuComponent& gpu_comp) {
-    if (!initialized) {
-      VividLogger::app_debug("Initializing ImGui backends for window handle: %p",
-                             gpu_comp.window_handle);
-      ImGui_ImplSDL3_InitForOther(gpu_comp.window_handle);
-      ImGui_ImplWGPU_InitInfo init_info;
-      init_info.Device = webgpuRes.device;
-      init_info.NumFramesInFlight = 3;
-      init_info.RenderTargetFormat = webgpuRes.surfaceFormat;
-      init_info.DepthStencilFormat = webgpuRes.depthFormat;
-      ImGui_ImplWGPU_Init(&init_info);
-      initialized = true;
-      VividLogger::app_info("ImGui initialized successfully");
-    }
-  });
+  // TODO: 这里都能移到resource中
+
+  VividLogger::app_debug("Initializing ImGui backends for window handle: %p",
+                         gpu_comp.window_handle);
+  ImGui_ImplSDL3_InitForOther(gpu_comp.window_handle);
+  ImGui_ImplWGPU_InitInfo init_info;
+  init_info.Device = webgpuRes.device;
+  init_info.NumFramesInFlight = 3;
+  init_info.RenderTargetFormat = webgpuRes.surfaceFormat;
+  init_info.DepthStencilFormat = webgpuRes.depthFormat;
+  ImGui_ImplWGPU_Init(&init_info);
+  VividLogger::app_debug("ImGui initialized successfully");
 
   // Load Fonts
   // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
@@ -124,19 +110,13 @@ void UISystems::initImGuiImpl(flecs::iter& it) {
 }
 
 // Process ImGui events system
-void UISystems::processImGuiEventImpl(flecs::iter& it) {
-  auto world = it.world();
-
-  // Get event queues from world singleton
-  if (world.has<VIVID::APP::EventQueues>()) {
-    auto& eventQueues = world.get_mut<VIVID::APP::EventQueues>();
-    if (!eventQueues.raw_sdl_events.empty()) {
-      // VividLogger::app_info("Processing ImGui event: %d",
-      // eventQueues.raw_sdl_events.front().type);
-      ImGui_ImplSDL3_ProcessEvent(&eventQueues.raw_sdl_events.front());
-      eventQueues.raw_sdl_events
-          .pop();  // Note:Maybe Don't pop here, let the window system handle it
-    }
+void UISystems::processImGuiEventImpl(flecs::entity e, VIVID::APP::EventQueues& eventQueues) {
+  // EventQueues is queried from singleton (dependency declared via .term_at(0).src<>())
+  if (!eventQueues.raw_sdl_events.empty()) {
+    // VividLogger::app_info("Processing ImGui event: %d",
+    // eventQueues.raw_sdl_events.front().type);
+    ImGui_ImplSDL3_ProcessEvent(&eventQueues.raw_sdl_events.front());
+    eventQueues.raw_sdl_events.pop();  // Note:Maybe Don't pop here, let the window system handle it
   }
 }
 
