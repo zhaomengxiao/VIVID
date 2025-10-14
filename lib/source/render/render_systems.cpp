@@ -810,68 +810,60 @@ void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
   VividLogger::app_debug("WebGPU surface configured");
 } */
 
-void RenderSystems::syncSceneImpl(flecs::iter& it) {
-  auto world = it.world();
-
-  // We only want to process entities that have the CPU-side data (Mesh, Material)
+void RenderSystems::syncSceneImpl(flecs::entity entity, MeshComponent& mesh,
+                                  MaterialComponent& material, WebGPUResources& webgpuRes) {
+  // Process entities that have the CPU-side data (Mesh, Material)
   // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
-  auto& webgpuRes = world.get<WebGPUResources>();
-  if (!world.has<WebGPUResources>()) {
-    VividLogger::app_error("Could not get WebGPU resources!");
-    return;
-  }
+  // (filtered by .without<GpuMeshComponent>() in system registration)
 
-  auto query
-      = world.query_builder<MeshComponent, MaterialComponent>().without<GpuMeshComponent>().build();
-  query.each([&](flecs::entity entity, MeshComponent& mesh, MaterialComponent& material) {
-    if (mesh.m_Vertices.empty() || mesh.m_Indices.empty() || material.ShaderPath.empty()) return;
+  if (mesh.m_Vertices.empty() || mesh.m_Indices.empty() || material.ShaderPath.empty()) return;
 
-    // 创建和绑定VBO
-    // Create vertex buffer
-    WGPUBufferDescriptor bufferDesc = {};
-    bufferDesc.nextInChain = nullptr;
-    bufferDesc.label = toWgpuStringView("Vertex buffer");
-    bufferDesc.size = mesh.m_Vertices.size() * sizeof(float);
-    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
-    WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
+  // 创建和绑定VBO
+  // Create vertex buffer
+  WGPUBufferDescriptor bufferDesc = {};
+  bufferDesc.nextInChain = nullptr;
+  bufferDesc.label = toWgpuStringView("Vertex buffer");
+  bufferDesc.size = mesh.m_Vertices.size() * sizeof(float);
+  bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
+  WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
 
-    // Upload geometry data to the buffer
-    wgpuQueueWriteBuffer(webgpuRes.queue, vertexBuffer, 0, mesh.m_Vertices.data(), bufferDesc.size);
+  // Upload geometry data to the buffer
+  wgpuQueueWriteBuffer(webgpuRes.queue, vertexBuffer, 0, mesh.m_Vertices.data(), bufferDesc.size);
 
-    // 创建IBO
-    // Create index buffer (use 32-bit indices to match MeshComponent definition)
-    // (we reuse the bufferDesc initialized for the vertexBuffer)
-    bufferDesc.size = mesh.m_Indices.size() * sizeof(uint32_t);
+  // 创建IBO
+  // Create index buffer (use 32-bit indices to match MeshComponent definition)
+  // (we reuse the bufferDesc initialized for the vertexBuffer)
+  bufferDesc.size = mesh.m_Indices.size() * sizeof(uint32_t);
 
-    // only need when using uint16_t, uint32_t is 4 bytes aligned
-    // bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
-    // mesh.m_Indices.resize((mesh.m_Indices.size() + 1)
-    //                       & ~1);  // round up to the next multiple of 2
-    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
-    WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
+  // only need when using uint16_t, uint32_t is 4 bytes aligned
+  // bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+  // mesh.m_Indices.resize((mesh.m_Indices.size() + 1)
+  //                       & ~1);  // round up to the next multiple of 2
+  bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
+  WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
 
-    wgpuQueueWriteBuffer(webgpuRes.queue, indexBuffer, 0, mesh.m_Indices.data(), bufferDesc.size);
+  wgpuQueueWriteBuffer(webgpuRes.queue, indexBuffer, 0, mesh.m_Indices.data(), bufferDesc.size);
 
-    // 创建和绑定VAO
-    WGPUVertexBufferLayout vertexBufferLayout = {};
-    std::vector<WGPUVertexAttribute> vertexAttribs(2);
-    // Describe the position attribute
-    vertexAttribs[0].shaderLocation = 0;  // @location(0)
-    vertexAttribs[0].format = WGPUVertexFormat_Float32x3;
-    vertexAttribs[0].offset = 0;
-    // Describe the color attribute
-    vertexAttribs[1].shaderLocation = 1;                   // @location(1)
-    vertexAttribs[1].format = WGPUVertexFormat_Float32x3;  // different type!
-    vertexAttribs[1].offset = 3 * sizeof(float);           // non null offset!
+  // 创建和绑定VAO
+  WGPUVertexBufferLayout vertexBufferLayout = {};
+  std::vector<WGPUVertexAttribute> vertexAttribs(2);
+  // Describe the position attribute
+  vertexAttribs[0].shaderLocation = 0;  // @location(0)
+  vertexAttribs[0].format = WGPUVertexFormat_Float32x3;
+  vertexAttribs[0].offset = 0;
+  // Describe the color attribute
+  vertexAttribs[1].shaderLocation = 1;                   // @location(1)
+  vertexAttribs[1].format = WGPUVertexFormat_Float32x3;  // different type!
+  vertexAttribs[1].offset = 3 * sizeof(float);           // non null offset!
 
-    vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
-    vertexBufferLayout.attributes = vertexAttribs.data();
+  vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
+  vertexBufferLayout.attributes = vertexAttribs.data();
 
-    vertexBufferLayout.arrayStride = 6 * sizeof(float);
-    vertexBufferLayout.stepMode = WGPUVertexStepMode_Vertex;
+  vertexBufferLayout.arrayStride = 6 * sizeof(float);
+  vertexBufferLayout.stepMode = WGPUVertexStepMode_Vertex;
 
-    // shader (WGSL Blinn-Phong equivalent of standalone/res/shaders/BlinnPhong.shader)
-    const char* shaderSource = R"(
+  // shader (WGSL Blinn-Phong equivalent of standalone/res/shaders/BlinnPhong.shader)
+  const char* shaderSource = R"(
 struct VertexInput {
   @location(0) position: vec3f,
   @location(1) normal: vec3f,
@@ -930,119 +922,118 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
   return vec4f(ambient + diffuse + specular, 1.0);
 }
-      )";
+    )";
 
-    // create the shader module
-    WGPUShaderSourceWGSL wgslDesc = {};
-    wgslDesc.chain.next = nullptr;
-    wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
-    wgslDesc.code = toWgpuStringView(shaderSource);
-    WGPUShaderModuleDescriptor shaderDesc = {};
-    shaderDesc.nextInChain = &wgslDesc.chain;  // connect the chained extension
-    shaderDesc.label = toWgpuStringView("Shader source");
-    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(webgpuRes.device, &shaderDesc);
+  // create the shader module
+  WGPUShaderSourceWGSL wgslDesc = {};
+  wgslDesc.chain.next = nullptr;
+  wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
+  wgslDesc.code = toWgpuStringView(shaderSource);
+  WGPUShaderModuleDescriptor shaderDesc = {};
+  shaderDesc.nextInChain = &wgslDesc.chain;  // connect the chained extension
+  shaderDesc.label = toWgpuStringView("Shader source");
+  WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(webgpuRes.device, &shaderDesc);
 
-    // When describing the render pipeline:
-    WGPURenderPipelineDescriptor pipelineDesc = {};
-    pipelineDesc.vertex.bufferCount = 1;
-    pipelineDesc.vertex.buffers = &vertexBufferLayout;
-    pipelineDesc.vertex.module = shaderModule;
-    pipelineDesc.vertex.entryPoint = toWgpuStringView("vs_main");
+  // When describing the render pipeline:
+  WGPURenderPipelineDescriptor pipelineDesc = {};
+  pipelineDesc.vertex.bufferCount = 1;
+  pipelineDesc.vertex.buffers = &vertexBufferLayout;
+  pipelineDesc.vertex.module = shaderModule;
+  pipelineDesc.vertex.entryPoint = toWgpuStringView("vs_main");
 
-    WGPUFragmentState fragmentState = {};
-    fragmentState.module = shaderModule;
-    fragmentState.entryPoint = toWgpuStringView("fs_main");
-    WGPUColorTargetState colorTarget = {};
-    colorTarget.format = webgpuRes.surfaceFormat;
-    WGPUBlendState blendState = {};
-    colorTarget.blend = &blendState;
-    colorTarget.writeMask = WGPUColorWriteMask_All;
-    fragmentState.targetCount = 1;
-    fragmentState.targets = &colorTarget;
-    pipelineDesc.fragment = &fragmentState;
+  WGPUFragmentState fragmentState = {};
+  fragmentState.module = shaderModule;
+  fragmentState.entryPoint = toWgpuStringView("fs_main");
+  WGPUColorTargetState colorTarget = {};
+  colorTarget.format = webgpuRes.surfaceFormat;
+  WGPUBlendState blendState = {};
+  colorTarget.blend = &blendState;
+  colorTarget.writeMask = WGPUColorWriteMask_All;
+  fragmentState.targetCount = 1;
+  fragmentState.targets = &colorTarget;
+  pipelineDesc.fragment = &fragmentState;
 
-    // Primitive state
-    WGPUPrimitiveState primitive = {};
-    primitive.topology = WGPUPrimitiveTopology_TriangleList;
-    primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
-    primitive.frontFace = WGPUFrontFace_CCW;
-    primitive.cullMode = WGPUCullMode_Back;  // cull back faces
-    pipelineDesc.primitive = primitive;
+  // Primitive state
+  WGPUPrimitiveState primitive = {};
+  primitive.topology = WGPUPrimitiveTopology_TriangleList;
+  primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+  primitive.frontFace = WGPUFrontFace_CCW;
+  primitive.cullMode = WGPUCullMode_Back;  // cull back faces
+  pipelineDesc.primitive = primitive;
 
-    // Multisample state
-    WGPUMultisampleState multisample = {};
-    multisample.count = 1;
-    multisample.mask = 0xFFFFFFFF;
-    multisample.alphaToCoverageEnabled = false;
-    pipelineDesc.multisample = multisample;
+  // Multisample state
+  WGPUMultisampleState multisample = {};
+  multisample.count = 1;
+  multisample.mask = 0xFFFFFFFF;
+  multisample.alphaToCoverageEnabled = false;
+  pipelineDesc.multisample = multisample;
 
-    // Depth-stencil state
-    WGPUDepthStencilState depthStencil = {};
-    depthStencil.format = webgpuRes.depthFormat;
-    depthStencil.depthWriteEnabled = WGPUOptionalBool_True;
-    depthStencil.depthCompare = WGPUCompareFunction_Less;
-    depthStencil.stencilReadMask = 0xFFFFFFFF;
-    depthStencil.stencilWriteMask = 0xFFFFFFFF;
-    pipelineDesc.depthStencil = &depthStencil;
-    // Define binding layout for a uniform buffer used in VS/FS
-    WGPUBindGroupLayoutEntry bindingLayout = {};
-    bindingLayout.binding = 0;  // shader @binding(0)
-    bindingLayout.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-    bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
-    bindingLayout.buffer.hasDynamicOffset = false;
-    bindingLayout.buffer.minBindingSize = sizeof(BPUniforms);
+  // Depth-stencil state
+  WGPUDepthStencilState depthStencil = {};
+  depthStencil.format = webgpuRes.depthFormat;
+  depthStencil.depthWriteEnabled = WGPUOptionalBool_True;
+  depthStencil.depthCompare = WGPUCompareFunction_Less;
+  depthStencil.stencilReadMask = 0xFFFFFFFF;
+  depthStencil.stencilWriteMask = 0xFFFFFFFF;
+  pipelineDesc.depthStencil = &depthStencil;
+  // Define binding layout for a uniform buffer used in VS/FS
+  WGPUBindGroupLayoutEntry bindingLayout = {};
+  bindingLayout.binding = 0;  // shader @binding(0)
+  bindingLayout.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+  bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+  bindingLayout.buffer.hasDynamicOffset = false;
+  bindingLayout.buffer.minBindingSize = sizeof(BPUniforms);
 
-    // Create a bind group layout
-    WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
-    bindGroupLayoutDesc.entryCount = 1;
-    bindGroupLayoutDesc.entries = &bindingLayout;
-    WGPUBindGroupLayout bindGroupLayout
-        = wgpuDeviceCreateBindGroupLayout(webgpuRes.device, &bindGroupLayoutDesc);
+  // Create a bind group layout
+  WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
+  bindGroupLayoutDesc.entryCount = 1;
+  bindGroupLayoutDesc.entries = &bindingLayout;
+  WGPUBindGroupLayout bindGroupLayout
+      = wgpuDeviceCreateBindGroupLayout(webgpuRes.device, &bindGroupLayoutDesc);
 
-    // Create the pipeline layout
-    WGPUPipelineLayoutDescriptor layoutDesc = {};
-    layoutDesc.bindGroupLayoutCount = 1;
-    layoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout*)&bindGroupLayout;
-    WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(webgpuRes.device, &layoutDesc);
+  // Create the pipeline layout
+  WGPUPipelineLayoutDescriptor layoutDesc = {};
+  layoutDesc.bindGroupLayoutCount = 1;
+  layoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout*)&bindGroupLayout;
+  WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(webgpuRes.device, &layoutDesc);
 
-    // Assign the PipelineLayout to the RenderPipelineDescriptor's layout field
-    pipelineDesc.layout = layout;
-    WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(webgpuRes.device, &pipelineDesc);
-    wgpuShaderModuleRelease(shaderModule);
+  // Assign the PipelineLayout to the RenderPipelineDescriptor's layout field
+  pipelineDesc.layout = layout;
+  WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(webgpuRes.device, &pipelineDesc);
+  wgpuShaderModuleRelease(shaderModule);
 
-    // Now we use emplace, because we know the component doesn't exist yet.
-    GpuMeshComponent gpuMeshComponent;
-    gpuMeshComponent.vertexBuffer = vertexBuffer;
-    gpuMeshComponent.indexBuffer = indexBuffer;
-    gpuMeshComponent.indexCount = (unsigned int)mesh.m_Indices.size();
-    gpuMeshComponent.vertexBufferLayout = vertexBufferLayout;
-    gpuMeshComponent.layout = layout;
-    gpuMeshComponent.bindGroupLayout = bindGroupLayout;
-    gpuMeshComponent.pipeline = pipeline;
+  // Now we use emplace, because we know the component doesn't exist yet.
+  GpuMeshComponent gpuMeshComponent;
+  gpuMeshComponent.vertexBuffer = vertexBuffer;
+  gpuMeshComponent.indexBuffer = indexBuffer;
+  gpuMeshComponent.indexCount = (unsigned int)mesh.m_Indices.size();
+  gpuMeshComponent.vertexBufferLayout = vertexBufferLayout;
+  gpuMeshComponent.layout = layout;
+  gpuMeshComponent.bindGroupLayout = bindGroupLayout;
+  gpuMeshComponent.pipeline = pipeline;
 
-    // Create per-entity uniform buffer and bind group (persist across frames)
-    WGPUBufferDescriptor uniformDesc = {};
-    uniformDesc.nextInChain = nullptr;
-    uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
-    uniformDesc.size = sizeof(BPUniforms);
-    uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
-    gpuMeshComponent.uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &uniformDesc);
+  // Create per-entity uniform buffer and bind group (persist across frames)
+  WGPUBufferDescriptor uniformDesc = {};
+  uniformDesc.nextInChain = nullptr;
+  uniformDesc.label = toWgpuStringView("Per-entity uniform buffer");
+  uniformDesc.size = sizeof(BPUniforms);
+  uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+  gpuMeshComponent.uniformBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &uniformDesc);
 
-    WGPUBindGroupEntry bgEntry = {};
-    bgEntry.binding = 0;
-    bgEntry.buffer = gpuMeshComponent.uniformBuffer;
-    bgEntry.offset = 0;
-    bgEntry.size = sizeof(BPUniforms);
+  WGPUBindGroupEntry bgEntry = {};
+  bgEntry.binding = 0;
+  bgEntry.buffer = gpuMeshComponent.uniformBuffer;
+  bgEntry.offset = 0;
+  bgEntry.size = sizeof(BPUniforms);
 
-    WGPUBindGroupDescriptor bgDesc = {};
-    bgDesc.nextInChain = nullptr;
-    bgDesc.layout = bindGroupLayout;
-    bgDesc.entryCount = 1;
-    bgDesc.entries = &bgEntry;
-    gpuMeshComponent.bindGroup = wgpuDeviceCreateBindGroup(webgpuRes.device, &bgDesc);
+  WGPUBindGroupDescriptor bgDesc = {};
+  bgDesc.nextInChain = nullptr;
+  bgDesc.layout = bindGroupLayout;
+  bgDesc.entryCount = 1;
+  bgDesc.entries = &bgEntry;
+  gpuMeshComponent.bindGroup = wgpuDeviceCreateBindGroup(webgpuRes.device, &bgDesc);
 
-    entity.set<GpuMeshComponent>(gpuMeshComponent);
-  });
+  entity.set<GpuMeshComponent>(gpuMeshComponent);
 }
 
 void RenderSystems::drawImpl(flecs::iter& it) {
@@ -1456,22 +1447,15 @@ void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
   }
 }
 
-void RenderSystems::initWebGPUImpl(flecs::iter& it) {
-  auto world = it.world();
-
-  // Check if already initialized (this system runs in PreUpdate, so it runs every frame)
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
+void RenderSystems::initWebGPUImpl(flecs::entity entity,
+                                   VIVID::WINDOW::WindowGpuComponent& gpu_comp,
+                                   WebGPUResources& webgpuRes) {
+  // Check if already initialized (due to .each(), this may run on multiple window entities)
   if (webgpuRes.initialized) {
-    VividLogger::app_warn("WebGPU already initialized, skipping...");
     return;  // Already initialized, skip
   }
 
   VividLogger::app_debug("Initializing WebGPU...");
-  if (!world.has<WebGPUResources>()) {
-    VividLogger::app_debug("Create WebGPU resources!");
-    world.set<WebGPUResources>({});
-    webgpuRes = world.get_mut<WebGPUResources>();
-  }
 
   WGPUTextureFormat preferred_fmt
       = WGPUTextureFormat_Undefined;  // acquired from SurfaceCapabilities
@@ -1518,26 +1502,21 @@ void RenderSystems::initWebGPUImpl(flecs::iter& it) {
   webgpuRes.surface = surface.MoveToCHandle();
 #endif
 
-  // Set instance BEFORE querying windows (needed for surface creation on non-Emscripten)
+  // Set instance BEFORE accessing window (needed for surface creation on non-Emscripten)
   webgpuRes.instance = instance.MoveToCHandle();
 
-  // Query current window pixel size instead of hard-coded values
+  // Get window pixel size from the current entity's WindowGpuComponent
   int pixel_width = 0;
   int pixel_height = 0;
 
-  {
-    auto query = world.query<VIVID::WINDOW::WindowGpuComponent>();
-    query.each([&](flecs::entity entity, VIVID::WINDOW::WindowGpuComponent& gpu_comp) {
-      if (gpu_comp.window_handle) {
+  if (gpu_comp.window_handle) {
 #ifndef __EMSCRIPTEN__
-        webgpuRes.surface
-            = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, gpu_comp.window_handle);
+    webgpuRes.surface
+        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, gpu_comp.window_handle);
 #endif
-        SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
-        VividLogger::app_debug("Using window: entity=%llu, handle=%p, size=%dx%d", entity.id(),
-                               gpu_comp.window_handle, pixel_width, pixel_height);
-      }
-    });
+    SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
+    VividLogger::app_debug("Using window: entity=%llu, handle=%p, size=%dx%d", entity.id(),
+                           gpu_comp.window_handle, pixel_width, pixel_height);
   }
 
   // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
@@ -1587,7 +1566,7 @@ void RenderSystems::initWebGPUImpl(flecs::iter& it) {
     VividLogger::app_error("Failed to acquire WebGPU device queue");
     return;
   }
-  reconfigureSurface(world, pixel_width, pixel_height);
+  reconfigureSurface(entity.world(), pixel_width, pixel_height);
 
   // Mark as initialized to prevent re-initialization
   webgpuRes.initialized = true;

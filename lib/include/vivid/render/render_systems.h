@@ -8,6 +8,7 @@
 
 #include "render_component.h"
 #include "vivid/log/log.h"
+#include "vivid/window/window_component.h"
 
 namespace VIVID::RENDER {
 
@@ -54,8 +55,10 @@ struct RenderSystems {
 
 private:
   // Actually used system implementations (registered in constructor)
-  static void initWebGPUImpl(flecs::iter& it);
-  static void syncSceneImpl(flecs::iter& it);
+  static void initWebGPUImpl(flecs::entity e, VIVID::WINDOW::WindowGpuComponent& gpu_comp,
+                             WebGPUResources& webgpuRes);
+  static void syncSceneImpl(flecs::entity e, MeshComponent& mesh, MaterialComponent& material,
+                            WebGPUResources& webgpuRes);
   static void drawImpl(flecs::iter& it);
   static void releaseWebGPUResourcesImpl(flecs::iter& it);
 
@@ -88,10 +91,19 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
   // OnStart systems' changes are only visible after the OnStart phase completes
-  world.system("InitWebGPU").kind(flecs::OnStart).run(initWebGPUImpl);
+  world.system<VIVID::WINDOW::WindowGpuComponent, WebGPUResources>("InitWebGPU")
+      .term_at(1)
+      .src<WebGPUResources>()
+      .kind(flecs::OnStart)
+      .each(initWebGPUImpl);
 
   // Scene sync - runs every frame before update
-  world.system("SyncScene").kind(flecs::OnStart).run(syncSceneImpl);
+  world.system<MeshComponent, MaterialComponent, WebGPUResources>("SyncScene")
+      .without<GpuMeshComponent>()
+      .term_at(2)
+      .src<WebGPUResources>()
+      .kind(flecs::OnStart)
+      .each(syncSceneImpl);
 
   // Drawing - runs every frame
   world.system("Draw").kind(flecs::OnUpdate).run(drawImpl);

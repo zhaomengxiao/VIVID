@@ -13,80 +13,73 @@ namespace WINDOW {
 // Static member function implementations
 
 // Window initialization system
-void WindowSystems::windowInitializationImpl(flecs::iter& it) {
-  auto world = it.world();
-
+void WindowSystems::windowInitializationImpl(flecs::entity entity, WindowComponent& window_comp,
+                                             WindowGpuComponent& gpu_comp) {
   VividLogger::app_debug("WindowInitialization system executing...");
 
-  // Find all entities with WindowComponent but without WindowGpuComponent (uninitialized windows)
-  auto query = world.query<WindowComponent, WindowGpuComponent>();
-
-  query.each([&](flecs::entity entity, WindowComponent& window_comp, WindowGpuComponent& gpu_comp) {
-    // Initialize SDL video subsystem if not already initialized
-    if (!SDL_WasInit(SDL_INIT_VIDEO)) {
-      if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_Log("Failed to initialize SDL video subsystem: %s", SDL_GetError());
-        return;
-      }
+  // Initialize SDL video subsystem if not already initialized
+  if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+      SDL_Log("Failed to initialize SDL video subsystem: %s", SDL_GetError());
+      return;
     }
-    float main_scale
-        = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());  // FIXME-WGPU: Test this?
-    SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
+  }
+  float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());  // FIXME-WGPU: Test this?
+  SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
 
-    // Create SDL window
-    SDL_Window* window_handle = SDL_CreateWindow(window_comp.title.c_str(), window_comp.width,
-                                                 window_comp.height, window_comp.flags);
+  // Create SDL window
+  SDL_Window* window_handle = SDL_CreateWindow(window_comp.title.c_str(), window_comp.width,
+                                               window_comp.height, window_comp.flags);
 
-    if (!VividErrorHandler::check_sdl_pointer(window_handle, "SDL_CreateWindow")) {
-      return;  // Error already logged
-    }
+  if (!VividErrorHandler::check_sdl_pointer(window_handle, "SDL_CreateWindow")) {
+    return;  // Error already logged
+  }
 
-    // TODO: =======move to render==========================================================
-    // SDL_GLContext gl_context = SDL_GL_CreateContext(window_handle);
-    //
-    // if (!VividErrorHandler::check_sdl_pointer(gl_context, "SDL_GL_CreateContext")) {
-    //   return;  // Error already logged
-    // }
-    //
-    // SDL_GL_MakeCurrent(window_handle, gl_context);
-    // SDL_GL_SetSwapInterval(1);  // Enable vsync
-    //=====================================================================================
+  // TODO: =======move to render==========================================================
+  // SDL_GLContext gl_context = SDL_GL_CreateContext(window_handle);
+  //
+  // if (!VividErrorHandler::check_sdl_pointer(gl_context, "SDL_GL_CreateContext")) {
+  //   return;  // Error already logged
+  // }
+  //
+  // SDL_GL_MakeCurrent(window_handle, gl_context);
+  // SDL_GL_SetSwapInterval(1);  // Enable vsync
+  //=====================================================================================
 
-    // Set window position if specified
-    if (window_comp.x != SDL_WINDOWPOS_CENTERED && window_comp.y != SDL_WINDOWPOS_CENTERED) {
-      VividErrorHandler::check_sdl_result(
-          SDL_SetWindowPosition(window_handle, window_comp.x, window_comp.y),
-          "SDL_SetWindowPosition");
-    }
+  // Set window position if specified
+  if (window_comp.x != SDL_WINDOWPOS_CENTERED && window_comp.y != SDL_WINDOWPOS_CENTERED) {
+    VividErrorHandler::check_sdl_result(
+        SDL_SetWindowPosition(window_handle, window_comp.x, window_comp.y),
+        "SDL_SetWindowPosition");
+  }
 
-    // Add GPU component to mark as initialized
-    gpu_comp.window_handle = window_handle;
-    // gpu_comp.gl_context = gl_context;
-    gpu_comp.initialized = true;
+  // Add GPU component to mark as initialized
+  gpu_comp.window_handle = window_handle;
+  // gpu_comp.gl_context = gl_context;
+  gpu_comp.initialized = true;
 
-    // Initialize cache with current values
-    gpu_comp.cached_title = window_comp.title;
-    gpu_comp.cached_width = window_comp.width;
-    gpu_comp.cached_height = window_comp.height;
-    gpu_comp.cached_x = window_comp.x;
-    gpu_comp.cached_y = window_comp.y;
-    gpu_comp.cached_visible = window_comp.visible;
+  // Initialize cache with current values
+  gpu_comp.cached_title = window_comp.title;
+  gpu_comp.cached_width = window_comp.width;
+  gpu_comp.cached_height = window_comp.height;
+  gpu_comp.cached_x = window_comp.x;
+  gpu_comp.cached_y = window_comp.y;
+  gpu_comp.cached_visible = window_comp.visible;
 
-    entity.set<WindowGpuComponent>(gpu_comp);
+  entity.set<WindowGpuComponent>(gpu_comp);
 
-    // Add events component
-    entity.set<WindowEventsComponent>({});
+  // Add events component
+  entity.set<WindowEventsComponent>({});
 
-    // Show window if visible
-    if (window_comp.visible) {
-      VividErrorHandler::check_sdl_result(SDL_ShowWindow(window_handle), "SDL_ShowWindow");
-    }
+  // Show window if visible
+  if (window_comp.visible) {
+    VividErrorHandler::check_sdl_result(SDL_ShowWindow(window_handle), "SDL_ShowWindow");
+  }
 
-    VividLogger::app_info("Window created successfully: %s (%dx%d)", window_comp.title.c_str(),
-                          window_comp.width, window_comp.height);
-    VividLogger::app_debug("WindowGpuComponent added to entity: %llu, handle: %p", entity.id(),
-                           gpu_comp.window_handle);
-  });
+  VividLogger::app_info("Window created successfully: %s (%dx%d)", window_comp.title.c_str(),
+                        window_comp.width, window_comp.height);
+  VividLogger::app_debug("WindowGpuComponent added to entity: %llu, handle: %p", entity.id(),
+                         gpu_comp.window_handle);
 }
 
 // Window event processing system
@@ -170,46 +163,39 @@ void WindowSystems::windowEventProcessingImpl(flecs::iter& it) {
 }
 
 // Window update system
-void WindowSystems::windowUpdateImpl(flecs::iter& it) {
-  auto world = it.world();
+void WindowSystems::windowUpdateImpl(flecs::entity entity, WindowComponent& window_comp,
+                                     WindowGpuComponent& gpu_comp) {
+  if (!gpu_comp.initialized || !gpu_comp.window_handle) {
+    return;
+  }
 
-  // Query for windows with WindowComponent and WindowGpuComponent
-  auto query = world.query<WindowComponent, WindowGpuComponent>();
+  // Only update properties that have actually changed
+  if (window_comp.title != gpu_comp.cached_title) {
+    SDL_SetWindowTitle(gpu_comp.window_handle, window_comp.title.c_str());
+    gpu_comp.cached_title = window_comp.title;
+  }
 
-  query.each([&](flecs::entity entity, WindowComponent& window_comp, WindowGpuComponent& gpu_comp) {
-    if (!gpu_comp.initialized || !gpu_comp.window_handle) {
-      return;
+  if (window_comp.width != gpu_comp.cached_width || window_comp.height != gpu_comp.cached_height) {
+    SDL_SetWindowSize(gpu_comp.window_handle, window_comp.width, window_comp.height);
+    gpu_comp.cached_width = window_comp.width;
+    gpu_comp.cached_height = window_comp.height;
+  }
+
+  if (window_comp.x != gpu_comp.cached_x || window_comp.y != gpu_comp.cached_y) {
+    SDL_SetWindowPosition(gpu_comp.window_handle, window_comp.x, window_comp.y);
+    gpu_comp.cached_x = window_comp.x;
+    gpu_comp.cached_y = window_comp.y;
+  }
+
+  // Handle visibility changes
+  if (window_comp.visible != gpu_comp.cached_visible) {
+    if (window_comp.visible) {
+      SDL_ShowWindow(gpu_comp.window_handle);
+    } else {
+      SDL_HideWindow(gpu_comp.window_handle);
     }
-
-    // Only update properties that have actually changed
-    if (window_comp.title != gpu_comp.cached_title) {
-      SDL_SetWindowTitle(gpu_comp.window_handle, window_comp.title.c_str());
-      gpu_comp.cached_title = window_comp.title;
-    }
-
-    if (window_comp.width != gpu_comp.cached_width
-        || window_comp.height != gpu_comp.cached_height) {
-      SDL_SetWindowSize(gpu_comp.window_handle, window_comp.width, window_comp.height);
-      gpu_comp.cached_width = window_comp.width;
-      gpu_comp.cached_height = window_comp.height;
-    }
-
-    if (window_comp.x != gpu_comp.cached_x || window_comp.y != gpu_comp.cached_y) {
-      SDL_SetWindowPosition(gpu_comp.window_handle, window_comp.x, window_comp.y);
-      gpu_comp.cached_x = window_comp.x;
-      gpu_comp.cached_y = window_comp.y;
-    }
-
-    // Handle visibility changes
-    if (window_comp.visible != gpu_comp.cached_visible) {
-      if (window_comp.visible) {
-        SDL_ShowWindow(gpu_comp.window_handle);
-      } else {
-        SDL_HideWindow(gpu_comp.window_handle);
-      }
-      gpu_comp.cached_visible = window_comp.visible;
-    }
-  });
+    gpu_comp.cached_visible = window_comp.visible;
+  }
 }
 
 // Window cleanup system

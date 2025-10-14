@@ -1,15 +1,152 @@
-[![Actions Status](https://github.com/TheLartians/ModernCppStarter/workflows/MacOS/badge.svg)](https://github.com/TheLartians/ModernCppStarter/actions)
-[![Actions Status](https://github.com/TheLartians/ModernCppStarter/workflows/Windows/badge.svg)](https://github.com/TheLartians/ModernCppStarter/actions)
-[![Actions Status](https://github.com/TheLartians/ModernCppStarter/workflows/Ubuntu/badge.svg)](https://github.com/TheLartians/ModernCppStarter/actions)
-[![Actions Status](https://github.com/TheLartians/ModernCppStarter/workflows/Style/badge.svg)](https://github.com/TheLartians/ModernCppStarter/actions)
-[![Actions Status](https://github.com/TheLartians/ModernCppStarter/workflows/Install/badge.svg)](https://github.com/TheLartians/ModernCppStarter/actions)
-[![codecov](https://codecov.io/gh/TheLartians/ModernCppStarter/branch/master/graph/badge.svg)](https://codecov.io/gh/TheLartians/ModernCppStarter)
+# VIVID Engine
 
-<p align="center">
-  <img src="https://repository-images.githubusercontent.com/254842585/4dfa7580-7ffb-11ea-99d0-46b8fe2f4170" height="175" width="auto" />
-</p>
+现代化的 C++ 游戏引擎，基于 Flecs ECS、WebGPU 和 SDL3 构建。
 
-# ModernCppStarter
+## 核心技术栈
+
+- **ECS 框架**: [Flecs](https://github.com/SanderMertens/flecs) - 高性能实体组件系统
+- **渲染后端**: [WebGPU](https://github.com/webgpu-native/webgpu-headers) - 下一代跨平台图形 API
+- **窗口管理**: [SDL3](https://github.com/libsdl-org/SDL) - 跨平台多媒体库
+- **UI 框架**: [ImGui](https://github.com/ocornut/imgui) - 即时模式图形界面
+- **数学库**: [GLM](https://github.com/g-truc/glm) - OpenGL 数学库
+
+---
+
+## 开发文档
+
+📑 **[完整文档索引](./DOCUMENTATION_INDEX.md)** - 查看所有技术文档和快速查找指南
+
+### Flecs ECS 编程指南
+
+- **[Flecs 系统编写指南](./FLECS_SYSTEM_WRITING_GUIDE.md)** ⭐
+
+  - 标准系统编写模式（`.each()` vs `.run()`）
+  - 纯实体组件查询、混合查询、纯单例查询
+  - 实际案例分析（UI、Window、Render 模组）
+  - 常见陷阱和迁移指南
+
+- **[Flecs 单例查询深度解析](./FLECS_SINGLETON_QUERY_GUIDE.md)** 🔬
+  - 单例查询的底层实现机制
+  - `.term_at().src<>()` 的正确使用场景
+  - 源码级别的原理分析
+  - API 设计改进建议
+
+### 其他文档
+
+- **[SDL3App 使用示例](./SDL3App_usage_example.md)** - SDL3 应用程序基础用法
+- **[EnTT 到 Flecs 迁移总结](./ENTT_TO_FLECS_MIGRATION_SUMMARY.md)** - ECS 框架迁移记录
+- **[Flecs 迁移总结](./FLECS_MIGRATION_SUMMARY.md)** - 详细的迁移过程
+
+### 快速开始
+
+推荐阅读顺序：
+
+1. 先阅读 [Flecs 系统编写指南](./FLECS_SYSTEM_WRITING_GUIDE.md) 了解标准编写模式
+2. 遇到单例相关问题时，参考 [Flecs 单例查询深度解析](./FLECS_SINGLETON_QUERY_GUIDE.md)
+3. 查看 [SDL3App 使用示例](./SDL3App_usage_example.md) 了解窗口和事件处理
+
+---
+
+## 项目结构
+
+```
+VIVID/
+├── lib/                          # 核心引擎库
+│   ├── include/vivid/            # 公共头文件
+│   │   ├── app/                  # 应用程序基础框架
+│   │   ├── input/                # 输入系统
+│   │   ├── log/                  # 日志系统
+│   │   ├── physics/              # 物理系统
+│   │   ├── render/               # 渲染系统 (WebGPU)
+│   │   ├── ui/                   # UI 系统 (ImGui)
+│   │   └── window/               # 窗口系统 (SDL3)
+│   └── source/                   # 实现文件
+│
+├── standalone/                   # 独立可执行程序
+│   ├── source/editor/            # 编辑器代码
+│   └── res/                      # 资源文件（字体、着色器等）
+│
+├── xr/                           # OpenXR 支持（VR/AR）
+│
+├── test/                         # 单元测试
+│
+└── vendor/                       # 第三方依赖
+    ├── imgui-docking/            # ImGui (docking 分支)
+    ├── optick/                   # 性能分析工具
+    ├── PhysX/                    # 物理引擎
+    └── dawn/                     # WebGPU 实现
+```
+
+### 模块说明
+
+| 模块        | 功能         | 主要组件                                                                 |
+| ----------- | ------------ | ------------------------------------------------------------------------ |
+| **App**     | 应用程序框架 | `SDL3App`, `EventQueues`                                                 |
+| **Window**  | 窗口管理     | `WindowComponent`, `WindowGpuComponent`, `WindowSystems`                 |
+| **Render**  | WebGPU 渲染  | `WebGPUResources`, `MeshComponent`, `MaterialComponent`, `RenderSystems` |
+| **UI**      | ImGui 界面   | `UISystems`, ImGui 集成                                                  |
+| **Input**   | 输入处理     | 键盘、鼠标、手柄支持                                                     |
+| **Physics** | 物理模拟     | PhysX 集成                                                               |
+| **Log**     | 日志系统     | `VividLogger`                                                            |
+
+---
+
+## 构建和运行
+
+### 环境要求
+
+- **编译器**: MSVC 2022+ / GCC 11+ / Clang 14+
+- **CMake**: 3.21+
+- **C++ 标准**: C++20
+- **操作系统**: Windows / Linux / macOS
+
+### Windows (推荐使用 Visual Studio)
+
+```powershell
+# 配置项目
+cmake -B build/debug -S . --preset=debug
+
+# 构建
+cmake --build build/debug --config Debug
+
+# 运行编辑器
+.\build\debug\standalone\Debug\Standalone.exe
+
+# 运行测试
+.\build\debug\test\Debug\VIVIDTests.exe
+```
+
+### Linux / macOS
+
+```bash
+# 配置项目
+cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug
+
+# 构建
+cmake --build build/debug
+
+# 运行编辑器
+./build/debug/standalone/Standalone
+
+# 运行测试
+./build/debug/test/VIVIDTests
+```
+
+### 代码格式化
+
+项目使用 PowerShell 脚本进行代码格式化：
+
+```powershell
+# 检查代码格式
+.\scripts\check_code.ps1
+
+# 自动格式化代码
+.\scripts\format_code.ps1
+```
+
+---
+
+# ModernCppStarter (原始模板说明)
 
 Setting up a new C++ project usually requires a significant amount of preparation and boilerplate code, even more so for modern C++ projects with tests, executables and continuous integration.
 This template is the result of learnings from many previous projects and should help reduce the work required to setup up a modern C++ project.
@@ -44,7 +181,7 @@ This template is the result of learnings from many previous projects and should 
 Eventually, you can remove any unused files, such as the standalone directory or irrelevant github workflows for your project.
 Feel free to replace the License with one suited for your project.
 
-To cleanly separate the library and subproject code, the outer `CMakeList.txt` only defines the library itself while the tests and other subprojects are self-contained in their own directories. 
+To cleanly separate the library and subproject code, the outer `CMakeList.txt` only defines the library itself while the tests and other subprojects are self-contained in their own directories.
 During development it is usually convenient to [build all subprojects at once](#build-everything-at-once).
 
 ### Build and run the standalone target
@@ -66,7 +203,7 @@ cmake -S test -B build/test
 cmake --build build/test
 CTEST_OUTPUT_ON_FAILURE=1 cmake --build build/test --target test
 
-# or simply call the executable: 
+# or simply call the executable:
 ./build/test/GreeterTests
 ```
 
@@ -167,7 +304,7 @@ Use this as the main directory for best IDE support.
 > I see you are using `GLOB` to add source files in CMakeLists.txt. Isn't that evil?
 
 Glob is considered bad because any changes to the source file structure [might not be automatically caught](https://cmake.org/cmake/help/latest/command/file.html#filesystem) by CMake's builders and you will need to manually invoke CMake on changes.
-  I personally prefer the `GLOB` solution for its simplicity, but feel free to change it to explicitly listing sources.
+I personally prefer the `GLOB` solution for its simplicity, but feel free to change it to explicitly listing sources.
 
 > I want create additional targets that depend on my library. Should I modify the main CMakeLists to include them?
 
