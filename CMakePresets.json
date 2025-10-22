@@ -1,5 +1,5 @@
 {
-    "version": 8,
+    "version": 10,
     "configurePresets": [
         {
             "name": "VIVID",
@@ -41,6 +41,33 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "VE",
+            "displayName": "Emscripten WebAssembly",
+            "description": "Build for WebAssembly using Emscripten",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/emscripten",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "D:/ClineWorkSpace/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                },
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": {
+                    "value": "D:/ClineWorkSpace/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+                    "type": "FILEPATH"
+                },
+                "VCPKG_TARGET_TRIPLET": "wasm32-emscripten",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+                "VCPKG_FEATURE_FLAGS": "manifests",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "environment": {
+                "EMSDK": "D:/ClineWorkSpace/emsdk",
+                "EMSDK_NODE": "D:/ClineWorkSpace/emsdk/node/22.16.0_64bit/bin/node.exe",
+                "EMSDK_PYTHON": "D:/ClineWorkSpace/emsdk/python/3.13.3_64bit/python.exe"
+            }
         }
     ],
     "buildPresets": [
@@ -54,6 +81,12 @@
             "name": "VR",
             "displayName": "VIVID all Release",
             "configurePreset": "VR",
+            "configuration": "Release"
+        },
+        {
+            "name": "VE",
+            "displayName": "VIVID Emscripten",
+            "configurePreset": "VE",
             "configuration": "Release"
         }
     ]

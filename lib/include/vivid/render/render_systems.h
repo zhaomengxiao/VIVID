@@ -46,6 +46,32 @@ struct GpuMeshComponent {
   WGPURenderPipeline pipeline = nullptr;
 };
 
+// 渲染上下文 - 存储渲染过程中的共享数据
+struct RenderContext {
+  // 表面信息
+  uint32_t surfaceWidth = 0;
+  uint32_t surfaceHeight = 0;
+  WGPUTextureView targetView = nullptr;
+  WGPURenderPassEncoder renderPass = nullptr;
+  WGPUCommandEncoder encoder = nullptr;
+  WGPUSurfaceTexture surfaceTexture = {};
+
+  // 场景信息
+  glm::mat4 viewMatrix = glm::mat4(1.0f);
+  glm::mat4 projectionMatrix = glm::mat4(1.0f);
+  glm::vec3 viewPos = glm::vec3(0.0f);
+  glm::vec3 lightPos = glm::vec3(5.0f, 5.0f, 5.0f);
+  glm::vec3 lightColor = glm::vec3(1.0f);
+  glm::vec3 ambientColor = glm::vec3(0.2f);
+  float constant = 1.0f, linear = 0.09f, quadratic = 0.032f;
+
+  // 渲染状态
+  bool surfaceReady = false;
+  bool sceneReady = false;
+  bool meshesReady = false;
+  bool uiReady = false;
+};
+
 // Forward declarations
 struct ShutdownPhase {};  // Custom phase for cleanup systems
 
@@ -54,7 +80,18 @@ struct RenderSystems {
   RenderSystems(flecs::world& world);
 
 private:
-  // Actually used system implementations (registered in constructor)
+  // New modular system implementations
+  static void surfaceManagementImpl(flecs::entity e, VIVID::WINDOW::WindowGpuComponent& gpu_comp,
+                                    WebGPUResources& webgpuRes, RenderContext& renderCtx);
+  static void sceneCollectionImpl(flecs::entity e, RenderContext& renderCtx);
+  static void meshRenderImpl(flecs::entity e, GpuMeshComponent& gpuMesh,
+                             TransformComponent& transform, MaterialComponent& material,
+                             RenderContext& renderCtx);
+  static void uiRenderImpl(flecs::entity e, RenderContext& renderCtx);
+  static void commandSubmissionImpl(flecs::entity e, WebGPUResources& webgpuRes,
+                                    RenderContext& renderCtx);
+
+  // Legacy system implementations (kept for compatibility)
   static void initWebGPUImpl(flecs::entity e, VIVID::WINDOW::WindowGpuComponent& gpu_comp,
                              WebGPUResources& webgpuRes);
   static void syncSceneImpl(flecs::entity e, MeshComponent& mesh, MaterialComponent& material,
@@ -87,6 +124,7 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   VividLogger::app_info("Registering RenderSystems...");
   world.set<WebGPUResources>({});
+  world.set<RenderContext>({});
   world.component<GpuMeshComponent>();
 
   // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
@@ -105,7 +143,32 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .kind(flecs::PreUpdate)
       .each(syncSceneImpl);
 
-  // Drawing - runs every frame
+  // world
+  //     .system<VIVID::WINDOW::WindowGpuComponent, WebGPUResources, RenderContext>(
+  //         "SurfaceManagement")
+  //     .term_at(1)
+  //     .src<WebGPUResources>()
+  //     .term_at(2)
+  //     .src<RenderContext>()
+  //     .kind(flecs::OnUpdate)
+  //     .each(surfaceManagementImpl);
+
+  // world.system<RenderContext>("SceneCollection").kind(flecs::OnUpdate).each(sceneCollectionImpl);
+
+  // world.system<GpuMeshComponent, TransformComponent, MaterialComponent,
+  // RenderContext>("MeshRender")
+  //     .term_at(3)
+  //     .src<RenderContext>()
+  //     .kind(flecs::OnUpdate)
+  //     .each(meshRenderImpl);
+
+  // world.system<RenderContext>("UIRender").kind(flecs::OnUpdate).each(uiRenderImpl);
+
+  // world.system<WebGPUResources, RenderContext>("CommandSubmission")
+  //     .kind(flecs::OnUpdate)
+  //     .each(commandSubmissionImpl);
+
+  // Drawing - runs every frame (temporarily disabled during refactoring)
   world.system("Draw").kind(flecs::OnUpdate).run(drawImpl);
 
   // Cleanup - runs once at shutdown

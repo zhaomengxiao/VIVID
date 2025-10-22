@@ -97,6 +97,56 @@ Check C++ code quality using clang-tidy (naming rules, potential bugs, performan
 
 ---
 
+### build_emscripten.ps1 / build_emscripten.bat
+
+Build the project for WebAssembly using Emscripten. These scripts automatically activate the Emscripten environment before building.
+
+**Usage (PowerShell):**
+
+```powershell
+# Full build (configure and build)
+.\scripts\build_emscripten.ps1
+
+# Clean build (remove old build directory first)
+.\scripts\build_emscripten.ps1 -Clean
+
+# Only configure (don't build)
+.\scripts\build_emscripten.ps1 -ConfigureOnly
+
+# Only build (assume already configured)
+.\scripts\build_emscripten.ps1 -BuildOnly
+```
+
+**Usage (CMD):**
+
+```cmd
+REM Full build
+.\scripts\build_emscripten.bat
+
+REM Clean build
+.\scripts\build_emscripten.bat -clean
+```
+
+**Requirements:**
+
+- Emscripten SDK installed at `D:\ClineWorkSpace\emsdk\emsdk`
+- Ninja build tool installed and in PATH
+- vcpkg installed at `D:\ClineWorkSpace\vcpkg`
+- Update the `EMSDK_PATH` variable in the script if your installation is elsewhere
+
+**Running the WebAssembly Output:**
+
+After a successful build, start a local web server:
+
+```powershell
+cd build\emscripten
+python -m http.server 8000
+```
+
+Then open http://localhost:8000/hello_sdl3/index.html in your browser.
+
+---
+
 ## Recommended Workflow
 
 ### Before Committing Code
