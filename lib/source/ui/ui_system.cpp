@@ -178,6 +178,23 @@ void UISystems::showImGuiDemoImpl(flecs::iter& it) {
   // Do not call ImGui::Render() here; it will be invoked in Render::Draw
 }
 
+// Render ImGui draw data inside active render pass
+void UISystems::renderImGuiImpl(flecs::entity e, RENDER::WebGPUResources& webgpuRes) {
+  // IMPORTANT: This function is responsible for closing the ImGui frame,
+  // either by calling ImGui::Render() (which calls EndFrame internally)
+  // or by explicitly calling ImGui::EndFrame() if rendering is skipped.
+
+  // If we built a frame but cannot render this tick, close the frame manually
+  if (webgpuRes.renderPass == nullptr) {
+    ImGui::EndFrame();
+    return;
+  }
+
+  // Normal rendering: Render() will call EndFrame() internally
+  ImGui::Render();
+  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpuRes.renderPass);
+}
+
 // Shutdown ImGui system
 void UISystems::shutDownImGuiImpl(flecs::iter& it) {
   std::cout << "Shutting down ImGui..." << std::endl;

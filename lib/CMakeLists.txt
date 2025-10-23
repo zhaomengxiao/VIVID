@@ -263,7 +263,6 @@ endif() # end NOT EMSCRIPTEN
 set(headers
   # App headers
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/app/App.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/app/Schedule.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/app/SDL3App.h
 
   # Render headers
