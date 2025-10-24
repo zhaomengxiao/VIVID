@@ -127,12 +127,7 @@ struct BPUniforms {
 // Helper Functions
 // ============================================================================
 
-static void reconfigureSurface(flecs::world world, uint32_t width, uint32_t height) {
-  if (!world.has<WebGPUResources>()) {
-    VividLogger::render_error("No WebGPUResources in world");
-    return;
-  }
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
+static void reconfigureSurface(WebGPUContext& webgpuRes, uint32_t width, uint32_t height) {
   if (!webgpuRes.surface || !webgpuRes.device) {
     VividLogger::render_error("Surface or device is null");
     return;
@@ -269,7 +264,7 @@ void RenderSystems::createWebGPUInstanceImpl(flecs::iter& it) {
     return;
   }
 
-  auto& webgpu_res = world.ensure<WebGPUResources>();
+  auto& webgpu_res = world.ensure<WebGPUContext>();
   webgpu_res.instance = instance;
 
   // Display the object (WGPUInstance is a simple pointer, it may be
@@ -279,16 +274,16 @@ void RenderSystems::createWebGPUInstanceImpl(flecs::iter& it) {
 
 void RenderSystems::requestWebGPUAdapterSyncImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Requesting WebGPU adapter...");
+  VividLogger::app_info("Requesting WebGPU adapter...");
 
   WGPURequestAdapterOptions adapterOpts = {};
   adapterOpts.nextInChain = nullptr;
 
-  if (!world.has<WebGPUResources>()) {
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
 
   // A simple structure holding the local information shared with the
   // onAdapterRequestEnded callback.
@@ -344,22 +339,22 @@ void RenderSystems::requestWebGPUAdapterSyncImpl(flecs::iter& it) {
 
   VIVID_ASSERT(userData.requestEnded);
 
-  auto& webgpuRes_mut = world.get_mut<WebGPUResources>();
+  auto& webgpuRes_mut = world.get_mut<WebGPUContext>();
   webgpuRes_mut.adapter = userData.adapter;
   webgpuRes_mut.adapterRequestEnded = userData.requestEnded;
 
-  VividLogger::app_debug("Got WebGPU adapter");
+  VividLogger::app_info("Got WebGPU adapter");
 }
 
 void RenderSystems::inspectWebGPUAdapterImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Inspecting WebGPU adapter...");
+  VividLogger::app_info("Inspecting WebGPU adapter...");
 
-  if (!world.has<WebGPUResources>()) {
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
-  auto& webgpuRes = world.get<WebGPUResources>();
+  auto& webgpuRes = world.get<WebGPUContext>();
 
 #ifndef __EMSCRIPTEN__
   WGPULimits supportedLimits = {};
@@ -417,7 +412,7 @@ void RenderSystems::inspectWebGPUAdapterImpl(flecs::iter& it) {
 
 void RenderSystems::requestWebGPUDeviceSyncImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Requesting WebGPU device...");
+  VividLogger::app_info("Requesting WebGPU device...");
   WGPUDeviceDescriptor deviceDesc = {};
   deviceDesc.nextInChain = nullptr;
   // Any name works here, that's your call
@@ -448,11 +443,11 @@ void RenderSystems::requestWebGPUDeviceSyncImpl(flecs::iter& it) {
 
   deviceDesc.uncapturedErrorCallbackInfo.callback = onDeviceError;
 
-  if (!world.has<WebGPUResources>()) {
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
 
   struct UserData {
     WGPUDevice device = nullptr;
@@ -492,24 +487,24 @@ void RenderSystems::requestWebGPUDeviceSyncImpl(flecs::iter& it) {
 
   VIVID_ASSERT(userData.requestEnded);
 
-  auto& webgpuRes_mut = world.get_mut<WebGPUResources>();
+  auto& webgpuRes_mut = world.get_mut<WebGPUContext>();
   webgpuRes_mut.device = userData.device;
   webgpuRes_mut.deviceRequestEnded = userData.requestEnded;
   // Set default queue for later write/submit operations
   webgpuRes_mut.queue = wgpuDeviceGetQueue(webgpuRes_mut.device);
 
-  VividLogger::app_debug("Got WebGPU device");
+  VividLogger::app_info("Got WebGPU device");
 }
 
 void RenderSystems::inspectWebGPUDeviceImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Inspecting WebGPU device...");
+  VividLogger::app_info("Inspecting WebGPU device...");
 
-  if (!world.has<WebGPUResources>()) {
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
-  auto& webgpuRes = world.get<WebGPUResources>();
+  auto& webgpuRes = world.get<WebGPUContext>();
 
   WGPUSupportedFeatures features = {};
   wgpuDeviceGetFeatures(webgpuRes.device, &features);
@@ -588,12 +583,12 @@ void RenderSystems::inspectWebGPUDeviceImpl(flecs::iter& it) {
 
 void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Testing WebGPU command queue...");
-  if (!world.has<WebGPUResources>()) {
+  VividLogger::app_info("Testing WebGPU command queue...");
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
   // Get the queue
   WGPUQueue queue = wgpuDeviceGetQueue(webgpuRes.device);
   webgpuRes.queue = queue;
@@ -713,7 +708,7 @@ void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
 
   VividLogger::app_info("All queued instructions have been executed!");
 
-  VividLogger::app_debug("WebGPU command queue tested");
+  VividLogger::app_info("WebGPU command queue tested");
 }
 
 // ============================================================================
@@ -721,7 +716,7 @@ void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
 // ============================================================================
 
 void RenderSystems::syncSceneImpl(flecs::entity entity, MeshComponent& mesh,
-                                  MaterialComponent& material, WebGPUResources& webgpuRes) {
+                                  MaterialComponent& material, WebGPUContext& webgpuRes) {
   // Process entities that have the CPU-side data (Mesh, Material)
   // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
   // (filtered by .without<GpuMeshComponent>() in system registration)
@@ -948,21 +943,25 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
 void RenderSystems::renderMeshImpl(flecs::iter& it) {
   auto world = it.world();
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
-  if (!world.has<WebGPUResources>()) {
+
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
+
+  if (!world.has<VIVID::WINDOW::WindowContext>()) {
+    VividLogger::app_error("Could not get Window context!");
+    return;
+  }
+
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
+  auto& windowContext = world.get<VIVID::WINDOW::WindowContext>();
   // Check current window pixel size and reconfigure if changed or zero
   int pixel_width = 0;
   int pixel_height = 0;
-  {
-    auto query = world.query<VIVID::WINDOW::WindowGpuComponent>();
-    query.each([&](flecs::entity entity, VIVID::WINDOW::WindowGpuComponent& gpu_comp) {
-      if (gpu_comp.window_handle) {
-        SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
-      }
-    });
+
+  if (windowContext.window_handle) {
+    SDL_GetWindowSizeInPixels(windowContext.window_handle, &pixel_width, &pixel_height);
   }
 
   if (pixel_width <= 0 || pixel_height <= 0) {
@@ -971,9 +970,10 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
     return;
   }
 
+  // TODO: refactor this
   if (webgpuRes.configuredWidth != static_cast<uint32_t>(pixel_width)
       || webgpuRes.configuredHeight != static_cast<uint32_t>(pixel_height)) {
-    reconfigureSurface(world, static_cast<uint32_t>(pixel_width),
+    reconfigureSurface(webgpuRes, static_cast<uint32_t>(pixel_width),
                        static_cast<uint32_t>(pixel_height));
     // Skip this frame after reconfiguration
     webgpuRes.renderPass
@@ -994,7 +994,7 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
     if (webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated
         || webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Lost) {
       // Reconfigure on outdated/lost
-      reconfigureSurface(world, static_cast<uint32_t>(pixel_width),
+      reconfigureSurface(webgpuRes, static_cast<uint32_t>(pixel_width),
                          static_cast<uint32_t>(pixel_height));
     }
     // Skip this frame for any non-success status
@@ -1080,24 +1080,24 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
       const auto& controller = mainCameraEntity.get<CameraControllerComponent>();
       glm::vec3 target = mainCameraTransform.Position + controller.Front;
       viewMatrix = glm::lookAt(mainCameraTransform.Position, target, controller.Up);
-      // VividLogger::app_debug("Camera controller component found, using view matrix");
+      // VividLogger::app_info("Camera controller component found, using view matrix");
     } else {
       viewMatrix
           = glm::lookAt(mainCameraTransform.Position,
                         mainCameraTransform.Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-      // VividLogger::app_debug("No camera controller component found, using default view matrix");
+      // VividLogger::app_info("No camera controller component found, using default view matrix");
     }
-    // VividLogger::app_debug("Using view matrix");
+    // VividLogger::app_info("Using view matrix");
     projectionMatrix = mainCameraComponent.ProjectionMatrix;
     if (projectionMatrix == glm::mat4(1.0f) && webgpuRes.configuredHeight > 0) {
       float aspect = static_cast<float>(webgpuRes.configuredWidth)
                      / static_cast<float>(webgpuRes.configuredHeight);
       projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
     } else {
-      // VividLogger::app_debug("Using default projection matrix");
+      // VividLogger::app_info("Using default projection matrix");
     }
   } else {
-    VividLogger::app_debug("No camera found");
+    VividLogger::app_info("No camera found");
   }
 
   // Query first light
@@ -1174,8 +1174,8 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
 
 void RenderSystems::submitImpl(flecs::iter& it) {
   auto world = it.world();
-  auto& webgpuRes = world.get<WebGPUResources>();
-  if (!world.has<WebGPUResources>()) {
+  auto& webgpuRes = world.get<WebGPUContext>();
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
@@ -1224,279 +1224,11 @@ void RenderSystems::submitImpl(flecs::iter& it) {
 #endif
 }
 
-void RenderSystems::drawImpl(flecs::iter& it) {
-  auto world = it.world();
-  auto& webgpuRes = world.get<WebGPUResources>();
-  if (!world.has<WebGPUResources>()) {
-    VividLogger::app_error("Could not get WebGPU resources!");
-    return;
-  }
-  // Check current window pixel size and reconfigure if changed or zero
-  int pixel_width = 0;
-  int pixel_height = 0;
-  {
-    auto query = world.query<VIVID::WINDOW::WindowGpuComponent>();
-    query.each([&](flecs::entity entity, VIVID::WINDOW::WindowGpuComponent& gpu_comp) {
-      if (gpu_comp.window_handle) {
-        SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
-      }
-    });
-  }
-
-  if (pixel_width <= 0 || pixel_height <= 0) {
-    // Minimized or not ready; skip this frame
-    // Note: drawImpl() is self-contained and includes ImGui rendering.
-    // ImGui::EndFrame() will be called by UI system's renderImGuiImpl() instead.
-    return;
-  }
-
-  if (webgpuRes.configuredWidth != static_cast<uint32_t>(pixel_width)
-      || webgpuRes.configuredHeight != static_cast<uint32_t>(pixel_height)) {
-    reconfigureSurface(world, static_cast<uint32_t>(pixel_width),
-                       static_cast<uint32_t>(pixel_height));
-    // Skip this frame after reconfiguration
-    return;
-  }
-
-  // [...] Get the next target texture view
-  WGPUSurfaceTexture surfaceTexture;
-  wgpuSurfaceGetCurrentTexture(webgpuRes.surface, &surfaceTexture);
-  if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal
-      && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
-#if defined(WGPUSurfaceGetCurrentTextureStatus_Success)
-      && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success
-#endif
-  ) {
-    if (surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated
-        || surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Lost) {
-      // Reconfigure on outdated/lost
-      reconfigureSurface(world, static_cast<uint32_t>(pixel_width),
-                         static_cast<uint32_t>(pixel_height));
-    }
-    // Skip this frame for any non-success status
-    return;
-  }
-
-  WGPUTextureViewDescriptor viewDescriptor = {};
-  viewDescriptor.nextInChain = nullptr;
-  viewDescriptor.label = toWgpuStringView("Surface texture view");
-  viewDescriptor.format = wgpuTextureGetFormat(surfaceTexture.texture);
-  viewDescriptor.dimension = WGPUTextureViewDimension_2D;
-  viewDescriptor.baseMipLevel = 0;
-  viewDescriptor.mipLevelCount = 1;
-  viewDescriptor.baseArrayLayer = 0;
-  viewDescriptor.arrayLayerCount = 1;
-  viewDescriptor.aspect = WGPUTextureAspect_All;
-  // View usage must be compatible with the surface texture's usage (RENDER_ATTACHMENT)
-  viewDescriptor.usage = WGPUTextureUsage_RenderAttachment;
-  WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
-
-  // [...] Draw things
-  // [...] Create Command Encoder
-  WGPUCommandEncoderDescriptor encoderDesc = {};
-  encoderDesc.nextInChain = nullptr;
-  encoderDesc.label = toWgpuStringView("begin render pass encoder");
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(webgpuRes.device, &encoderDesc);
-
-  // [...] Encode Render Pass
-  // Describe the attachment
-  WGPURenderPassColorAttachment renderPassColorAttachment = {};
-  renderPassColorAttachment.view = targetView;
-  renderPassColorAttachment.resolveTarget = nullptr;
-  renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-  renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-  renderPassColorAttachment.clearValue = WGPUColor{0.9, 0.1, 0.2, 1.0};
-  renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-
-  // Describe the render pass
-  WGPURenderPassDescriptor renderPassDesc = {};
-  renderPassDesc.nextInChain = nullptr;
-  renderPassDesc.colorAttachmentCount = 1;
-  renderPassDesc.colorAttachments = &renderPassColorAttachment;
-  WGPURenderPassDepthStencilAttachment depthAttach = {};
-  depthAttach.view = webgpuRes.depthView;
-  depthAttach.depthClearValue = 1.0f;
-  depthAttach.depthLoadOp = WGPULoadOp_Clear;
-  depthAttach.depthStoreOp = WGPUStoreOp_Store;
-  depthAttach.depthReadOnly = false;
-  depthAttach.stencilReadOnly = true;
-  renderPassDesc.depthStencilAttachment = &depthAttach;
-  renderPassDesc.timestampWrites
-      = nullptr;  // When measuring the performance of a render pass, it is not possible to use
-                  // CPU-side timing functions, since the commands are not executed synchronously.
-                  // Instead, the render pass can receive a set of timestamp queries.
-
-  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-
-  // Use Render Pass
-  // Build camera matrices and positions
-  glm::mat4 viewMatrix(1.0f);
-  glm::mat4 projectionMatrix(1.0f);
-  glm::vec3 viewPos(0.0f);
-
-  // Find the first camera entity
-  flecs::entity mainCameraEntity;
-  {
-    auto cameraQuery = world.query<TransformComponent, CameraComponent>();
-    cameraQuery.each(
-        [&](flecs::entity entity, TransformComponent& transform, CameraComponent& camera) {
-          if (!mainCameraEntity.is_valid()) {
-            mainCameraEntity = entity;
-          }
-        });
-  }
-
-  if (mainCameraEntity.is_valid()) {
-    const auto& mainCameraTransform = mainCameraEntity.get<TransformComponent>();
-    const auto& mainCameraComponent = mainCameraEntity.get<CameraComponent>();
-
-    viewPos = mainCameraTransform.Position;
-    if (mainCameraEntity.has<CameraControllerComponent>()) {
-      const auto& controller = mainCameraEntity.get<CameraControllerComponent>();
-      glm::vec3 target = mainCameraTransform.Position + controller.Front;
-      viewMatrix = glm::lookAt(mainCameraTransform.Position, target, controller.Up);
-      // VividLogger::app_debug("Camera controller component found, using view matrix");
-    } else {
-      viewMatrix
-          = glm::lookAt(mainCameraTransform.Position,
-                        mainCameraTransform.Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-      // VividLogger::app_debug("No camera controller component found, using default view matrix");
-    }
-    // VividLogger::app_debug("Using view matrix");
-    projectionMatrix = mainCameraComponent.ProjectionMatrix;
-    if (projectionMatrix == glm::mat4(1.0f) && webgpuRes.configuredHeight > 0) {
-      float aspect = static_cast<float>(webgpuRes.configuredWidth)
-                     / static_cast<float>(webgpuRes.configuredHeight);
-      projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-    } else {
-      // VividLogger::app_debug("Using default projection matrix");
-    }
-  } else {
-    VividLogger::app_debug("No camera found");
-  }
-
-  // Query first light
-  glm::vec3 lightPos(5.0f, 5.0f, 5.0f);
-  glm::vec3 lightColor(1.0f);
-  glm::vec3 ambientColor(0.2f);
-  float constant = 1.0f, linear = 0.09f, quadratic = 0.032f;
-
-  flecs::entity lightEntity;
-  {
-    auto lightQuery = world.query<TransformComponent, LightComponent>();
-    lightQuery.each([&](flecs::entity entity, TransformComponent& lightTransform,
-                        LightComponent& lightComponent) {
-      if (!lightEntity.is_valid()) {
-        lightEntity = entity;
-      }
-    });
-  }
-
-  if (lightEntity.is_valid()) {
-    const auto& lightTransform = lightEntity.get<TransformComponent>();
-    const auto& lightComponent = lightEntity.get<LightComponent>();
-
-    lightPos = lightTransform.Position;
-    lightColor = lightComponent.LightColor;
-    ambientColor = lightComponent.AmbientColor;
-    constant = lightComponent.Constant;
-    linear = lightComponent.Linear;
-    quadratic = lightComponent.Quadratic;
-  }
-
-  // Iterate over all GPU meshes and draw
-  auto drawQuery = world.query<GpuMeshComponent, TransformComponent, MaterialComponent>();
-  drawQuery.each([&](flecs::entity entity, const GpuMeshComponent& gpu,
-                     const TransformComponent& transform, const MaterialComponent& material) {
-    if (gpu.pipeline == nullptr || gpu.vertexBuffer == nullptr || gpu.indexBuffer == nullptr
-        || gpu.indexCount == 0) {
-      return;
-    }
-
-    // Prepare per-entity uniforms
-    BPUniforms uniforms = {};
-    const glm::mat4 model = transform.GetTransform();
-    const glm::mat4 normalMat = glm::transpose(glm::inverse(model));
-    uniforms.model = model;
-    uniforms.view = viewMatrix;
-    uniforms.projection = projectionMatrix;
-    uniforms.normalMatrix = normalMat;
-    uniforms.viewPos = {viewPos.x, viewPos.y, viewPos.z, 0.0f};
-    uniforms.lightPos = {lightPos.x, lightPos.y, lightPos.z, 0.0f};
-    uniforms.objectColor
-        = {material.ObjectColor.r, material.ObjectColor.g, material.ObjectColor.b, 0.0f};
-    uniforms.lightColor = {lightColor.r, lightColor.g, lightColor.b, 0.0f};
-    uniforms.ambientColor = {ambientColor.r, ambientColor.g, ambientColor.b, 0.0f};
-    uniforms.specularColor
-        = {material.SpecularColor.r, material.SpecularColor.g, material.SpecularColor.b, 0.0f};
-    uniforms.params = {constant, linear, quadratic, material.Shininess};
-
-    // Update per-entity uniform buffer content
-    if (gpu.uniformBuffer != nullptr) {
-      wgpuQueueWriteBuffer(webgpuRes.queue, gpu.uniformBuffer, 0, &uniforms, sizeof(uniforms));
-    }
-
-    // Bind pipeline and buffers, then draw
-    wgpuRenderPassEncoderSetPipeline(renderPass, gpu.pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, gpu.vertexBuffer, 0, WGPU_WHOLE_SIZE);
-    wgpuRenderPassEncoderSetIndexBuffer(renderPass, gpu.indexBuffer, WGPUIndexFormat_Uint32, 0,
-                                        WGPU_WHOLE_SIZE);
-    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, gpu.bindGroup, 0, nullptr);
-    wgpuRenderPassEncoderDrawIndexed(renderPass, gpu.indexCount, 1, 0, 0, 0);
-  });
-
-  // ================================ Render UI ================================
-
-  // Render ImGui draw data within the same render pass (UI built earlier in Update stage)
-  ImGui::Render();
-  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
-
-  // ================================ Submit ================================
-
-  wgpuRenderPassEncoderEnd(renderPass);
-  wgpuRenderPassEncoderRelease(renderPass);
-
-  // [...] Finish encoding and submit
-  WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-  cmdBufferDescriptor.nextInChain = nullptr;
-  cmdBufferDescriptor.label = toWgpuStringView("Command buffer");
-  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-  wgpuCommandEncoderRelease(encoder);  // release encoder after it's finished
-
-  // Finally submit the command queue
-  // std::cout << "Submitting command..." << std::endl;
-  wgpuQueueSubmit(webgpuRes.queue, 1, &command);
-  wgpuCommandBufferRelease(command);
-  // std::cout << "Command submitted." << std::endl;
-
-  // [...] Present the surface onto the window
-  wgpuTextureViewRelease(targetView);
-#ifndef WEBGPU_BACKEND_WGPU
-  // We no longer need the texture, only its view
-  // (NB: with wgpu-native, surface textures must be release after the call to wgpuSurfacePresent)
-  wgpuTextureRelease(surfaceTexture.texture);
-#endif  // WEBGPU_BACKEND_WGPU
-
-  // In the context of a Web browser, we do not present the surface texture ourselves. We rather
-  // rely on emscripten_set_main_loop_arg (a.k.a. requestAnimationFrame in JavaScript) to call our
-  // MainLoop() function right before presenting.
-#ifndef __EMSCRIPTEN__
-  wgpuSurfacePresent(webgpuRes.surface);
-#  if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-  wgpuDeviceTick(webgpuRes.device);
-#  endif
-#endif
-
-#ifdef WEBGPU_BACKEND_WGPU
-  wgpuTextureRelease(surfaceTexture.texture);
-#endif
-}
-
 void RenderSystems::createPipelineImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Creating WebGPU pipeline...");
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
-  if (!world.has<WebGPUResources>()) {
+  VividLogger::app_info("Creating WebGPU pipeline...");
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
+  if (!world.has<WebGPUContext>()) {
     VividLogger::app_error("Could not get WebGPU resources!");
     return;
   }
@@ -1585,7 +1317,7 @@ void RenderSystems::createPipelineImpl(flecs::iter& it) {
 
 void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
   auto world = it.world();
-  VividLogger::app_debug("Releasing WebGPU instance...");
+  VividLogger::app_info("Releasing WebGPU instance...");
 
   // Release all per-entity GPU resources first
   {
@@ -1624,8 +1356,8 @@ void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
     });
   }
 
-  auto& webgpuRes = world.get_mut<WebGPUResources>();
-  if (world.has<WebGPUResources>()) {
+  auto& webgpuRes = world.get_mut<WebGPUContext>();
+  if (world.has<WebGPUContext>()) {
     if (webgpuRes.depthView) {
       wgpuTextureViewRelease(webgpuRes.depthView);
       webgpuRes.depthView = nullptr;
@@ -1641,7 +1373,7 @@ void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
     wgpuDeviceRelease(webgpuRes.device);
     wgpuInstanceProcessEvents(webgpuRes.instance);
     wgpuInstanceRelease(webgpuRes.instance);
-    VividLogger::app_debug("WGPU instance, adapter, and device released");
+    VividLogger::app_info("WGPU instance, adapter, and device released");
     webgpuRes.queue = nullptr;
     webgpuRes.surface = nullptr;
     webgpuRes.pipeline = nullptr;
@@ -1653,15 +1385,20 @@ void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
   }
 }
 
-void RenderSystems::initWebGPUImpl(flecs::entity entity,
-                                   VIVID::WINDOW::WindowGpuComponent& gpu_comp,
-                                   WebGPUResources& webgpuRes) {
+void RenderSystems::initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowContext,
+                                   WebGPUContext& webgpuRes) {
+  VividLogger::app_info("=== InitWebGPU system called ===");
+  // VividLogger::app_info("Entity: %s (ID: %llu)", entity.name(), entity.id());
+  VividLogger::app_info("Window handle: %p", windowContext.window_handle);
+  VividLogger::app_info("WebGPU initialized flag: %d", webgpuRes.initialized);
+
   // Check if already initialized (due to .each(), this may run on multiple window entities)
   if (webgpuRes.initialized) {
+    VividLogger::app_warn("WebGPU already initialized, skipping...");
     return;  // Already initialized, skip
   }
 
-  VividLogger::app_debug("Initializing WebGPU...");
+  VividLogger::app_info("Initializing WebGPU...");
 
   WGPUTextureFormat preferred_fmt
       = WGPUTextureFormat_Undefined;  // acquired from SurfaceCapabilities
@@ -1715,14 +1452,16 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
   int pixel_width = 0;
   int pixel_height = 0;
 
-  if (gpu_comp.window_handle) {
+  if (windowContext.window_handle) {
 #ifndef __EMSCRIPTEN__
     webgpuRes.surface
-        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, gpu_comp.window_handle);
+        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, windowContext.window_handle);
 #endif
-    SDL_GetWindowSizeInPixels(gpu_comp.window_handle, &pixel_width, &pixel_height);
-    VividLogger::app_debug("Using window: entity=%llu, handle=%p, size=%dx%d", entity.id(),
-                           gpu_comp.window_handle, pixel_width, pixel_height);
+
+    // TODO: move this to the window systems
+    SDL_GetWindowSizeInPixels(windowContext.window_handle, &pixel_width, &pixel_height);
+    // VividLogger::app_info("Using window: entity=%llu, handle=%p, size=%dx%d", entity.id(),
+    //                       windowContext.window_handle, pixel_width, pixel_height);
   }
 
   // Guard against zero-sized surfaces (e.g., minimized window); fall back to a small valid size
@@ -1772,7 +1511,8 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
     VividLogger::app_error("Failed to acquire WebGPU device queue");
     return;
   }
-  reconfigureSurface(entity.world(), pixel_width, pixel_height);
+  // reconfigureSurface(entity.world(), pixel_width, pixel_height);
+  reconfigureSurface(webgpuRes, pixel_width, pixel_height);
 
   // Mark as initialized to prevent re-initialization
   webgpuRes.initialized = true;
@@ -1789,7 +1529,7 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
 
 // void RenderSystems::surfaceManagementImpl(flecs::entity e,
 //                                           VIVID::WINDOW::WindowGpuComponent& gpu_comp,
-//                                           WebGPUResources& webgpuRes, RenderContext& renderCtx) {
+//                                           WebGPUContext& webgpuRes, RenderContext& renderCtx) {
 //   // Check current window pixel size and reconfigure if changed or zero
 //   int pixel_width = 0;
 //   int pixel_height = 0;
@@ -1933,7 +1673,7 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
 //   if (!renderCtx.renderPass) {
 //     // Create command encoder and render pass if not exists
 //     auto world = e.world();
-//     auto& webgpuRes = world.get<WebGPUResources>();
+//     auto& webgpuRes = world.get<WebGPUContext>();
 
 //     WGPUCommandEncoderDescriptor encoderDesc = {};
 //     encoderDesc.nextInChain = nullptr;
@@ -1987,7 +1727,7 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
 
 //   // Update per-entity uniform buffer content
 //   auto world = e.world();
-//   auto& webgpuRes = world.get<WebGPUResources>();
+//   auto& webgpuRes = world.get<WebGPUContext>();
 //   if (gpuMesh.uniformBuffer != nullptr) {
 //     wgpuQueueWriteBuffer(webgpuRes.queue, gpuMesh.uniformBuffer, 0, &uniforms, sizeof(uniforms));
 //   }
@@ -2017,7 +1757,7 @@ void RenderSystems::initWebGPUImpl(flecs::entity entity,
 //   renderCtx.uiReady = true;
 // }
 
-// void RenderSystems::commandSubmissionImpl(flecs::entity e, WebGPUResources& webgpuRes,
+// void RenderSystems::commandSubmissionImpl(flecs::entity e, WebGPUContext& webgpuRes,
 //                                           RenderContext& renderCtx) {
 //   if (!renderCtx.surfaceReady || !renderCtx.sceneReady || !renderCtx.meshesReady
 //       || !renderCtx.uiReady) {

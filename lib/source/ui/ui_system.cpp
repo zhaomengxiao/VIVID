@@ -28,9 +28,13 @@ namespace UI {
 // Static member function implementations
 
 // Initialize ImGui system
-void UISystems::initImGuiImpl(flecs::entity e, WINDOW::WindowGpuComponent& gpu_comp,
-                              RENDER::WebGPUResources& webgpuRes) {
-  auto world = e.world();
+void UISystems::initImGuiImpl(WINDOW::WindowContext& windowContext,
+                              RENDER::WebGPUContext& webgpuRes) {
+  VividLogger::app_info("=== InitImGui system called ===");
+  // VividLogger::app_info("Entity: %s", e.name());
+  VividLogger::app_info("Window handle: %p", windowContext.window_handle);
+  VividLogger::app_info("WebGPU device: %p", webgpuRes.device);
+  VividLogger::app_info("ImGui context: %p", ImGui::GetCurrentContext());
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
   if (ImGui::GetCurrentContext() != nullptr) {
@@ -38,7 +42,7 @@ void UISystems::initImGuiImpl(flecs::entity e, WINDOW::WindowGpuComponent& gpu_c
     return;  // Already initialized, skip
   }
 
-  VividLogger::app_debug("Initializing ImGui...");
+  VividLogger::app_info("Initializing ImGui...");
 
   // Check if WebGPU is initialized
   if (webgpuRes.device == nullptr) {
@@ -73,16 +77,16 @@ void UISystems::initImGuiImpl(flecs::entity e, WINDOW::WindowGpuComponent& gpu_c
 
   // TODO: 这里都能移到resource中
 
-  VividLogger::app_debug("Initializing ImGui backends for window handle: %p",
-                         gpu_comp.window_handle);
-  ImGui_ImplSDL3_InitForOther(gpu_comp.window_handle);
+  VividLogger::app_info("Initializing ImGui backends for window handle: %p",
+                        windowContext.window_handle);
+  ImGui_ImplSDL3_InitForOther(windowContext.window_handle);
   ImGui_ImplWGPU_InitInfo init_info;
   init_info.Device = webgpuRes.device;
   init_info.NumFramesInFlight = 3;
   init_info.RenderTargetFormat = webgpuRes.surfaceFormat;
   init_info.DepthStencilFormat = webgpuRes.depthFormat;
   ImGui_ImplWGPU_Init(&init_info);
-  VividLogger::app_debug("ImGui initialized successfully");
+  VividLogger::app_info("ImGui initialized successfully");
 
   // Load Fonts
   // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
@@ -179,7 +183,7 @@ void UISystems::showImGuiDemoImpl(flecs::iter& it) {
 }
 
 // Render ImGui draw data inside active render pass
-void UISystems::renderImGuiImpl(flecs::entity e, RENDER::WebGPUResources& webgpuRes) {
+void UISystems::renderImGuiImpl(flecs::entity e, RENDER::WebGPUContext& webgpuRes) {
   // IMPORTANT: This function is responsible for closing the ImGui frame,
   // either by calling ImGui::Render() (which calls EndFrame internally)
   // or by explicitly calling ImGui::EndFrame() if rendering is skipped.

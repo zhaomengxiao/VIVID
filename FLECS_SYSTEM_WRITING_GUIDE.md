@@ -4,16 +4,68 @@
 
 ## 目录
 
+- [单例查询快速参考](#单例查询快速参考-重要) ⭐ **新手必读**
 - [核心原则](#核心原则)
 - [系统编写模式](#系统编写模式)
   - [1. 纯实体组件查询](#1-纯实体组件查询)
   - [2. 混合查询（实体组件 + 单例）](#2-混合查询实体组件--单例)
   - [3. 纯单例查询](#3-纯单例查询)
+    - [3.1 单个单例](#31-单个单例)
+    - [3.2 多个单例](#32-多个单例--重要)
   - [4. 多查询系统](#4-多查询系统)
 - [何时使用 .each() vs .run()](#何时使用-each-vs-run)
 - [实际案例](#实际案例)
 - [常见陷阱](#常见陷阱)
 - [迁移指南](#迁移指南)
+
+---
+
+## 单例查询快速参考 ⭐ 重要
+
+### 单例数量决定写法
+
+| 单例数量  | `.term_at().src<>()` | `entity` 参数 | 说明                     |
+| --------- | -------------------- | ------------- | ------------------------ |
+| **1 个**  | ❌ 不使用            | ✅ 可选       | 让 Flecs 自动识别        |
+| **2+ 个** | ✅ 必须全部声明      | ❌ 不能有     | 显式声明且无 entity 参数 |
+
+### 完整示例对比
+
+```cpp
+// ============================================================================
+// 场景 1：单个单例 (EventQueues)
+// ============================================================================
+world.system<EventQueues>("ProcessEvent")
+    // ❌ 不要用 .term_at(0).src<EventQueues>()
+    .each(processImpl);
+
+static void processImpl(flecs::entity e, EventQueues& q) {
+    // ✅ 可以有 entity 参数
+}
+
+// ============================================================================
+// 场景 2：多个单例 (WindowContext + WebGPUContext)
+// ============================================================================
+world.system<WindowContext, WebGPUContext>("InitWebGPU")
+    .term_at(0).src<WindowContext>()    // ✅ 必须显式声明
+    .term_at(1).src<WebGPUContext>()    // ✅ 必须显式声明
+    .each(initImpl);
+
+static void initImpl(WindowContext& w, WebGPUContext& g) {
+    // ❌ 不能有 entity 参数
+}
+
+// ============================================================================
+// 场景 3：混合查询 (实体组件 + 单例)
+// ============================================================================
+world.system<MeshComponent, WebGPUContext>("SyncScene")
+    .term_at(1).src<WebGPUContext>()    // ✅ 只为单例声明
+    .each(syncImpl);
+
+static void syncImpl(flecs::entity e, MeshComponent& mesh, WebGPUContext& gpu) {
+    // ✅ 可以有 entity 参数，e 是 MeshComponent 所在的实体
+}
+```
 
 ---
 
@@ -24,7 +76,8 @@
 1. **依赖前置声明**：在系统注册时明确声明所有依赖的组件
 2. **避免手动查询**：优先使用系统参数自动注入，而非在实现中手动创建 query
 3. **使用 `.each()`**：对于单一查询类型的系统，使用 `.each()` 而非 `.run()`
-4. **保持一致**：整个项目使用统一的编写模式
+4. **多单例规则**：⚠️ 记住 "2+ 单例 = 全部 `.src<>()` + 无 entity"
+5. **保持一致**：整个项目使用统一的编写模式
 
 ### ❌ 避免做法
 
@@ -214,9 +267,9 @@ void RenderSystems::syncSceneImpl(flecs::entity entity,
 
 **适用场景**：系统只需要访问单例资源，不需要迭代实体。
 
-#### 模式
+#### 3.1 单个单例
 
-⚠️ **重要**：纯单例查询**不要**使用 `.term_at().src<>()`，让 Flecs 自动识别！
+⚠️ **重要**：单个单例查询**不要**使用 `.term_at().src<>()`，让 Flecs 自动识别！
 
 ```cpp
 // ============================================================================
@@ -261,7 +314,99 @@ world.system<Singleton>("MySystem")
 
 详见：[`FLECS_SINGLETON_QUERY_GUIDE.md`](./FLECS_SINGLETON_QUERY_GUIDE.md)
 
-#### 实际案例：ProcessImGuiEvent
+#### 3.2 多个单例 ⭐ 重要
+
+⚠️ **关键发现**：当系统查询**多个单例**时，规则完全不同！
+
+##### 模式
+
+```cpp
+// ============================================================================
+// 头文件
+// ============================================================================
+struct MySystem {
+  MySystem(flecs::world& world) {
+    // ✅ 正确：必须为每个单例使用 .term_at().src<>()
+    // ✅ 关键：实现函数 NO entity 参数！
+    world.system<Singleton1, Singleton2>("MySystem")
+        .term_at(0).src<Singleton1>()  // 第0个参数是单例
+        .term_at(1).src<Singleton2>()  // 第1个参数是单例
+        .kind(flecs::PreUpdate)
+        .each(mySystemImpl);
+  }
+
+private:
+  // ⚠️ 注意：NO flecs::entity 参数！
+  static void mySystemImpl(Singleton1& s1, Singleton2& s2);
+};
+
+// ============================================================================
+// 源文件
+// ============================================================================
+void MySystem::mySystemImpl(Singleton1& s1, Singleton2& s2) {
+  // 直接使用两个单例，没有 entity 参数
+  s1.update(s2);
+}
+```
+
+##### 为什么必须这样做？
+
+```cpp
+// ❌ 错误 1：不使用 .term_at().src<>()
+world.system<Singleton1, Singleton2>("MySystem")
+    .each([](flecs::entity e, Singleton1& s1, Singleton2& s2) { ... });
+// 结果：系统不会执行！Flecs 找不到同时拥有两个单例的实体
+
+// ❌ 错误 2：使用 .term_at().src<>() 但有 entity 参数
+world.system<Singleton1, Singleton2>("MySystem")
+    .term_at(0).src<Singleton1>()
+    .term_at(1).src<Singleton2>()
+    .each([](flecs::entity e, Singleton1& s1, Singleton2& s2) { ... });
+// 结果：系统不会执行！有 entity 参数会导致查询匹配失败
+
+// ✅ 正确：使用 .term_at().src<>() 且 NO entity 参数
+world.system<Singleton1, Singleton2>("MySystem")
+    .term_at(0).src<Singleton1>()
+    .term_at(1).src<Singleton2>()
+    .each([](Singleton1& s1, Singleton2& s2) { ... });
+// 结果：系统正确执行一次
+```
+
+#### 实际案例：InitWebGPU 和 InitImGui
+
+```cpp
+// 头文件
+struct RenderSystems {
+  RenderSystems(flecs::world& world) {
+    // 两个单例：WindowContext 和 WebGPUContext
+    world.system<WINDOW::WindowContext, WebGPUContext>("InitWebGPU")
+        .term_at(0).src<WINDOW::WindowContext>()  // 显式声明单例
+        .term_at(1).src<WebGPUContext>()          // 显式声明单例
+        .kind(flecs::OnStart)
+        .each(initWebGPUImpl);
+  }
+
+private:
+  // NO entity 参数！
+  static void initWebGPUImpl(WINDOW::WindowContext& windowContext,
+                             WebGPUContext& webgpuRes);
+};
+
+// 源文件
+void RenderSystems::initWebGPUImpl(WINDOW::WindowContext& windowContext,
+                                   WebGPUContext& webgpuRes) {
+  if (webgpuRes.initialized) return;
+
+  // 使用两个单例初始化 WebGPU
+  if (windowContext.window_handle) {
+    webgpuRes.surface = createSurface(windowContext.window_handle);
+  }
+
+  webgpuRes.initialized = true;
+}
+```
+
+#### 实际案例：ProcessImGuiEvent（单个单例）
 
 ```cpp
 // 头文件

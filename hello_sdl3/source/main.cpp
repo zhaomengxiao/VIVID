@@ -1,24 +1,12 @@
 // SDL3 Hello World Example
 // This example demonstrates how to use the new SDL3 callback-based application system
 
+#include <iostream>
 #include <utility>
 
 #include "vivid/app/SDL3App.h"
-#include "vivid/log/log.h"
-// #include "vivid/render/render_component.h"
-// #include "vivid/window/window_systems.h"
-
-// 如何在SDL3窗口中显示imgui: 1.添加imgui头文件
-// #include <SDL3/SDL_opengl.h>
-// #include <imgui.h>
-// #include <imgui_impl_opengl3.h>
-// #include <imgui_impl_sdl3.h>
-// #include <imgui_impl_wgpu.h>
-// #include "vivid/render/render_systems.h"
-// #include "vivid/ui/ui_system.h"
-#include <iostream>
-
 #include "vivid/input/camera_controller.h"
+#include "vivid/log/log.h"
 #include "vivid/physics/physics_component.h"
 #include "vivid/physics/physics_system.h"
 #include "vivid/render/render_systems.h"
@@ -93,7 +81,7 @@ struct WindowSetup {
     world.import <WindowComponents>();
 
     // Create custom window entity with specific configuration
-    WindowComponent window_config;
+    WindowContext window_config;
     window_config.title = "VIVID Hello SDL3 with WebGPU Rendering";
     window_config.width = 1024;
     window_config.height = 768;
@@ -103,7 +91,7 @@ struct WindowSetup {
     window_config.visible = true;
     window_config.should_close = false;
 
-    world.entity("MainWindow").set<WindowComponent>(window_config);
+    world.set<WindowContext>(window_config);
 
     VividLogger::app_info("Custom window entity 'MainWindow' created (1024x768)");
   }
@@ -112,6 +100,8 @@ struct WindowSetup {
 // Scene initialization module - creates cube, light, and camera entities
 struct Setup {
   Setup(flecs::world& world) {
+    VIVID_LOG_SYSTEM("Registering Setup module...");
+
     using namespace VIVID::RENDER;
     using namespace VIVID::PHYSICS;
 
@@ -123,12 +113,15 @@ struct Setup {
 
     // Register scene initialization system (runs at startup)
     world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
+
+    VIVID_LOG_SUCCESS("Setup module registration completed!");
   }
 
 private:
   // Scene initialization system implementation
   static void sceneInitializationImpl(flecs::iter& it) {
     auto world = it.world();
+    VividLogger::app_info("=== SceneInitialization system executing ===");
     VividLogger::app_info("Initializing scene entities...");
 
     // --- Create Cube Entity ---
@@ -168,6 +161,74 @@ private:
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
     VividLogger::app_info("Scene initialization completed!");
+    VividLogger::debug("=== SceneInitialization system finished ===");
+  }
+};
+
+// Module registration overview display
+struct ModuleOverview {
+  ModuleOverview(flecs::world& world) {
+    // Only show detailed overview in Debug builds to reduce verbosity
+#ifndef NDEBUG
+    VividLogger::app_info(
+        "╔══════════════════════════════════════════════════════════════════════════════╗");
+    VividLogger::app_info(
+        "║                    🚀 VIVID ENGINE - MODULE REGISTRATION                     ║");
+    VividLogger::app_info(
+        "║                                                                              ║");
+    VividLogger::app_info(
+        "║  📋 REGISTRATION ORDER & DEPENDENCIES:                                      ║");
+    VividLogger::app_info(
+        "║                                                                              ║");
+    VividLogger::app_info(
+        "║  1️⃣  📦 WindowSystems                                                       ║");
+    VividLogger::app_info(
+        "║      ├── Provides: WindowContext (singleton)                                 ║");
+    VividLogger::app_info(
+        "║      ├── Systems: WindowInitialization, WindowUpdate, WindowCleanup          ║");
+    VividLogger::app_info(
+        "║      └── Phase: OnStart → OnUpdate → Shutdown                               ║");
+    VividLogger::app_info(
+        "║                                                                              ║");
+    VividLogger::app_info(
+        "║  2️⃣  📦 Setup                                                               ║");
+    VividLogger::app_info(
+        "║      ├── Depends: WindowSystems                                              ║");
+    VividLogger::app_info(
+        "║      ├── Provides: Scene entities (Cube, Light, Camera)                      ║");
+    VividLogger::app_info(
+        "║      └── System: SceneInitialization (OnStart)                              ║");
+    VividLogger::app_info(
+        "║                                                                              ║");
+    VividLogger::app_info(
+        "║  3️⃣  📦 RenderSystems                                                      ║");
+    VividLogger::app_info(
+        "║      ├── Depends: WindowSystems (WindowContext)                              ║");
+    VividLogger::app_info(
+        "║      ├── Provides: WebGPUContext (singleton)                                 ║");
+    VividLogger::app_info(
+        "║      ├── Pipeline: Extract → Prepare → Queue → Sort → Render → UI → Submit  ║");
+    VividLogger::app_info(
+        "║      ├── Systems: InitWebGPU, SyncScene, RenderMesh, Submit                  ║");
+    VividLogger::app_info(
+        "║      └── Phase: OnStart → PreUpdate → RenderPhase → SubmitPhase → Shutdown  ║");
+    VividLogger::app_info(
+        "║                                                                              ║");
+    VividLogger::app_info(
+        "║  4️⃣  📦 UISystems                                                           ║");
+    VividLogger::app_info(
+        "║      ├── Depends: WindowSystems (WindowContext)                              ║");
+    VividLogger::app_info(
+        "║      ├── Depends: RenderSystems (WebGPUContext + RenderUIPhase)              ║");
+    VividLogger::app_info(
+        "║      ├── Systems: InitImGui, ProcessImGuiEvent, ShowImGuiDemo, RenderImGui   ║");
+    VividLogger::app_info(
+        "║      └── Phase: OnStart → PreUpdate → RenderUIPhase → Shutdown              ║");
+    VividLogger::app_info(
+        "╚══════════════════════════════════════════════════════════════════════════════╝");
+#else
+    VividLogger::app_info("🚀 VIVID Engine - Initializing modules...");
+#endif
   }
 };
 
@@ -185,6 +246,7 @@ VIVID_SDL3_MAIN(
         .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
         // 应用配置
         .insert_resource<MyResource>(100)
+        .import_module<ModuleOverview>()                // Display module registration overview
         .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create default)
         .import_module<Setup>()                         // Scene initialization (after window)
         // .import_module<WindowSetup>()                   // Create custom window entity first
@@ -329,7 +391,7 @@ VIVID_SDL3_MAIN(
   auto window_entity = world.create();
 
   // Configure window component with custom settings
-  auto& window_comp = world.emplace<VIVID::Window::WindowComponent>(window_entity);
+  auto& window_comp = world.emplace<VIVID::Window::WindowContext>(window_entity);
   window_comp.title = "VIVID Hello SDL3 with ECS Window";
   window_comp.width = 1024;
   window_comp.height = 768;
@@ -346,13 +408,13 @@ VIVID_SDL3_MAIN(
 
   if (frame_count % 60 == 0) {  // Print every 60 frames
     VividLogger::app_info("SDL3 ECS app running... Frame: %d", frame_count);
-    VividLogger::app_debug("MyResource value: %d", res.get<MyResource>()->value);
+    VividLogger::debug("MyResource value: %d", res.get<MyResource>()->value);
 
     // Check window status using ECS approach
     auto window_view
-        = world.view<VIVID::Window::WindowComponent, VIVID::Window::WindowGpuComponent>();
+        = world.view<VIVID::Window::WindowContext, VIVID::Window::WindowGpuComponent>();
     for (auto entity : window_view) {
-      auto& window_comp = world.get<VIVID::Window::WindowComponent>(entity);
+      auto& window_comp = world.get<VIVID::Window::WindowContext>(entity);
       auto& gpu_comp = world.get<VIVID::Window::WindowGpuComponent>(entity);
 
       if (gpu_comp.initialized) {

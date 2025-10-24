@@ -190,7 +190,7 @@ SDL3AppBuilder create_sdl3_app() { return SDL3AppBuilder{}; }
 // 应用SDL3元数据的辅助函数实现
 // 完全按照SDL3官方规范设置所有支持的元数据属性
 void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
-  VividLogger::app_debug("Applying SDL3 metadata");
+  VividLogger::app_info("Applying SDL3 metadata");
 
   // 清除之前的错误
   VividErrorHandler::clear_error();
@@ -232,7 +232,7 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
   if (!metadata.creator.empty()) {
     if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING,
                                    metadata.creator.c_str())) {
-      VividLogger::app_debug("Set creator metadata: %s", metadata.creator.c_str());
+      VividLogger::app_info("Set creator metadata: %s", metadata.creator.c_str());
     } else {
       VividLogger::app_warn("Failed to set creator metadata: %s", VividErrorHandler::get_error());
     }
@@ -242,7 +242,7 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
   if (!metadata.copyright.empty()) {
     if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING,
                                    metadata.copyright.c_str())) {
-      VividLogger::app_debug("Set copyright metadata: %s", metadata.copyright.c_str());
+      VividLogger::app_info("Set copyright metadata: %s", metadata.copyright.c_str());
     } else {
       VividLogger::app_warn("Failed to set copyright metadata: %s", VividErrorHandler::get_error());
     }
@@ -251,7 +251,7 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
   // SDL_PROP_APP_METADATA_URL_STRING - 应用网址
   if (!metadata.url.empty()) {
     if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, metadata.url.c_str())) {
-      VividLogger::app_debug("Set URL metadata: %s", metadata.url.c_str());
+      VividLogger::app_info("Set URL metadata: %s", metadata.url.c_str());
     } else {
       VividLogger::app_warn("Failed to set URL metadata: %s", VividErrorHandler::get_error());
     }
@@ -260,18 +260,18 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
   // SDL_PROP_APP_METADATA_TYPE_STRING - 应用类型
   // 根据SDL3规范，默认值为"application"，总是设置此属性
   if (SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, metadata.type.c_str())) {
-    VividLogger::app_debug("Set application type: %s", metadata.type.c_str());
+    VividLogger::app_info("Set application type: %s", metadata.type.c_str());
   } else {
     VividLogger::app_warn("Failed to set application type: %s", VividErrorHandler::get_error());
   }
 
   // 设置自定义属性（非SDL3官方规范）
   if (!metadata.custom_properties.empty()) {
-    VividLogger::app_debug("Setting %zu custom metadata properties",
-                           metadata.custom_properties.size());
+    VividLogger::app_info("Setting %zu custom metadata properties",
+                          metadata.custom_properties.size());
     for (const auto& [key, value] : metadata.custom_properties) {
       if (SDL_SetAppMetadataProperty(key.c_str(), value.c_str())) {
-        VividLogger::app_debug("Set custom property: %s = %s", key.c_str(), value.c_str());
+        VividLogger::app_info("Set custom property: %s = %s", key.c_str(), value.c_str());
       } else {
         VividLogger::app_warn("Failed to set custom property %s: %s", key.c_str(),
                               VividErrorHandler::get_error());
@@ -279,7 +279,7 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata) {
     }
   }
 
-  VividLogger::app_debug("SDL3 metadata application completed");
+  VividLogger::app_info("SDL3 metadata application completed");
 }
 }  // namespace APP
 }  // namespace VIVID

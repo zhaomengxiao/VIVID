@@ -10,7 +10,7 @@ namespace VIVID {
 namespace WINDOW {
 
 // Pure data component - window configuration and state
-struct WindowComponent {
+struct WindowContext {
   std::string title = "VIVID Application";
   int width = 800;
   int height = 600;
@@ -19,22 +19,24 @@ struct WindowComponent {
   SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
   bool visible = true;
   bool should_close = false;
-};
-
-// GPU resource component - holds SDL window handle
-struct WindowGpuComponent {
   SDL_Window* window_handle = nullptr;
-  SDL_GLContext gl_context = nullptr;
 
-  // Cache previous values to detect changes
-  std::string cached_title;
-  int cached_width = 0;
-  int cached_height = 0;
-  int cached_x = 0;
-  int cached_y = 0;
-  bool cached_visible = true;
+  // Dirty flags
+  enum class DirtyFlag : uint8_t {
+    Title = 1 << 0,
+    Size = 1 << 1,
+    Position = 1 << 2,
+    Visibility = 1 << 3
+  };
+  uint8_t dirty_flags = 0;
 
-  bool initialized = false;
+  void markDirty(DirtyFlag flag) { dirty_flags |= static_cast<uint8_t>(flag); }
+
+  bool isDirty(DirtyFlag flag) const { return (dirty_flags & static_cast<uint8_t>(flag)) != 0; }
+
+  void clearDirty(DirtyFlag flag) { dirty_flags &= ~static_cast<uint8_t>(flag); }
+
+  void clearAllDirty() { dirty_flags = 0; }
 };
 
 // Window events component - stores events for processing
@@ -53,8 +55,7 @@ struct WindowComponents {
     world.module<WindowComponents>();
 
     // Register components
-    world.component<WindowComponent>();
-    world.component<WindowGpuComponent>();
+    world.component<WindowContext>();
     world.component<WindowEventsComponent>();
   }
 };

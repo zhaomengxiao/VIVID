@@ -10,10 +10,32 @@
 #include "vivid/log/log.h"
 #include "vivid/window/window_component.h"
 
+// Simplified logging macros for modules
+#ifdef NDEBUG
+#  define VIVID_LOG_MODULE_HEADER(name, icon, content) \
+    VividLogger::app_info("🔧 " name " module registration...");
+#  define VIVID_LOG_MODULE_INFO(msg) VividLogger::app_info("  " msg);
+#else
+#  define VIVID_LOG_MODULE_HEADER(name, icon, content)                                       \
+    VividLogger::app_info(                                                                   \
+        "╔══════════════════════════════════════════════════════════════════════════════╗"); \
+    VividLogger::app_info("║                          " icon " " name                        \
+                          " MODULE                           ║");                            \
+    VividLogger::app_info(                                                                   \
+        "║                                                                              ║"); \
+    content VividLogger::app_info(                                                           \
+        "╚══════════════════════════════════════════════════════════════════════════════╝");
+#  define VIVID_LOG_MODULE_INFO(msg) VividLogger::app_info("║  " msg);
+#endif
+
+#define VIVID_LOG_SYSTEM(msg) VividLogger::app_info("🔧 " msg);
+#define VIVID_LOG_SUCCESS(msg) VividLogger::app_info("✅ " msg);
+#define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
+
 namespace VIVID::RENDER {
 
 // WebGPU Resources (singleton/resource)
-struct WebGPUResources {
+struct WebGPUContext {
   bool initialized = false;  // Flag to ensure one-time initialization
   WGPUInstance instance = nullptr;
   WGPUAdapter adapter = nullptr;
@@ -23,7 +45,7 @@ struct WebGPUResources {
   WGPUQueue queue = nullptr;
   WGPURenderPipeline pipeline = nullptr;
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-  WGPUSurfaceConfiguration surfaceConfiguration = {};
+  WGPUSurfaceConfiguration surfaceConfiguration = WGPU_SURFACE_CONFIGURATION_INIT;
   WGPUSurface surface = nullptr;
   uint32_t configuredWidth = 0;
   uint32_t configuredHeight = 0;
@@ -51,31 +73,6 @@ struct GpuMeshComponent {
   WGPURenderPipeline pipeline = nullptr;
 };
 
-// struct RenderContext {
-//   // 表面信息
-//   uint32_t surfaceWidth = 0;
-//   uint32_t surfaceHeight = 0;
-//   WGPUTextureView targetView = nullptr;
-//   WGPURenderPassEncoder renderPass = nullptr;
-//   WGPUCommandEncoder encoder = nullptr;
-//   WGPUSurfaceTexture surfaceTexture = {};
-
-//   // 场景信息
-//   glm::mat4 viewMatrix = glm::mat4(1.0f);
-//   glm::mat4 projectionMatrix = glm::mat4(1.0f);
-//   glm::vec3 viewPos = glm::vec3(0.0f);
-//   glm::vec3 lightPos = glm::vec3(5.0f, 5.0f, 5.0f);
-//   glm::vec3 lightColor = glm::vec3(1.0f);
-//   glm::vec3 ambientColor = glm::vec3(0.2f);
-//   float constant = 1.0f, linear = 0.09f, quadratic = 0.032f;
-
-//   // 渲染状态
-//   bool surfaceReady = false;
-//   bool sceneReady = false;
-//   bool meshesReady = false;
-//   bool uiReady = false;
-// };
-
 // Forward declarations
 struct ShutdownPhase {};  // Custom phase for cleanup systems
 
@@ -84,23 +81,11 @@ struct RenderSystems {
   RenderSystems(flecs::world& world);
 
 private:
-  // New modular system implementations
-  // static void surfaceManagementImpl(flecs::entity e, VIVID::WINDOW::WindowGpuComponent& gpu_comp,
-  //                                   WebGPUResources& webgpuRes, RenderContext& renderCtx);
-  // static void sceneCollectionImpl(flecs::entity e, RenderContext& renderCtx);
-  // static void meshRenderImpl(flecs::entity e, GpuMeshComponent& gpuMesh,
-  //                            TransformComponent& transform, MaterialComponent& material,
-  //                            RenderContext& renderCtx);
-  // static void uiRenderImpl(flecs::entity e, RenderContext& renderCtx);
-  // static void commandSubmissionImpl(flecs::entity e, WebGPUResources& webgpuRes,
-  //                                   RenderContext& renderCtx);
-
-  // Legacy system implementations (kept for compatibility)
-  static void initWebGPUImpl(flecs::entity e, VIVID::WINDOW::WindowGpuComponent& gpu_comp,
-                             WebGPUResources& webgpuRes);
+  // Multiple singletons: NO entity parameter!
+  static void initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowContext,
+                             WebGPUContext& webgpuRes);
   static void syncSceneImpl(flecs::entity e, MeshComponent& mesh, MaterialComponent& material,
-                            WebGPUResources& webgpuRes);
-  static void drawImpl(flecs::iter& it);
+                            WebGPUContext& webgpuRes);
   static void renderMeshImpl(flecs::iter& it);
   static void submitImpl(flecs::iter& it);
   static void releaseWebGPUResourcesImpl(flecs::iter& it);
@@ -113,69 +98,123 @@ private:
   static void inspectWebGPUDeviceImpl(flecs::iter& it);
   static void testCommandQueueImpl(flecs::iter& it);
   static void createPipelineImpl(flecs::iter& it);
-
-  // Helper functions
-  // static void reconfigureSurface(flecs::world world, uint32_t width, uint32_t height);
-  // static WGPUAdapter getAdapter(wgpu::Instance& instance);
-  // static WGPUDevice getDevice(wgpu::Instance& instance, wgpu::Adapter& adapter);
 };
 
 inline RenderSystems::RenderSystems(flecs::world& world) {
+  // Display module overview only in Debug mode to reduce verbosity
+  VIVID_LOG_MODULE_HEADER("RENDER SYSTEMS", "🎨", {
+    VIVID_LOG_MODULE_INFO("📦 Module: RenderSystems");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📋 DEPENDENCIES:");
+    VIVID_LOG_MODULE_INFO("├── 📦 RenderComponents (imported)");
+    VIVID_LOG_MODULE_INFO("└── 📦 WindowComponents (for WindowContext access)");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("🎯 CUSTOM PIPELINE PHASES:");
+    VIVID_LOG_MODULE_INFO("├── 📍 ExtractPhase  ← depends_on(OnStore)");
+    VIVID_LOG_MODULE_INFO("├── 📍 PreparePhase  ← depends_on(ExtractPhase)");
+    VIVID_LOG_MODULE_INFO("├── 📍 QueuePhase    ← depends_on(PreparePhase)");
+    VIVID_LOG_MODULE_INFO("├── 📍 SortPhase     ← depends_on(QueuePhase)");
+    VIVID_LOG_MODULE_INFO("├── 📍 RenderPhase   ← depends_on(SortPhase)");
+    VIVID_LOG_MODULE_INFO("├── 📍 RenderUIPhase ← depends_on(RenderPhase)");
+    VIVID_LOG_MODULE_INFO("└── 📍 SubmitPhase   ← depends_on(RenderUIPhase)");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("🏗️  SYSTEMS REGISTRATION:");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: OnStart");
+    VIVID_LOG_MODULE_INFO("├── 🔄 InitWebGPU");
+    VIVID_LOG_MODULE_INFO("│   ├── Requires: WindowContext, WebGPUContext");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: initWebGPUImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: PreUpdate");
+    VIVID_LOG_MODULE_INFO("├── 🔄 SyncScene");
+    VIVID_LOG_MODULE_INFO("│   ├── Requires: MeshComponent, MaterialComponent, WebGPUContext");
+    VIVID_LOG_MODULE_INFO("│   ├── Filters: without<GpuMeshComponent>");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: syncSceneImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: RenderPhase");
+    VIVID_LOG_MODULE_INFO("├── 🔄 RenderMesh");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: renderMeshImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: SubmitPhase");
+    VIVID_LOG_MODULE_INFO("├── 🔄 Submit");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: submitImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: Shutdown");
+    VIVID_LOG_MODULE_INFO("└── 🔄 ReleaseWebGPUResources");
+    VIVID_LOG_MODULE_INFO("    └── Executes: releaseWebGPUResourcesImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("💾 RESOURCES & COMPONENTS:");
+    VIVID_LOG_MODULE_INFO("├── 🔹 WebGPUContext (singleton)");
+    VIVID_LOG_MODULE_INFO("└── 🔹 GpuMeshComponent");
+  });
+
   // Register module
   world.module<RenderSystems>();
 
   // Import component modules
   world.import <RenderComponents>();
   // world.import <VIVID::WINDOW::WindowComponents>();  // Import window components for querying
-
-  VividLogger::app_info("Registering RenderSystems...");
-  world.set<WebGPUResources>({});
+  VIVID_LOG_SYSTEM("Registering RenderSystems...");
+  world.set<WebGPUContext>({});
   world.component<GpuMeshComponent>();
 
   // add custom phases
-  // 读取 CPU 侧只读快照，写入轻量 Extracted* 组件或 RenderContext 中的帧本地结构。
+  VividLogger::app_info("📍 Creating custom pipeline phases...");
   flecs::entity ExtractPhase
       = world.entity("ExtractPhase").add(flecs::Phase).depends_on(flecs::OnStore);
-  // 依据 Extracted* 创建/更新 GpuMeshComponent、BindGroup、Pipeline 等。
   flecs::entity PreparePhase
       = world.entity("PreparePhase").add(flecs::Phase).depends_on(ExtractPhase);
-  // 按 View 将待绘制对象加入每个 Phase 的队列，建立 per-view 的 DrawItem 列表。
   flecs::entity QueuePhase = world.entity("QueuePhase").add(flecs::Phase).depends_on(PreparePhase);
-  // （可选）：对各 Phase 做排序/合批键生成。
   flecs::entity SortPhase = world.entity("SortPhase").add(flecs::Phase).depends_on(QueuePhase);
-  // 创建 CommandEncoder/RenderPass，遍历 Phase 发起 draw。
   flecs::entity RenderPhase = world.entity("RenderPhase").add(flecs::Phase).depends_on(SortPhase);
-  // 渲染 UI
   flecs::entity RenderUIPhase
       = world.entity("RenderUIPhase").add(flecs::Phase).depends_on(RenderPhase);
-  // 提交命令缓冲区，最终渲染到交换链。
   flecs::entity SubmitPhase
       = world.entity("SubmitPhase").add(flecs::Phase).depends_on(RenderUIPhase);
-
-  // 通过名称查找SubmitPhase
-  // flecs::entity submitPhase = world.lookup("SubmitPhase");
+  VIVID_LOG_SUCCESS("Custom pipeline phases created");
 
   // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
   // OnStart systems' changes are only visible after the OnStart phase completes
-  world.system<VIVID::WINDOW::WindowGpuComponent, WebGPUResources>("InitWebGPU")
+  VIVID_LOG_SYSTEM("Registering InitWebGPU system...");
+
+  // Debug: Check if singletons exist (only in debug builds)
+#ifndef NDEBUG
+  if (world.has<WINDOW::WindowContext>()) {
+    VividLogger::app_info("✅ WindowContext singleton exists for InitWebGPU");
+  } else {
+    VividLogger::app_error("❌ WindowContext singleton NOT found for InitWebGPU!");
+  }
+
+  if (world.has<WebGPUContext>()) {
+    VividLogger::app_info("✅ WebGPUContext singleton exists for InitWebGPU");
+  } else {
+    VividLogger::app_error("❌ WebGPUContext singleton NOT found for InitWebGPU!");
+  }
+#endif
+
+  // Multiple singletons: must use .term_at().src<>() for each AND no entity param
+  world.system<const WINDOW::WindowContext, WebGPUContext>("InitWebGPU")
+      .term_at(0)
+      .src<WINDOW::WindowContext>()
       .term_at(1)
-      .src<WebGPUResources>()
+      .src<WebGPUContext>()
       .kind(flecs::OnStart)
       .each(initWebGPUImpl);
+  VIVID_LOG_SUCCESS("InitWebGPU system registered successfully");
 
   // Scene sync - runs every frame before update
-  world.system<MeshComponent, MaterialComponent, WebGPUResources>("SyncScene")
+  world.system<MeshComponent, MaterialComponent, WebGPUContext>("SyncScene")
       .without<GpuMeshComponent>()
       .term_at(2)
-      .src<WebGPUResources>()
+      .src<WebGPUContext>()
       .kind(flecs::PreUpdate)
       .each(syncSceneImpl);
 
   // world
-  //     .system<VIVID::WINDOW::WindowGpuComponent, WebGPUResources, RenderContext>(
+  //     .system<VIVID::WINDOW::WindowGpuComponent, WebGPUContext, RenderContext>(
   //         "SurfaceManagement")
   //     .term_at(1)
-  //     .src<WebGPUResources>()
+  //     .src<WebGPUContext>()
   //     .term_at(2)
   //     .src<RenderContext>()
   //     .kind(flecs::OnUpdate)
@@ -192,12 +231,9 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // world.system<RenderContext>("UIRender").kind(flecs::OnUpdate).each(uiRenderImpl);
 
-  // world.system<WebGPUResources, RenderContext>("CommandSubmission")
+  // world.system<WebGPUContext, RenderContext>("CommandSubmission")
   //     .kind(flecs::OnUpdate)
   //     .each(commandSubmissionImpl);
-
-  // Drawing - runs every frame (temporarily disabled during refactoring)
-  // world.system("Draw").kind(RenderPhase).run(drawImpl);
 
   world.system("RenderMesh").kind(RenderPhase).run(renderMeshImpl);
   world.system("Submit").kind(SubmitPhase).run(submitImpl);
@@ -205,7 +241,7 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
   // Cleanup - runs once at shutdown
   world.system("ReleaseWebGPUResources").kind<ShutdownPhase>().run(releaseWebGPUResourcesImpl);
 
-  VividLogger::app_info("RenderSystems registered successfully");
+  VIVID_LOG_SUCCESS("RenderSystems module registration completed!");
 }
 
 }  // namespace VIVID::RENDER
