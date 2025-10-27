@@ -40,6 +40,13 @@ void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowCo
     return;  // Error already logged
   }
 
+  if (!VividErrorHandler::check_sdl_result(
+          SDL_GetWindowSizeInPixels(windowContext.window_handle, &windowContext.pixel_width,
+                                    &windowContext.pixel_height),
+          "SDL_GetWindowSizeInPixels")) {
+    return;
+  }
+
   // Set window position if specified
   if (windowContext.x != SDL_WINDOWPOS_CENTERED && windowContext.y != SDL_WINDOWPOS_CENTERED) {
     VividErrorHandler::check_sdl_result(
@@ -63,88 +70,46 @@ void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowCo
 }
 
 // Window event processing system
-// void WindowSystems::windowEventProcessingImpl(flecs::iter& it) {
-//   auto world = it.world();
+void WindowSystems::processWindowEventsImpl(VIVID::APP::EventQueues& eventQueues,
+                                            WindowContext& windowContext) {
+  if (!windowContext.window_handle) {
+    return;
+  }
 
-//   // Query for windows with all three components
-//   auto query = world.query<WindowContext, WindowGpuComponent, WindowEventsComponent>();
+  for (auto& event : eventQueues.raw_sdl_events) {
+    // Check if event belongs to this window
+    if (!(event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST)) {
+      continue;
+    }
 
-//   query.each([&](flecs::entity entity, WindowContext& windowContext,
-//                  WindowGpuComponent& windowContext, WindowEventsComponent& events_comp) {
-//     if (!windowContext.initialized || !windowContext.window_handle) {
-//       return;
-//     }
+    if (event.window.windowID != SDL_GetWindowID(windowContext.window_handle)) {
+      continue;
+    }
 
-//     // Clear previous frame events
-//     events_comp.events.clear();
-//     events_comp.quit_requested = false;
-//     events_comp.close_requested = false;
-//     events_comp.resized = false;
-//     events_comp.moved = false;
+    switch (event.type) {
+      case SDL_EVENT_WINDOW_RESIZED:
+        windowContext.width = event.window.data1;
+        windowContext.height = event.window.data2;
+        windowContext.markDirty(WindowContext::DirtyFlag::Size);
+        // SDL_Log("Window resize event received: %dx%d", event.window.data1, event.window.data2);
+        break;
 
-//     SDL_Event event;
-//     while (SDL_PollEvent(&event)) {
-//       bool is_window_event = false;
+      case SDL_EVENT_WINDOW_MOVED:
+        windowContext.x = event.window.data1;
+        windowContext.y = event.window.data2;
+        windowContext.markDirty(WindowContext::DirtyFlag::Position);
+        // SDL_Log("Window moved event received: (%d, %d)", event.window.data1, event.window.data2);
+        break;
 
-//       // Check if event belongs to this window
-//       if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) {
-//         is_window_event = (event.window.windowID ==
-//         SDL_GetWindowID(windowContext.window_handle));
-//       }
-
-//       switch (event.type) {
-//         case SDL_EVENT_QUIT:
-//           events_comp.quit_requested = true;
-//           events_comp.events.push_back(event);
-//           SDL_Log("Quit event received");
-//           break;
-
-//         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-//           if (is_window_event) {
-//             events_comp.close_requested = true;
-//             windowContext.should_close = true;
-//             events_comp.events.push_back(event);
-//             SDL_Log("Window close requested");
-//           }
-//           break;
-
-//         case SDL_EVENT_WINDOW_RESIZED:
-//           if (is_window_event) {
-//             windowContext.width = event.window.data1;
-//             windowContext.height = event.window.data2;
-//             // Update cache to match the new size
-//             windowContext.cached_width = event.window.data1;
-//             windowContext.cached_height = event.window.data2;
-//             events_comp.resized = true;
-//             events_comp.events.push_back(event);
-//             // SDL_Log("Window resized to %dx%d", event.window.data1, event.window.data2);
-//           }
-//           break;
-
-//         case SDL_EVENT_WINDOW_MOVED:
-//           if (is_window_event) {
-//             windowContext.x = event.window.data1;
-//             windowContext.y = event.window.data2;
-//             // Update cache to match the new position
-//             windowContext.cached_x = event.window.data1;
-//             windowContext.cached_y = event.window.data2;
-//             events_comp.moved = true;
-//             events_comp.events.push_back(event);
-//             // SDL_Log("Window moved to (%d, %d)", event.window.data1, event.window.data2);
-//           }
-//           break;
-
-//         default:
-//           // Store all events for potential use by other systems
-//           events_comp.events.push_back(event);
-//           break;
-//       }
-//     }
-// });
-// }
+      default:
+        // SDL_Log("UnHandled window event received: %d", event.type);
+        break;
+    }
+  }
+}
 
 // Window update system
-void WindowSystems::windowUpdateImpl(flecs::entity entity, WindowContext& windowContext) {
+void WindowSystems::windowUpdateImpl(const flecs::entity entity, WindowContext& windowContext) {
   if (!windowContext.window_handle) {
     return;
   }
@@ -156,7 +121,12 @@ void WindowSystems::windowUpdateImpl(flecs::entity entity, WindowContext& window
   }
 
   if (windowContext.isDirty(WindowContext::DirtyFlag::Size)) {
-    SDL_SetWindowSize(windowContext.window_handle, windowContext.width, windowContext.height);
+    if (!VividErrorHandler::check_sdl_result(
+            SDL_GetWindowSizeInPixels(windowContext.window_handle, &windowContext.pixel_width,
+                                      &windowContext.pixel_height),
+            "SDL_GetWindowSizeInPixels")) {
+      return;
+    }
     windowContext.clearDirty(WindowContext::DirtyFlag::Size);
   }
 
@@ -176,8 +146,13 @@ void WindowSystems::windowUpdateImpl(flecs::entity entity, WindowContext& window
   }
 }
 
+// Clean events system
+void WindowSystems::cleanEventsImpl(APP::EventQueues& eventQueues) {
+  eventQueues.raw_sdl_events.clear();
+}
+
 // Window cleanup system
-void WindowSystems::windowCleanupImpl(flecs::entity entity, WindowContext& windowContext) {
+void WindowSystems::windowCleanupImpl(const flecs::entity entity, WindowContext& windowContext) {
   VividLogger::app_info("WindowCleanup system executing...");
 
   if (windowContext.window_handle) {

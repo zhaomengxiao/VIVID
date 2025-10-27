@@ -13,7 +13,6 @@
 #include "vivid/render/render_component.h"
 #include "vivid/window/window_component.h"
 // ImGui rendering backend
-#include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
 
@@ -245,7 +244,7 @@ static WGPUDevice getDevice(wgpu::Instance& instance, wgpu::Adapter& adapter) {
 // System Implementations (not registered, converted to Flecs format)
 // ============================================================================
 
-void RenderSystems::createWebGPUInstanceImpl(flecs::iter& it) {
+void RenderSystems::createWebGPUInstanceImpl(const flecs::iter& it) {
   auto world = it.world();
   // We create a descriptor
 
@@ -272,7 +271,7 @@ void RenderSystems::createWebGPUInstanceImpl(flecs::iter& it) {
   VividLogger::app_info("WGPU instance: %p", instance);
 }
 
-void RenderSystems::requestWebGPUAdapterSyncImpl(flecs::iter& it) {
+void RenderSystems::requestWebGPUAdapterSyncImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Requesting WebGPU adapter...");
 
@@ -346,7 +345,7 @@ void RenderSystems::requestWebGPUAdapterSyncImpl(flecs::iter& it) {
   VividLogger::app_info("Got WebGPU adapter");
 }
 
-void RenderSystems::inspectWebGPUAdapterImpl(flecs::iter& it) {
+void RenderSystems::inspectWebGPUAdapterImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Inspecting WebGPU adapter...");
 
@@ -410,7 +409,7 @@ void RenderSystems::inspectWebGPUAdapterImpl(flecs::iter& it) {
   wgpuAdapterInfoFreeMembers(properties);
 }
 
-void RenderSystems::requestWebGPUDeviceSyncImpl(flecs::iter& it) {
+void RenderSystems::requestWebGPUDeviceSyncImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Requesting WebGPU device...");
   WGPUDeviceDescriptor deviceDesc = {};
@@ -496,7 +495,7 @@ void RenderSystems::requestWebGPUDeviceSyncImpl(flecs::iter& it) {
   VividLogger::app_info("Got WebGPU device");
 }
 
-void RenderSystems::inspectWebGPUDeviceImpl(flecs::iter& it) {
+void RenderSystems::inspectWebGPUDeviceImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Inspecting WebGPU device...");
 
@@ -581,7 +580,7 @@ void RenderSystems::inspectWebGPUDeviceImpl(flecs::iter& it) {
   }
 }
 
-void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
+void RenderSystems::testCommandQueueImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Testing WebGPU command queue...");
   if (!world.has<WebGPUContext>()) {
@@ -715,8 +714,8 @@ void RenderSystems::testCommandQueueImpl(flecs::iter& it) {
 // Core System Implementations (registered and actually used)
 // ============================================================================
 
-void RenderSystems::syncSceneImpl(flecs::entity entity, MeshComponent& mesh,
-                                  MaterialComponent& material, WebGPUContext& webgpuRes) {
+void RenderSystems::syncSceneImpl(flecs::entity entity, const MeshComponent& mesh,
+                                  const MaterialComponent& material, WebGPUContext& webgpuRes) {
   // Process entities that have the CPU-side data (Mesh, Material)
   // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
   // (filtered by .without<GpuMeshComponent>() in system registration)
@@ -941,7 +940,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   entity.set<GpuMeshComponent>(gpuMeshComponent);
 }
 
-void RenderSystems::renderMeshImpl(flecs::iter& it) {
+void RenderSystems::renderMeshImpl(const flecs::iter& it) {
   auto world = it.world();
 
   if (!world.has<WebGPUContext>()) {
@@ -957,24 +956,18 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
   auto& webgpuRes = world.get_mut<WebGPUContext>();
   auto& windowContext = world.get<VIVID::WINDOW::WindowContext>();
   // Check current window pixel size and reconfigure if changed or zero
-  int pixel_width = 0;
-  int pixel_height = 0;
 
-  if (windowContext.window_handle) {
-    SDL_GetWindowSizeInPixels(windowContext.window_handle, &pixel_width, &pixel_height);
-  }
-
-  if (pixel_width <= 0 || pixel_height <= 0) {
+  if (windowContext.pixel_width <= 0 || windowContext.pixel_height <= 0) {
     // Minimized or not ready; skip this frame
     webgpuRes.renderPass = nullptr;  // Mark render pass as invalid to signal frame skip
     return;
   }
 
   // TODO: refactor this
-  if (webgpuRes.configuredWidth != static_cast<uint32_t>(pixel_width)
-      || webgpuRes.configuredHeight != static_cast<uint32_t>(pixel_height)) {
-    reconfigureSurface(webgpuRes, static_cast<uint32_t>(pixel_width),
-                       static_cast<uint32_t>(pixel_height));
+  if (webgpuRes.configuredWidth != static_cast<uint32_t>(windowContext.pixel_width)
+      || webgpuRes.configuredHeight != static_cast<uint32_t>(windowContext.pixel_height)) {
+    reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width),
+                       static_cast<uint32_t>(windowContext.pixel_height));
     // Skip this frame after reconfiguration
     webgpuRes.renderPass
         = nullptr;  // Mark render pass as invalid to prevent UI from rendering to stale pass
@@ -994,8 +987,8 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
     if (webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated
         || webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Lost) {
       // Reconfigure on outdated/lost
-      reconfigureSurface(webgpuRes, static_cast<uint32_t>(pixel_width),
-                         static_cast<uint32_t>(pixel_height));
+      reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width),
+                         static_cast<uint32_t>(windowContext.pixel_height));
     }
     // Skip this frame for any non-success status
     webgpuRes.renderPass = nullptr;  // Mark render pass as invalid
@@ -1172,7 +1165,7 @@ void RenderSystems::renderMeshImpl(flecs::iter& it) {
   });
 }
 
-void RenderSystems::submitImpl(flecs::iter& it) {
+void RenderSystems::submitImpl(const flecs::iter& it) {
   auto world = it.world();
   auto& webgpuRes = world.get<WebGPUContext>();
   if (!world.has<WebGPUContext>()) {
@@ -1224,7 +1217,7 @@ void RenderSystems::submitImpl(flecs::iter& it) {
 #endif
 }
 
-void RenderSystems::createPipelineImpl(flecs::iter& it) {
+void RenderSystems::createPipelineImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Creating WebGPU pipeline...");
   auto& webgpuRes = world.get_mut<WebGPUContext>();
@@ -1315,7 +1308,7 @@ void RenderSystems::createPipelineImpl(flecs::iter& it) {
   // }
 }
 
-void RenderSystems::releaseWebGPUResourcesImpl(flecs::iter& it) {
+void RenderSystems::releaseWebGPUResourcesImpl(const flecs::iter& it) {
   auto world = it.world();
   VividLogger::app_info("Releasing WebGPU instance...");
 

@@ -5,7 +5,7 @@
 #include <vivid/log/log.h>
 
 #include <iostream>
-#include <queue>
+#include <vector>
 
 struct ShutdownPhase {};
 
@@ -13,7 +13,7 @@ namespace VIVID {
 namespace APP {
 
 struct EventQueues {
-  std::queue<SDL_Event> raw_sdl_events;  // 原始SDL事件
+  std::vector<SDL_Event> raw_sdl_events;  // 原始SDL事件
   // std::queue<InputEvent> input_events;            // 输入事件
   // std::queue<WindowEvent> window_events;          // 窗口事件
   // std::queue<SystemEvent> system_events;          // 系统事件
@@ -152,7 +152,7 @@ public:
 
     // push event to event queues
     auto& event_queues = world_.get_mut<EventQueues>();
-    event_queues.raw_sdl_events.push(*event);
+    event_queues.raw_sdl_events.push_back(*event);
     // VividLogger::app_info("SDL_AppEvent: %d", event->type);
     // VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());
     return running_;

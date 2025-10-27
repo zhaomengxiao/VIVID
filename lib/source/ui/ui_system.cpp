@@ -28,21 +28,15 @@ namespace UI {
 // Static member function implementations
 
 // Initialize ImGui system
-void UISystems::initImGuiImpl(WINDOW::WindowContext& windowContext,
-                              RENDER::WebGPUContext& webgpuRes) {
-  VividLogger::app_info("=== InitImGui system called ===");
-  // VividLogger::app_info("Entity: %s", e.name());
-  VividLogger::app_info("Window handle: %p", windowContext.window_handle);
-  VividLogger::app_info("WebGPU device: %p", webgpuRes.device);
-  VividLogger::app_info("ImGui context: %p", ImGui::GetCurrentContext());
+void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
+                              const RENDER::WebGPUContext& webgpuRes) {
+  VividLogger::app_debug("=== InitImGui system called ===");
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
   if (ImGui::GetCurrentContext() != nullptr) {
     VividLogger::app_warn("ImGui already initialized, skipping...");
     return;  // Already initialized, skip
   }
-
-  VividLogger::app_info("Initializing ImGui...");
 
   // Check if WebGPU is initialized
   if (webgpuRes.device == nullptr) {
@@ -74,11 +68,6 @@ void UISystems::initImGuiImpl(WINDOW::WindowContext& windowContext,
   // purpose) Setup Platform/Renderer backends
 
   // Setup Platform/Renderer backends
-
-  // TODO: 这里都能移到resource中
-
-  VividLogger::app_info("Initializing ImGui backends for window handle: %p",
-                        windowContext.window_handle);
   ImGui_ImplSDL3_InitForOther(windowContext.window_handle);
   ImGui_ImplWGPU_InitInfo init_info;
   init_info.Device = webgpuRes.device;
@@ -114,18 +103,14 @@ void UISystems::initImGuiImpl(WINDOW::WindowContext& windowContext,
 }
 
 // Process ImGui events system
-void UISystems::processImGuiEventImpl(flecs::entity e, VIVID::APP::EventQueues& eventQueues) {
-  // EventQueues is queried from singleton (dependency declared via .term_at(0).src<>())
-  if (!eventQueues.raw_sdl_events.empty()) {
-    // VividLogger::app_info("Processing ImGui event: %d",
-    // eventQueues.raw_sdl_events.front().type);
-    ImGui_ImplSDL3_ProcessEvent(&eventQueues.raw_sdl_events.front());
-    eventQueues.raw_sdl_events.pop();  // Note:Maybe Don't pop here, let the window system handle it
+void UISystems::processImGuiEventImpl(VIVID::APP::EventQueues& eventQueues) {
+  for (auto& event : eventQueues.raw_sdl_events) {
+    ImGui_ImplSDL3_ProcessEvent(&event);
   }
 }
 
 // Show ImGui demo system
-void UISystems::showImGuiDemoImpl(flecs::iter& it) {
+void UISystems::showImGuiDemoImpl(const flecs::iter& it) {
   // Build ImGui frame only; actual rendering happens in Render::Draw
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
@@ -183,7 +168,7 @@ void UISystems::showImGuiDemoImpl(flecs::iter& it) {
 }
 
 // Render ImGui draw data inside active render pass
-void UISystems::renderImGuiImpl(flecs::entity e, RENDER::WebGPUContext& webgpuRes) {
+void UISystems::renderImGuiImpl(RENDER::WebGPUContext& webgpuRes) {
   // IMPORTANT: This function is responsible for closing the ImGui frame,
   // either by calling ImGui::Render() (which calls EndFrame internally)
   // or by explicitly calling ImGui::EndFrame() if rendering is skipped.
@@ -200,7 +185,7 @@ void UISystems::renderImGuiImpl(flecs::entity e, RENDER::WebGPUContext& webgpuRe
 }
 
 // Shutdown ImGui system
-void UISystems::shutDownImGuiImpl(flecs::iter& it) {
+void UISystems::shutDownImGuiImpl(const flecs::iter& it) {
   std::cout << "Shutting down ImGui..." << std::endl;
 
   ImGui::DestroyPlatformWindows();

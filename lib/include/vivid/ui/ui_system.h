@@ -26,7 +26,7 @@
 #endif
 
 #define VIVID_LOG_SYSTEM(msg) VividLogger::app_info("🔧 " msg);
-#define VIVID_LOG_SUCCESS(msg) VividLogger::app_info("✅ " msg);
+#define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, __VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
 namespace VIVID {
@@ -40,11 +40,12 @@ struct UISystems {
 
 private:
   // Static member functions for system implementations
-  static void initImGuiImpl(WINDOW::WindowContext& windowContext, RENDER::WebGPUContext& webgpuRes);
-  static void processImGuiEventImpl(flecs::entity e, VIVID::APP::EventQueues& eventQueues);
-  static void showImGuiDemoImpl(flecs::iter& it);
-  static void renderImGuiImpl(flecs::entity e, RENDER::WebGPUContext& webgpuRes);
-  static void shutDownImGuiImpl(flecs::iter& it);
+  static void initImGuiImpl(const WINDOW::WindowContext& windowContext,
+                            const RENDER::WebGPUContext& webgpuRes);
+  static void processImGuiEventImpl(VIVID::APP::EventQueues& eventQueues);
+  static void showImGuiDemoImpl(const flecs::iter& it);
+  static void renderImGuiImpl(RENDER::WebGPUContext& webgpuRes);
+  static void shutDownImGuiImpl(const flecs::iter& it);
 };
 
 // Constructor - Register module and systems
@@ -93,29 +94,10 @@ inline UISystems::UISystems(flecs::world& world) {
   // Import components module
   world.import <UIComponents>();
 
-  // Import render module //TODO: Test duplicate import
-  // world.import <RENDER::RenderComponents>();
-  // world.import <RENDER::RenderSystems>();
-
   // Register systems
   VIVID_LOG_SYSTEM("Registering InitImGui system...");
 
-  // Debug: Check if singletons exist (only in debug builds)
-#ifndef NDEBUG
-  if (world.has<WINDOW::WindowContext>()) {
-    VividLogger::app_info("✅ WindowContext singleton exists for InitImGui");
-  } else {
-    VividLogger::app_error("❌ WindowContext singleton NOT found for InitImGui!");
-  }
-
-  if (world.has<RENDER::WebGPUContext>()) {
-    VividLogger::app_info("✅ WebGPUContext singleton exists for InitImGui");
-  } else {
-    VividLogger::app_error("❌ WebGPUContext singleton NOT found for InitImGui!");
-  }
-#endif
-
-  world.system<WINDOW::WindowContext, RENDER::WebGPUContext>("InitImGui")
+  world.system<const WINDOW::WindowContext, const RENDER::WebGPUContext>("InitImGui")
       .term_at(0)
       .src<WINDOW::WindowContext>()
       .term_at(1)

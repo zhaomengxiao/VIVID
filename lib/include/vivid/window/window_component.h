@@ -21,6 +21,9 @@ struct WindowContext {
   bool should_close = false;
   SDL_Window* window_handle = nullptr;
 
+  int pixel_width = 0;
+  int pixel_height = 0;
+
   // Dirty flags
   enum class DirtyFlag : uint8_t {
     Title = 1 << 0,

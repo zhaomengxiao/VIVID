@@ -29,7 +29,7 @@
 #endif
 
 #define VIVID_LOG_SYSTEM(msg) VividLogger::app_info("🔧 " msg);
-#define VIVID_LOG_SUCCESS(msg) VividLogger::app_info("✅ " msg);
+#define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, __VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
 namespace VIVID::RENDER {
@@ -84,20 +84,20 @@ private:
   // Multiple singletons: NO entity parameter!
   static void initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowContext,
                              WebGPUContext& webgpuRes);
-  static void syncSceneImpl(flecs::entity e, MeshComponent& mesh, MaterialComponent& material,
-                            WebGPUContext& webgpuRes);
-  static void renderMeshImpl(flecs::iter& it);
-  static void submitImpl(flecs::iter& it);
-  static void releaseWebGPUResourcesImpl(flecs::iter& it);
+  static void syncSceneImpl(flecs::entity e, const MeshComponent& mesh,
+                            const MaterialComponent& material, WebGPUContext& webgpuRes);
+  static void renderMeshImpl(const flecs::iter& it);
+  static void submitImpl(const flecs::iter& it);
+  static void releaseWebGPUResourcesImpl(const flecs::iter& it);
 
   // Additional system implementations (not registered, but converted to Flecs format)
-  static void createWebGPUInstanceImpl(flecs::iter& it);
-  static void requestWebGPUAdapterSyncImpl(flecs::iter& it);
-  static void inspectWebGPUAdapterImpl(flecs::iter& it);
-  static void requestWebGPUDeviceSyncImpl(flecs::iter& it);
-  static void inspectWebGPUDeviceImpl(flecs::iter& it);
-  static void testCommandQueueImpl(flecs::iter& it);
-  static void createPipelineImpl(flecs::iter& it);
+  static void createWebGPUInstanceImpl(const flecs::iter& it);
+  static void requestWebGPUAdapterSyncImpl(const flecs::iter& it);
+  static void inspectWebGPUAdapterImpl(const flecs::iter& it);
+  static void requestWebGPUDeviceSyncImpl(const flecs::iter& it);
+  static void inspectWebGPUDeviceImpl(const flecs::iter& it);
+  static void testCommandQueueImpl(const flecs::iter& it);
+  static void createPipelineImpl(const flecs::iter& it);
 };
 
 inline RenderSystems::RenderSystems(flecs::world& world) {
