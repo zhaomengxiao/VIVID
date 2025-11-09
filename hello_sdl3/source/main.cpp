@@ -19,28 +19,59 @@ struct MyResource {
 };
 
 VIVID::RENDER::MeshComponent CreateCubeMesh() {
-  std::vector<float> vertices
-      = {// positions          // normals
-         -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.5f,  -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f,
-         0.5f,  0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, -0.5f, 0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f,
+  // Cube vertices with correct winding order (CCW when viewed from outside)
+  // Each vertex: position (3 floats) + normal (3 floats) = 6 floats
+  std::vector<float> vertices = {
+      // Back face (z = -0.5) - viewed from +z direction, CCW order
+      -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,  // 0: bottom-left
+      0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,   // 1: bottom-right
+      0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,    // 2: top-right
+      -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,   // 3: top-left
 
-         -0.5f, -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,  0.5f,  -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+      // Front face (z = 0.5) - viewed from +z direction (camera side), CCW order
+      -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,  // 4: bottom-left
+      0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,   // 5: bottom-right
+      0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,    // 6: top-right
+      -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,   // 7: top-left
 
-         -0.5f, 0.5f,  0.5f,  -1.0f, 0.0f,  0.0f,  -0.5f, 0.5f,  -0.5f, -1.0f, 0.0f,  0.0f,
-         -0.5f, -0.5f, -0.5f, -1.0f, 0.0f,  0.0f,  -0.5f, -0.5f, 0.5f,  -1.0f, 0.0f,  0.0f,
+      // Left face (x = -0.5) - viewed from +x direction, CCW order
+      -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f,  // 8: bottom-back
+      -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f,   // 9: top-back
+      -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f,    // 10: top-front
+      -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f,   // 11: bottom-front
 
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 1.0f,  0.0f,  0.0f,
-         0.5f,  -0.5f, -0.5f, 1.0f,  0.0f,  0.0f,  0.5f,  -0.5f, 0.5f,  1.0f,  0.0f,  0.0f,
+      // Right face (x = 0.5) - viewed from -x direction, CCW order
+      0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,  // 12: bottom-back
+      0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,   // 13: bottom-front
+      0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,    // 14: top-front
+      0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f,   // 15: top-back
 
-         -0.5f, -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,  0.5f,  -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,
-         0.5f,  -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,  -0.5f, -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,
+      // Bottom face (y = -0.5) - viewed from +y direction, CCW order
+      -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,  // 16: back-left
+      -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,   // 17: front-left
+      0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,    // 18: front-right
+      0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,   // 19: back-right
 
-         -0.5f, 0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  1.0f,  0.0f};
-  std::vector<unsigned int> indices
-      = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
-         12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20};
+      // Top face (y = 0.5) - viewed from -y direction, CCW order
+      -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // 20: back-left
+      0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,   // 21: back-right
+      0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,    // 22: front-right
+      -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f    // 23: front-left
+  };
+
+  // Indices for each face (2 triangles per face, CCW winding)
+  std::vector<unsigned int> indices = {// Back face
+                                       0, 1, 2, 2, 3, 0,
+                                       // Front face
+                                       4, 5, 6, 6, 7, 4,  // CCW from camera (+z direction)
+                                                          // Left face
+                                       8, 9, 10, 10, 11, 8,
+                                       // Right face
+                                       12, 13, 14, 14, 15, 12,
+                                       // Bottom face
+                                       16, 17, 18, 18, 19, 16,
+                                       // Top face
+                                       20, 21, 22, 22, 23, 20};
 
   return {vertices, indices, indices.size()};
 }
@@ -129,7 +160,9 @@ private:
     // render to an ImGui window. The window title will be from TagComponent.Tag.
     auto cameraEntity = world.entity("MainCamera");
     VIVID::RENDER::TransformComponent camTransform;
-    camTransform.Position = {0.0f, 0.0f, 5.0f};
+    // Move camera closer to cube for better perspective effect
+    // Position at (0, 0, 3) instead of (0, 0, 5) to make perspective more visible
+    camTransform.Position = {0.0f, 0.0f, 3.0f};
 
     // Setup ViewportComponent with initial size for ImGui window
     // The size will automatically adjust based on ImGui window size
@@ -143,8 +176,39 @@ private:
         .set<VIVID::RENDER::ViewportComponent>(viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>({});
 
-    VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
+    VividLogger::app_info("Created camera entity at position (0.0, 0.0, 3.0)");
     VividLogger::app_info("Render window will appear in ImGui with title 'MainCamera'");
+
+    // --- Create Second Camera Entity with 45-degree angle view ---
+    // This camera will render from a diagonal angle (3, 3, 3) looking at the origin
+    auto sideCameraEntity = world.entity("SideCamera");
+    VIVID::RENDER::TransformComponent sideCamTransform;
+    sideCamTransform.Position = {3.0f, 3.0f, 3.0f};  // Position at diagonal angle
+
+    // Setup ViewportComponent for the side camera
+    VIVID::RENDER::ViewportComponent sideViewport;
+    sideViewport.Width = 800.0f;
+    sideViewport.Height = 600.0f;
+
+    // Setup CameraControllerComponent to look at origin (0, 0, 0)
+    // Front vector points from (3, 3, 3) to (0, 0, 0) = (-1, -1, -1), normalized
+    CameraControllerComponent sideCameraController;
+    sideCameraController.Front = glm::normalize(glm::vec3(-1.0f, -1.0f, -1.0f));
+    sideCameraController.WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    // Calculate Right and Up vectors based on Front and WorldUp
+    sideCameraController.Right
+        = glm::normalize(glm::cross(sideCameraController.Front, sideCameraController.WorldUp));
+    sideCameraController.Up
+        = glm::normalize(glm::cross(sideCameraController.Right, sideCameraController.Front));
+
+    sideCameraEntity.set<VIVID::RENDER::TagComponent>({"SideCamera"})
+        .set<VIVID::RENDER::TransformComponent>(sideCamTransform)
+        .set<VIVID::RENDER::CameraComponent>({})
+        .set<VIVID::RENDER::ViewportComponent>(sideViewport)  // Enables render window in ImGui
+        .set<CameraControllerComponent>(sideCameraController);
+
+    VividLogger::app_info("Created side camera entity at position (3.0, 3.0, 3.0)");
+    VividLogger::app_info("Render window will appear in ImGui with title 'SideCamera'");
     VividLogger::app_info("Scene initialization completed!");
     VividLogger::debug("=== SceneInitialization system finished ===");
   }

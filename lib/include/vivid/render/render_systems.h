@@ -86,9 +86,16 @@ private:
                              WebGPUContext& webgpuRes);
   static void syncSceneImpl(flecs::entity e, const MeshComponent& mesh,
                             const MaterialComponent& material, WebGPUContext& webgpuRes);
-  static void renderMeshImpl(const flecs::iter& it);
-  static void renderViewportsImpl(const flecs::iter& it);
-  static void submitImpl(const flecs::iter& it);
+  // PreparePhase systems
+  static void prepareSurfaceImpl(const flecs::iter& it);
+  static void prepareViewportResourcesImpl(const flecs::iter& it);
+  // RenderPhase systems
+  static void beginMainRenderPassImpl(const flecs::iter& it);
+  static void beginViewportRenderPassImpl(const flecs::iter& it);
+  static void renderSceneImpl(const flecs::iter& it);
+  static void endViewportRenderPassImpl(const flecs::iter& it);
+  // SubmitPhase systems
+  static void submitMainRenderPassImpl(const flecs::iter& it);
   static void releaseWebGPUResourcesImpl(const flecs::iter& it);
 
   // Additional system implementations (not registered, but converted to Flecs format)
@@ -132,13 +139,25 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
     VIVID_LOG_MODULE_INFO("│   ├── Filters: without<GpuMeshComponent>");
     VIVID_LOG_MODULE_INFO("│   └── Executes: syncSceneImpl()");
     VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: PreparePhase");
+    VIVID_LOG_MODULE_INFO("├── 🔄 PrepareSurface");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: prepareSurfaceImpl()");
+    VIVID_LOG_MODULE_INFO("└── 🔄 PrepareViewportResources");
+    VIVID_LOG_MODULE_INFO("    └── Executes: prepareViewportResourcesImpl()");
+    VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: RenderPhase");
-    VIVID_LOG_MODULE_INFO("├── 🔄 RenderMesh");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: renderMeshImpl()");
+    VIVID_LOG_MODULE_INFO("├── 🔄 BeginMainRenderPass (conditional: no viewport)");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: beginMainRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("├── 🔄 BeginViewportRenderPass");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: beginViewportRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("├── 🔄 RenderScene");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: renderSceneImpl()");
+    VIVID_LOG_MODULE_INFO("└── 🔄 EndViewportRenderPass");
+    VIVID_LOG_MODULE_INFO("    └── Executes: endViewportRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: SubmitPhase");
-    VIVID_LOG_MODULE_INFO("├── 🔄 Submit");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: submitImpl()");
+    VIVID_LOG_MODULE_INFO("└── 🔄 SubmitMainRenderPass (conditional: has main render pass)");
+    VIVID_LOG_MODULE_INFO("    └── Executes: submitMainRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: Shutdown");
     VIVID_LOG_MODULE_INFO("└── 🔄 ReleaseWebGPUResources");
@@ -210,9 +229,18 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .kind(flecs::PreUpdate)
       .each(syncSceneImpl);
 
-  world.system("RenderMesh").kind(RenderPhase).run(renderMeshImpl);
-  world.system("RenderViewports").kind(RenderPhase).run(renderViewportsImpl);
-  world.system("Submit").kind(SubmitPhase).run(submitImpl);
+  // PreparePhase systems
+  world.system("PrepareSurface").kind(PreparePhase).run(prepareSurfaceImpl);
+  world.system("PrepareViewportResources").kind(PreparePhase).run(prepareViewportResourcesImpl);
+
+  // RenderPhase systems
+  world.system("BeginMainRenderPass").kind(RenderPhase).run(beginMainRenderPassImpl);
+  world.system("BeginViewportRenderPass").kind(RenderPhase).run(beginViewportRenderPassImpl);
+  world.system("RenderScene").kind(RenderPhase).run(renderSceneImpl);
+  world.system("EndViewportRenderPass").kind(RenderPhase).run(endViewportRenderPassImpl);
+
+  // SubmitPhase systems
+  world.system("SubmitMainRenderPass").kind(SubmitPhase).run(submitMainRenderPassImpl);
 
   // Cleanup - runs once at shutdown
   world.system("ReleaseWebGPUResources").kind<ShutdownPhase>().run(releaseWebGPUResourcesImpl);
