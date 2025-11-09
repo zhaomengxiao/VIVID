@@ -3,11 +3,19 @@
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
+#include <vivid/input/camera_controller.h>
 #include <vivid/log/log.h>
+#include <vivid/render/render_component.h>
 #include <vivid/render/render_systems.h>
 #include <vivid/window/window_component.h>
 #include <webgpu/webgpu.h>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstring>
+#include <deque>
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 
 #ifdef __EMSCRIPTEN__
@@ -24,6 +32,9 @@
 
 namespace VIVID {
 namespace UI {
+
+// Helper function to convert string to WGPUStringView
+static WGPUStringView toWgpuStringView(const char* cString) { return {cString, WGPU_STRLEN}; }
 
 // Static member function implementations
 
@@ -131,8 +142,8 @@ void UISystems::showImGuiDemoImpl(const flecs::iter& it) {
 
   // ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
 
-  // ImGui::Text("This is some useful text.");  // Display some text (you can use a format strings too)
-  // ImGui::Checkbox("Demo Window",
+  // ImGui::Text("This is some useful text.");  // Display some text (you can use a format strings
+  // too) ImGui::Checkbox("Demo Window",
   //                 &show_demo_window);  // Edit bools storing our window open/close state
   // ImGui::Checkbox("Another Window", &show_another_window);
 
@@ -194,6 +205,50 @@ void UISystems::shutDownImGuiImpl(const flecs::iter& it) {
   ImGui::DestroyContext();
 
   std::cout << "ImGui shutdown complete" << std::endl;
+}
+
+// Display viewport windows in ImGui (rendering handled by RenderSystems)
+void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
+  auto world = it.world();
+  auto viewportQuery = world.query<RENDER::CameraComponent, RENDER::ViewportComponent>();
+
+  viewportQuery.each([&](flecs::entity entity, const RENDER::CameraComponent& camera,
+                         RENDER::ViewportComponent& viewport) {
+    // Get window title
+    std::string windowTitle = "Viewport";
+    if (entity.has<RENDER::TagComponent>()) {
+      windowTitle = entity.get<RENDER::TagComponent>().Tag;
+    } else if (const char* name = entity.name(); name && strlen(name) > 0) {
+      windowTitle = name;
+    }
+
+    ImGui::Begin(windowTitle.c_str());
+    viewport.IsFocused = ImGui::IsWindowFocused();
+    viewport.IsHovered = ImGui::IsWindowHovered();
+
+    // Update viewport size if window size changed
+    ImVec2 contentSize = ImGui::GetContentRegionAvail();
+    float newWidth = std::max(1.0f, std::min(contentSize.x, 4096.0f));
+    float newHeight = std::max(1.0f, std::min(contentSize.y, 4096.0f));
+
+    if (newWidth > 0 && newHeight > 0
+        && (std::abs(viewport.Width - newWidth) > 1.0f
+            || std::abs(viewport.Height - newHeight) > 1.0f)) {
+      viewport.Width = newWidth;
+      viewport.Height = newHeight;
+      viewport.initialized = false;
+    }
+
+    // Display texture
+    if (viewport.renderTextureView && viewport.TextureID != 0) {
+      ImGui::Image(reinterpret_cast<ImTextureID>(viewport.renderTextureView),
+                   ImVec2(viewport.Width, viewport.Height));
+    } else {
+      ImGui::Text("Rendering...");
+    }
+
+    ImGui::End();
+  });
 }
 
 }  // namespace UI

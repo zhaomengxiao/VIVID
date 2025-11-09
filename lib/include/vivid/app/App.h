@@ -24,7 +24,6 @@ struct EventQueues {
 class App {
 private:
   flecs::world world_;
-  // std::vector<std::unique_ptr<Plugin>> plugins_;
   bool running_ = true;
   bool initialized_ = false;
 
@@ -121,6 +120,12 @@ public:
 
     // ensure ensure resource exists, if not, create one
     world_.set<EventQueues>({});
+
+    // Optional, gather statistics for explorer
+    world_.import <flecs::stats>();
+
+    // Creates REST server on default port (27750)
+    world_.set<flecs::Rest>({});
 
     // Run startup systems
     world_.progress(0);

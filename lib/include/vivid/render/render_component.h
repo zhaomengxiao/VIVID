@@ -1,6 +1,7 @@
 #pragma once
 
 #include <flecs.h>
+#include <webgpu/webgpu.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -79,6 +80,15 @@ struct ViewportComponent {
 
   bool IsFocused = false;
   bool IsHovered = false;
+
+  // Offscreen rendering resources for ImGui viewport windows
+  WGPUTexture renderTexture = nullptr;          // Offscreen render target texture
+  WGPUTextureView renderTextureView = nullptr;  // Texture view for ImGui
+  WGPUTexture depthTexture = nullptr;           // Depth texture for offscreen rendering
+  WGPUTextureView depthView = nullptr;          // Depth texture view
+  uint32_t configuredWidth = 0;                 // Track configured texture width
+  uint32_t configuredHeight = 0;                // Track configured texture height
+  bool initialized = false;                     // Flag to ensure one-time initialization
 };
 
 // Render Components Module

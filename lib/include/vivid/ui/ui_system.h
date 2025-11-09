@@ -46,6 +46,8 @@ private:
   static void showImGuiDemoImpl(const flecs::iter& it);
   static void renderImGuiImpl(RENDER::WebGPUContext& webgpuRes);
   static void shutDownImGuiImpl(const flecs::iter& it);
+  // Display viewport windows in ImGui
+  static void displayViewportWindowsImpl(const flecs::iter& it);
 };
 
 // Constructor - Register module and systems
@@ -115,17 +117,43 @@ inline UISystems::UISystems(flecs::world& world) {
   // 3. Show ImGui demo - runs every frame in Update
   world.system("ShowImGuiDemo").kind(flecs::PreUpdate).run(showImGuiDemoImpl);
 
-  // 4. Render ImGui - integrated with RenderSystems pipeline
-  VIVID_LOG_SYSTEM("Looking up RenderUIPhase from RenderSystems...");
-  flecs::entity RenderUIPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderUIPhase");
+  // 3.5 Display viewport windows in ImGui - runs in PreUpdate before rendering
+  world.system("DisplayViewportWindows").kind(flecs::PreUpdate).run(displayViewportWindowsImpl);
+
+  // 4. Render viewport windows to offscreen textures - between RenderPhase and RenderUIPhase
+  VIVID_LOG_SYSTEM("Looking up RenderPhase and RenderUIPhase from RenderSystems...");
+  flecs::entity RenderPhase = world.lookup("RenderPhase");
+  flecs::entity RenderUIPhase = world.lookup("RenderUIPhase");
+
+  // Try alternative lookup if not found (with module prefix)
+  if (RenderPhase.id() == 0) {
+    RenderPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderPhase");
+  }
   if (RenderUIPhase.id() == 0) {
+    RenderUIPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderUIPhase");
+  }
+
+  if (RenderPhase.id() == 0 || RenderUIPhase.id() == 0) {
     VIVID_LOG_ERROR(
-        "RenderUIPhase not found! Make sure RenderSystems is imported before UISystems.");
+        "RenderPhase or RenderUIPhase not found! Make sure RenderSystems is imported before "
+        "UISystems.");
     return;
   } else {
+    VIVID_LOG_SUCCESS("RenderPhase found: %s", RenderPhase.name());
     VIVID_LOG_SUCCESS("RenderUIPhase found: %s", RenderUIPhase.name());
   }
-  // 3.5 Render ImGui draw data within the render pass
+
+  // Create RenderViewportPhase between RenderPhase and RenderUIPhase
+  // The execution order will be: RenderPhase -> RenderViewportPhase -> RenderUIPhase
+  // We create RenderViewportPhase to depend on RenderPhase, and ensure RenderUIPhase
+  // depends on both RenderPhase (existing) and RenderViewportPhase (new)
+  // Flecs will automatically order phases correctly based on dependencies
+  flecs::entity RenderViewportPhase
+      = world.entity("RenderViewportPhase").add(flecs::Phase).depends_on(RenderPhase);
+  // Make RenderUIPhase also depend on RenderViewportPhase to ensure correct ordering
+  RenderUIPhase.add(flecs::DependsOn, RenderViewportPhase);
+
+  // 4.5 Render ImGui draw data within the render pass
   world.system<RENDER::WebGPUContext>("RenderImGui").kind(RenderUIPhase).each(renderImGuiImpl);
 
   // 5. Shutdown ImGui - runs once at shutdown

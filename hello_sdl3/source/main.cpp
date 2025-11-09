@@ -124,18 +124,27 @@ private:
 
     VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
 
-    // --- Create Camera Entity ---
+    // --- Create Camera Entity for Render Window ---
+    // Entities with both CameraComponent and ViewportComponent will automatically
+    // render to an ImGui window. The window title will be from TagComponent.Tag.
     auto cameraEntity = world.entity("MainCamera");
     VIVID::RENDER::TransformComponent camTransform;
     camTransform.Position = {0.0f, 0.0f, 5.0f};
 
+    // Setup ViewportComponent with initial size for ImGui window
+    // The size will automatically adjust based on ImGui window size
+    VIVID::RENDER::ViewportComponent viewport;
+    viewport.Width = 800.0f;
+    viewport.Height = 600.0f;
+
     cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
         .set<VIVID::RENDER::TransformComponent>(camTransform)
         .set<VIVID::RENDER::CameraComponent>({})
-        .set<VIVID::RENDER::ViewportComponent>({})
+        .set<VIVID::RENDER::ViewportComponent>(viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>({});
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
+    VividLogger::app_info("Render window will appear in ImGui with title 'MainCamera'");
     VividLogger::app_info("Scene initialization completed!");
     VividLogger::debug("=== SceneInitialization system finished ===");
   }

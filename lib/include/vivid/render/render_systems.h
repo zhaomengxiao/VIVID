@@ -87,6 +87,7 @@ private:
   static void syncSceneImpl(flecs::entity e, const MeshComponent& mesh,
                             const MaterialComponent& material, WebGPUContext& webgpuRes);
   static void renderMeshImpl(const flecs::iter& it);
+  static void renderViewportsImpl(const flecs::iter& it);
   static void submitImpl(const flecs::iter& it);
   static void releaseWebGPUResourcesImpl(const flecs::iter& it);
 
@@ -153,7 +154,6 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // Import component modules
   world.import <RenderComponents>();
-  // world.import <VIVID::WINDOW::WindowComponents>();  // Import window components for querying
   VIVID_LOG_SYSTEM("Registering RenderSystems...");
   world.set<WebGPUContext>({});
   world.component<GpuMeshComponent>();
@@ -210,32 +210,8 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .kind(flecs::PreUpdate)
       .each(syncSceneImpl);
 
-  // world
-  //     .system<VIVID::WINDOW::WindowGpuComponent, WebGPUContext, RenderContext>(
-  //         "SurfaceManagement")
-  //     .term_at(1)
-  //     .src<WebGPUContext>()
-  //     .term_at(2)
-  //     .src<RenderContext>()
-  //     .kind(flecs::OnUpdate)
-  //     .each(surfaceManagementImpl);
-
-  // world.system<RenderContext>("SceneCollection").kind(flecs::OnUpdate).each(sceneCollectionImpl);
-
-  // world.system<GpuMeshComponent, TransformComponent, MaterialComponent,
-  // RenderContext>("MeshRender")
-  //     .term_at(3)
-  //     .src<RenderContext>()
-  //     .kind(flecs::OnUpdate)
-  //     .each(meshRenderImpl);
-
-  // world.system<RenderContext>("UIRender").kind(flecs::OnUpdate).each(uiRenderImpl);
-
-  // world.system<WebGPUContext, RenderContext>("CommandSubmission")
-  //     .kind(flecs::OnUpdate)
-  //     .each(commandSubmissionImpl);
-
   world.system("RenderMesh").kind(RenderPhase).run(renderMeshImpl);
+  world.system("RenderViewports").kind(RenderPhase).run(renderViewportsImpl);
   world.system("Submit").kind(SubmitPhase).run(submitImpl);
 
   // Cleanup - runs once at shutdown
