@@ -450,7 +450,7 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
       return;
     }
 
-    viewport.TextureID = reinterpret_cast<uint32_t>(viewport.renderTextureView);
+    viewport.TextureID = reinterpret_cast<uintptr_t>(viewport.renderTextureView);
     viewport.configuredWidth = width;
     viewport.configuredHeight = height;
     viewport.initialized = true;

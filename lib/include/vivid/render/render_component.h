@@ -76,7 +76,7 @@ struct CameraComponent {
 struct ViewportComponent {
   float Width = 1280.0f;
   float Height = 720.0f;
-  uint32_t TextureID = 0;
+  uintptr_t TextureID = 0;
 
   bool IsFocused = false;
   bool IsHovered = false;

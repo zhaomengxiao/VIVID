@@ -43,9 +43,10 @@ private:
   static void initImGuiImpl(const WINDOW::WindowContext& windowContext,
                             const RENDER::WebGPUContext& webgpuRes);
   static void processImGuiEventImpl(VIVID::APP::EventQueues& eventQueues);
-  static void showImGuiDemoImpl(const flecs::iter& it);
-  static void renderImGuiImpl(RENDER::WebGPUContext& webgpuRes);
-  static void shutDownImGuiImpl(const flecs::iter& it);
+  static void newFrameImpl(const flecs::iter& it);
+  static void renderUIImpl(RENDER::WebGPUContext& webgpuRes);
+  static void endFrameImpl(const flecs::iter& it);
+  static void shutDownUIImpl(const flecs::iter& it);
   // Display viewport windows in ImGui
   static void displayViewportWindowsImpl(const flecs::iter& it);
 };
@@ -62,6 +63,11 @@ inline UISystems::UISystems(flecs::world& world) {
     VIVID_LOG_MODULE_INFO("├── 📦 WebGPUContext (from RenderSystems)");
     VIVID_LOG_MODULE_INFO("└── 📦 RenderUIPhase (from RenderSystems pipeline)");
     VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("🎯 CUSTOM PIPELINE PHASES:");
+    VIVID_LOG_MODULE_INFO("├── 📍 NewFramePhase  ← depends_on(PreUpdate)");
+    VIVID_LOG_MODULE_INFO("├── 📍 DrawFramePhase  ← depends_on(NewFramePhase)");
+    VIVID_LOG_MODULE_INFO("└── 📍 EndFramePhase  ← depends_on(DrawFramePhase)");
+    VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("🏗️  SYSTEMS REGISTRATION:");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: OnStart");
@@ -73,17 +79,24 @@ inline UISystems::UISystems(flecs::world& world) {
     VIVID_LOG_MODULE_INFO("├── 🔄 ProcessImGuiEvent");
     VIVID_LOG_MODULE_INFO("│   ├── Requires: EventQueues");
     VIVID_LOG_MODULE_INFO("│   └── Executes: processImGuiEventImpl()");
-    VIVID_LOG_MODULE_INFO("└── 🔄 ShowImGuiDemo");
-    VIVID_LOG_MODULE_INFO("    └── Executes: showImGuiDemoImpl()");
+    VIVID_LOG_MODULE_INFO("└── 🔄 NewFrame");
+    VIVID_LOG_MODULE_INFO("    └── Executes: newFrameImpl()");
+    VIVID_LOG_MODULE_INFO("└── 🔄 DisplayViewportWindows");
+    VIVID_LOG_MODULE_INFO("    └── Executes: displayViewportWindowsImpl()");
+    VIVID_LOG_MODULE_INFO("");
+    VIVID_LOG_MODULE_INFO("📍 PHASE: EndFramePhase");
+    VIVID_LOG_MODULE_INFO("├── 🔄 EndFrame");
+    VIVID_LOG_MODULE_INFO("│   ├── Requires: WebGPUContext");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: renderUIImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: RenderUIPhase (from RenderSystems)");
     VIVID_LOG_MODULE_INFO("├── 🔄 RenderImGui");
     VIVID_LOG_MODULE_INFO("│   ├── Requires: WebGPUContext");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: renderImGuiImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: renderUIImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: Shutdown");
     VIVID_LOG_MODULE_INFO("└── 🔄 ShutDownImGui");
-    VIVID_LOG_MODULE_INFO("    └── Executes: shutDownImGuiImpl()");
+    VIVID_LOG_MODULE_INFO("    └── Executes: shutDownUIImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("💾 INTEGRATION:");
     VIVID_LOG_MODULE_INFO("└── 🔗 Hooks into RenderSystems RenderUIPhase for ImGui rendering");
@@ -95,6 +108,18 @@ inline UISystems::UISystems(flecs::world& world) {
 
   // Import components module
   world.import <UIComponents>();
+
+  // add custom phases
+  // NewFramePhase -> DrawFramePhase -> EndFramePhase
+  // if other modules systems want to use UI, they should depend on DrawFramePhase
+  flecs::entity NewFramePhase
+      = world.entity("NewFramePhase").add(flecs::Phase).depends_on(flecs::PreUpdate);
+
+  flecs::entity DrawFramePhase
+      = world.entity("DrawFramePhase").add(flecs::Phase).depends_on(NewFramePhase);
+
+  flecs::entity EndFramePhase
+      = world.entity("EndFramePhase").add(flecs::Phase).depends_on(DrawFramePhase);
 
   // Register systems
   VIVID_LOG_SYSTEM("Registering InitImGui system...");
@@ -109,55 +134,34 @@ inline UISystems::UISystems(flecs::world& world) {
 
   VIVID_LOG_SUCCESS("InitImGui system registered successfully");
 
-  // 2. Process ImGui events - runs every frame in PreUpdate
+  // Process ImGui events
   world.system<VIVID::APP::EventQueues>("ProcessImGuiEvent")
       .kind(flecs::PreUpdate)
       .each(processImGuiEventImpl);
 
-  // 3. Show ImGui demo - runs every frame in Update
-  world.system("ShowImGuiDemo").kind(flecs::PreUpdate).run(showImGuiDemoImpl);
+  // Start UI frame
+  world.system("NewFrame").kind(NewFramePhase).run(newFrameImpl);
 
-  // 3.5 Display viewport windows in ImGui - runs in PreUpdate before rendering
-  world.system("DisplayViewportWindows").kind(flecs::PreUpdate).run(displayViewportWindowsImpl);
+  // Display viewport windows
+  world.system("DisplayViewportWindows").kind(DrawFramePhase).run(displayViewportWindowsImpl);
 
-  // 4. Render viewport windows to offscreen textures - between RenderPhase and RenderUIPhase
-  VIVID_LOG_SYSTEM("Looking up RenderPhase and RenderUIPhase from RenderSystems...");
-  flecs::entity RenderPhase = world.lookup("RenderPhase");
-  flecs::entity RenderUIPhase = world.lookup("RenderUIPhase");
+  // End UI frame
+  world.system("EndFrame").kind(EndFramePhase).run(endFrameImpl);
 
-  // Try alternative lookup if not found (with module prefix)
-  if (RenderPhase.id() == 0) {
-    RenderPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderPhase");
-  }
+  VIVID_LOG_SYSTEM("Looking up RenderUIPhase from RenderSystems...");
+
+  flecs::entity RenderUIPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderUIPhase");
   if (RenderUIPhase.id() == 0) {
-    RenderUIPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderUIPhase");
-  }
-
-  if (RenderPhase.id() == 0 || RenderUIPhase.id() == 0) {
     VIVID_LOG_ERROR(
-        "RenderPhase or RenderUIPhase not found! Make sure RenderSystems is imported before "
-        "UISystems.");
+        "RenderUIPhase not found! Make sure RenderSystems is imported before UISystems.");
     return;
-  } else {
-    VIVID_LOG_SUCCESS("RenderPhase found: %s", RenderPhase.name());
-    VIVID_LOG_SUCCESS("RenderUIPhase found: %s", RenderUIPhase.name());
   }
 
-  // Create RenderViewportPhase between RenderPhase and RenderUIPhase
-  // The execution order will be: RenderPhase -> RenderViewportPhase -> RenderUIPhase
-  // We create RenderViewportPhase to depend on RenderPhase, and ensure RenderUIPhase
-  // depends on both RenderPhase (existing) and RenderViewportPhase (new)
-  // Flecs will automatically order phases correctly based on dependencies
-  flecs::entity RenderViewportPhase
-      = world.entity("RenderViewportPhase").add(flecs::Phase).depends_on(RenderPhase);
-  // Make RenderUIPhase also depend on RenderViewportPhase to ensure correct ordering
-  RenderUIPhase.add(flecs::DependsOn, RenderViewportPhase);
+  // Render ImGui draw data within the render pass
+  world.system<RENDER::WebGPUContext>("RenderImGui").kind(RenderUIPhase).each(renderUIImpl);
 
-  // 4.5 Render ImGui draw data within the render pass
-  world.system<RENDER::WebGPUContext>("RenderImGui").kind(RenderUIPhase).each(renderImGuiImpl);
-
-  // 5. Shutdown ImGui - runs once at shutdown
-  world.system("ShutDownImGui").kind<ShutdownPhase>().run(shutDownImGuiImpl);
+  // Shutdown ImGui - runs once at shutdown
+  world.system("ShutDownUI").kind<ShutdownPhase>().run(shutDownUIImpl);
 
   VIVID_LOG_SUCCESS("UISystems module registration completed!");
 }

@@ -33,12 +33,6 @@
 namespace VIVID {
 namespace UI {
 
-// Helper function to convert string to WGPUStringView
-static WGPUStringView toWgpuStringView(const char* cString) { return {cString, WGPU_STRLEN}; }
-
-// Static member function implementations
-
-// Initialize ImGui system
 void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
                               const RENDER::WebGPUContext& webgpuRes) {
   VividLogger::app_debug("=== InitImGui system called ===");
@@ -120,83 +114,25 @@ void UISystems::processImGuiEventImpl(VIVID::APP::EventQueues& eventQueues) {
   }
 }
 
-// Show ImGui demo system
-void UISystems::showImGuiDemoImpl(const flecs::iter& it) {
-  // Build ImGui frame only; actual rendering happens in Render::Draw
+void UISystems::newFrameImpl(const flecs::iter& it) {
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
-
-  // // Static state for demo windows
-  // static bool show_demo_window = true;
-  // static bool show_another_window = false;
-  // static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
-  // // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named
-  // // window.
-
-  // // Our state
-
-  // static float f = 0.0f;
-  // static int counter = 0;
-
-  // ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
-
-  // ImGui::Text("This is some useful text.");  // Display some text (you can use a format strings
-  // too) ImGui::Checkbox("Demo Window",
-  //                 &show_demo_window);  // Edit bools storing our window open/close state
-  // ImGui::Checkbox("Another Window", &show_another_window);
-
-  // ImGui::SliderFloat("float", &f, 0.0f, 1.0f);             // Edit 1 float using a slider
-  // ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
-
-  // if (ImGui::Button("Button"))  // Buttons return true when clicked (most widgets return true
-  //                               // when edited/activated)
-  //   counter++;
-  // ImGui::SameLine();
-  // ImGui::Text("counter = %d", counter);
-
-  // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
-  //             ImGui::GetIO().Framerate);
-  // ImGui::End();
-
-  // if (show_demo_window) {
-  //   ImGui::ShowDemoWindow();
-  // }
-
-  // // Show another simple window
-  // if (show_another_window) {
-  //   ImGui::Begin(
-  //       "Another Window",
-  //       &show_another_window);  // Pass a pointer to our bool variable (the window will have a
-  //                               // closing button that will clear the bool when clicked)
-  //   ImGui::Text("Hello from another window!");
-  //   if (ImGui::Button("Close Me")) show_another_window = false;
-  //   ImGui::End();
-  // }
-
-  // Do not call ImGui::Render() here; it will be invoked in Render::Draw
 }
 
 // Render ImGui draw data inside active render pass
-void UISystems::renderImGuiImpl(RENDER::WebGPUContext& webgpuRes) {
-  // IMPORTANT: This function is responsible for closing the ImGui frame,
-  // either by calling ImGui::Render() (which calls EndFrame internally)
-  // or by explicitly calling ImGui::EndFrame() if rendering is skipped.
-
-  // If we built a frame but cannot render this tick, close the frame manually
-  if (webgpuRes.renderPass == nullptr) {
-    ImGui::EndFrame();
-    return;
+void UISystems::renderUIImpl(RENDER::WebGPUContext& webgpuRes) {
+  if (webgpuRes.renderPass != nullptr) {
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpuRes.renderPass);
   }
+}
 
-  // Normal rendering: Render() will call EndFrame() internally
-  ImGui::Render();
-  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpuRes.renderPass);
+void UISystems::endFrameImpl(const flecs::iter& it) {
+  ImGui::Render();  // Render() will call EndFrame() internally
 }
 
 // Shutdown ImGui system
-void UISystems::shutDownImGuiImpl(const flecs::iter& it) {
+void UISystems::shutDownUIImpl(const flecs::iter& it) {
   std::cout << "Shutting down ImGui..." << std::endl;
 
   ImGui::DestroyPlatformWindows();

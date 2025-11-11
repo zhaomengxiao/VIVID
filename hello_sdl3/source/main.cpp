@@ -4,6 +4,7 @@
 #include <iostream>
 #include <utility>
 
+#include "imgui.h"
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
 #include "vivid/log/log.h"
@@ -214,6 +215,74 @@ private:
   }
 };
 
+struct ImGuiDemo {
+  ImGuiDemo(flecs::world& world) {
+    world.module<ImGuiDemo>();
+
+    // get draw frame phase
+    flecs::entity DrawFramePhase = world.lookup("VIVID::UI::UISystems::DrawFramePhase");
+    if (DrawFramePhase.id() == 0) {
+      VividLogger::error(
+          "DrawFramePhase not found! Make sure UISystems is imported before ImGuiDemo.");
+      return;
+    }
+
+    world.system("ImGuiDemo").kind(DrawFramePhase).run(ImGuiDemoImpl);
+  }
+
+private:
+  static void ImGuiDemoImpl(flecs::iter& it) {
+    // Static state for demo windows
+    static bool show_demo_window = true;
+    static bool show_another_window = false;
+    static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named
+    // window.
+
+    // Our state
+
+    static float f = 0.0f;
+    static int counter = 0;
+
+    ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
+
+    ImGui::Text(
+        "This is some useful text.");  // Display some text (you can use a format strings too)
+    ImGui::Checkbox("Demo Window",
+                    &show_demo_window);  // Edit bools storing our window open/close state
+    ImGui::Checkbox("Another Window", &show_another_window);
+
+    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);             // Edit 1 float using a slider
+    ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
+
+    if (ImGui::Button("Button"))  // Buttons return true when clicked (most widgets return true
+                                  // when edited/activated)
+      counter++;
+    ImGui::SameLine();
+    ImGui::Text("counter = %d", counter);
+
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
+                ImGui::GetIO().Framerate);
+    ImGui::End();
+
+    if (show_demo_window) {
+      ImGui::ShowDemoWindow();
+    }
+
+    // Show another simple window
+    if (show_another_window) {
+      ImGui::Begin(
+          "Another Window",
+          &show_another_window);  // Pass a pointer to our bool variable (the window will have a
+                                  // closing button that will clear the bool when clicked)
+      ImGui::Text("Hello from another window!");
+      if (ImGui::Button("Close Me")) show_another_window = false;
+      ImGui::End();
+    }
+  }
+};
+
 // Module registration overview display
 struct ModuleOverview {
   ModuleOverview(flecs::world& world) {
@@ -296,11 +365,14 @@ VIVID_SDL3_MAIN(
         // 应用配置
         .insert_resource<MyResource>(100)
         .import_module<ModuleOverview>()                // Display module registration overview
-        .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create default)
+        .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create
+                                                        // default)
         .import_module<Setup>()                         // Scene initialization (after window)
         // .import_module<WindowSetup>()                   // Create custom window entity first
-        .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to PreUpdate)
+        .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to
+                                                        // PreUpdate)
         .import_module<VIVID::UI::UISystems>()          // ImGui UI
+        .import_module<ImGuiDemo>()                     // ImGui demo
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
 
 )
