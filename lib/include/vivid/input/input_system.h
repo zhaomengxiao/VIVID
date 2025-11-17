@@ -4,8 +4,19 @@
 
 #include <glm/glm.hpp>
 
-#include "../rendering/render_component.h"
+#include "../render/render_component.h"
 #include "camera_controller.h"
+
+// Input Components Module - registers input-related components
+struct InputComponents {
+  InputComponents(flecs::world& world) {
+    // Register module
+    world.module<InputComponents>();
+
+    // Register components
+    world.component<CameraControllerComponent>();
+  }
+};
 
 // InputSystem class - currently a placeholder
 // Input handling is done through SDL3 events in WindowPlugin

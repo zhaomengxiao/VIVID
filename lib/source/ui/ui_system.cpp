@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
+#include <imgui_internal.h>
 #include <vivid/input/camera_controller.h>
 #include <vivid/log/log.h>
 #include <vivid/render/render_component.h>
@@ -17,6 +18,7 @@
 #include <deque>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#include <vector>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -32,6 +34,19 @@
 
 namespace VIVID {
 namespace UI {
+
+// Tooltip info structure for camera controller debug display
+struct TooltipInfo {
+  std::string title;
+  bool isActive;
+  bool isDragging;
+  float yaw, pitch;
+  float mouseX, mouseY;
+  bool mouseInViewport;
+  glm::vec3 front, up;
+  ImVec2 mousePos;
+  bool show = false;
+};
 
 void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
                               const RENDER::WebGPUContext& webgpuRes) {
@@ -118,6 +133,31 @@ void UISystems::newFrameImpl(const flecs::iter& it) {
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
+
+  // Create a full-screen dock space for organizing viewports
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->Pos);
+  ImGui::SetNextWindowSize(viewport->Size);
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+  window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
+                  | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+  window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+  window_flags |= ImGuiWindowFlags_NoBackground;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+  ImGui::Begin("DockSpace", nullptr, window_flags);
+  ImGui::PopStyleVar(3);
+
+  // Create the dock space
+  ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+  ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+  ImGui::End();
 }
 
 // Render ImGui draw data inside active render pass
@@ -148,19 +188,31 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   auto world = it.world();
   auto viewportQuery = world.query<RENDER::CameraComponent, RENDER::ViewportComponent>();
 
+  // Store tooltip info for all viewports (will be rendered after all viewports)
+  static std::vector<TooltipInfo> tooltips;
+
+  // Clear previous tooltips
+  tooltips.clear();
+
   viewportQuery.each([&](flecs::entity entity, const RENDER::CameraComponent& camera,
                          RENDER::ViewportComponent& viewport) {
     // Get window title
     std::string windowTitle = "Viewport";
-    if (entity.has<RENDER::TagComponent>()) {
-      windowTitle = entity.get<RENDER::TagComponent>().Tag;
-    } else if (const char* name = entity.name(); name && strlen(name) > 0) {
+    if (const char* name = entity.name(); name && strlen(name) > 0) {
       windowTitle = name;
     }
 
+    // Create dockable viewport window
+    // By default, ImGui only allows dragging windows by their title bar
+    // The content area does not respond to drag events
     ImGui::Begin(windowTitle.c_str());
     viewport.IsFocused = ImGui::IsWindowFocused();
     viewport.IsHovered = ImGui::IsWindowHovered();
+
+    // DEBUG TEXT
+    ImGui::Text("Viewport: %s", windowTitle.c_str());
+    ImGui::Text("IsFocused: %s", viewport.IsFocused ? "Yes" : "No");
+    ImGui::Text("IsHovered: %s", viewport.IsHovered ? "Yes" : "No");
 
     // Update viewport size if window size changed
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -175,6 +227,91 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
       viewport.initialized = false;
     }
 
+    // Camera controller logic for viewport
+    if (entity.has<CameraControllerComponent>()) {
+      auto& cameraController = entity.get_mut<CameraControllerComponent>();
+      auto& transform = entity.get_mut<RENDER::TransformComponent>();
+
+      // Handle mouse input when viewport is focused and hovered
+      if (viewport.IsFocused && viewport.IsHovered) {
+        ImVec2 mousePos = ImGui::GetMousePos();
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
+
+        // Convert to local viewport coordinates (relative to content area)
+        float localMouseX = mousePos.x - windowPos.x - contentMin.x;
+        float localMouseY = mousePos.y - windowPos.y - contentMin.y;
+
+        // Check if mouse is within viewport area
+        bool mouseInViewport = (localMouseX >= 0 && localMouseX <= viewport.Width
+                                && localMouseY >= 0 && localMouseY <= viewport.Height);
+
+        // Handle mouse button press/release events
+        // Check for mouse press (only when mouse is in viewport area)
+        if (mouseInViewport && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          cameraController.MousePressed = true;
+          cameraController.IsActive = true;  // Keep camera controller active during drag
+          cameraController.LastMousePos = glm::vec2(localMouseX, localMouseY);
+          std::cout << "[MOUSE] Started dragging in viewport: " << windowTitle << std::endl;
+        }
+
+        // Check for mouse release (anywhere - to stop dragging)
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && cameraController.MousePressed) {
+          cameraController.MousePressed = false;
+          // Keep IsActive true so camera can still be controlled, but stop mouse tracking
+          std::cout << "[MOUSE] Stopped dragging: " << windowTitle << std::endl;
+        }
+
+        // Handle mouse drag for camera rotation (only when mouse is pressed, active, and still in
+        // viewport)
+        if (cameraController.MousePressed && cameraController.IsActive && mouseInViewport) {
+          glm::vec2 currentMousePos(localMouseX, localMouseY);
+          glm::vec2 mouseDelta = currentMousePos - cameraController.LastMousePos;
+
+          // Only update if there's actual mouse movement
+          if (glm::length(mouseDelta) > 0.1f) {  // Small threshold to avoid noise
+            // Apply mouse sensitivity and update yaw/pitch
+            cameraController.Yaw += mouseDelta.x * cameraController.MouseSensitivity;
+            cameraController.Pitch -= mouseDelta.y * cameraController.MouseSensitivity;
+
+            // Constrain pitch to prevent camera flipping
+            if (cameraController.Pitch > 89.0f) cameraController.Pitch = 89.0f;
+            if (cameraController.Pitch < -89.0f) cameraController.Pitch = -89.0f;
+
+            // Update camera vectors based on new yaw/pitch
+            cameraController.UpdateVectors();
+
+            // Update transform rotation from camera controller
+            transform.Rotation.x = cameraController.Pitch;
+            transform.Rotation.y = cameraController.Yaw;
+            transform.Rotation.z = 0.0f;
+          }
+
+          // Update last mouse position
+          cameraController.LastMousePos = currentMousePos;
+        }
+
+        // Store debug info for tooltip display (will be rendered after all viewports)
+        if (cameraController.IsActive || cameraController.MousePressed) {
+          TooltipInfo tooltip;
+          tooltip.title = windowTitle;
+          tooltip.isActive = cameraController.IsActive;
+          tooltip.isDragging = cameraController.MousePressed;
+          tooltip.yaw = cameraController.Yaw;
+          tooltip.pitch = cameraController.Pitch;
+          tooltip.mouseX = localMouseX;
+          tooltip.mouseY = localMouseY;
+          tooltip.mouseInViewport = mouseInViewport;
+          tooltip.front = cameraController.Front;
+          tooltip.up = cameraController.Up;
+          tooltip.mousePos = mousePos;
+          tooltip.show = true;
+
+          tooltips.push_back(tooltip);
+        }
+      }
+    }
+
     // Display texture
     if (viewport.renderTextureView && viewport.TextureID != 0) {
       ImGui::Image(reinterpret_cast<ImTextureID>(viewport.renderTextureView),
@@ -185,6 +322,46 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
 
     ImGui::End();
   });
+
+  // // Render tooltips for all camera controllers (outside viewport windows)
+  // for (const auto& tooltip : tooltips) {
+  //   if (tooltip.show) {
+  //     ImGui::SetNextWindowPos(ImVec2(tooltip.mousePos.x + 15, tooltip.mousePos.y + 15));
+  //     ImGui::SetNextWindowBgAlpha(0.9f);
+  //     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+  //     ImGui::Begin((std::string("##") + tooltip.title + "_tooltip").c_str(), nullptr,
+  //                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+  //                  ImGuiWindowFlags_NoMove
+  //                      | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+
+  //     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s Camera Controller",
+  //                        tooltip.title.c_str());
+  //     ImGui::Separator();
+
+  //     ImGui::Text("Active: %s", tooltip.isActive ? "Yes" : "No");
+  //     ImGui::Text("Dragging: %s", tooltip.isDragging ? "Yes" : "No");
+  //     ImGui::Text("Yaw: %.1f°", tooltip.yaw);
+  //     ImGui::Text("Pitch: %.1f°", tooltip.pitch);
+
+  //     if (tooltip.isDragging) {
+  //       ImGui::Text("Mouse: (%.0f, %.0f)", tooltip.mouseX, tooltip.mouseY);
+  //       ImGui::Text("In Viewport: %s", tooltip.mouseInViewport ? "Yes" : "No");
+  //     }
+
+  //     ImGui::Text("Front: (%.2f, %.2f, %.2f)", tooltip.front.x, tooltip.front.y,
+  //     tooltip.front.z); ImGui::Text("Up: (%.2f, %.2f, %.2f)", tooltip.up.x, tooltip.up.y,
+  //     tooltip.up.z);
+
+  //     ImGui::End();
+  //     ImGui::PopStyleVar();
+
+  //     // Bring tooltip to front to ensure it's visible above other windows
+  //     if (ImGuiWindow* window
+  //         = ImGui::FindWindowByName((std::string("##") + tooltip.title + "_tooltip").c_str())) {
+  //       ImGui::BringWindowToDisplayFront(window);
+  //     }
+  //   }
+  // }
 }
 
 }  // namespace UI

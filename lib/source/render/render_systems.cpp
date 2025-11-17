@@ -235,6 +235,7 @@ static SceneRenderContext querySceneContext(flecs::world& world, uint32_t viewpo
       const auto& controller = mainCameraEntity.get<CameraControllerComponent>();
       glm::vec3 target = mainCameraTransform.Position + controller.Front;
       ctx.viewMatrix = glm::lookAt(mainCameraTransform.Position, target, controller.Up);
+
     } else {
       ctx.viewMatrix
           = glm::lookAt(mainCameraTransform.Position,
