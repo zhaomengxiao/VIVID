@@ -68,6 +68,28 @@
                 "EMSDK_NODE": "D:/ClineWorkSpace/emsdk/node/22.16.0_64bit/bin/node.exe",
                 "EMSDK_PYTHON": "D:/ClineWorkSpace/emsdk/python/3.13.3_64bit/python.exe"
             }
+        },
+        {
+            "name": "VC",
+            "displayName": "Windows Clang",
+            "description": "Build using Clang compiler on Windows",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clang",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "D:/ClineWorkSpace/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                },
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+                "VCPKG_FEATURE_FLAGS": "manifests",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "D:/DevSoftware/LLVM/bin/clang.exe",
+                "CMAKE_CXX_COMPILER": "D:/DevSoftware/LLVM/bin/clang++.exe"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/ClineWorkSpace/vcpkg"
+            }
         }
     ],
     "buildPresets": [
@@ -87,6 +109,12 @@
             "name": "VE",
             "displayName": "VIVID Emscripten",
             "configurePreset": "VE",
+            "configuration": "Release"
+        },
+        {
+            "name": "VC",
+            "displayName": "VIVID all Clang",
+            "configurePreset": "VC",
             "configuration": "Release"
         }
     ]

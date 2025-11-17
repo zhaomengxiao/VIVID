@@ -3,8 +3,6 @@
 #include <SDL3/SDL.h>
 #include <vivid/log/log.h>
 
-#include <iostream>
-
 #include "vivid/app/App.h"
 
 namespace VIVID {
@@ -15,7 +13,7 @@ namespace WINDOW {
 // Window initialization system
 void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowContext) {
   VividLogger::app_info("=== WindowInitialization system executing ===");
-  VividLogger::app_info("Entity: %s", entity.name());
+  VividLogger::app_info("Entity: %s", entity.name().c_str());
   VividLogger::app_info("Window handle before init: %p", windowContext.window_handle);
 
   if (windowContext.window_handle) {

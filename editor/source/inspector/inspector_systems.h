@@ -52,7 +52,7 @@ inline InspectorSystems::InspectorSystems(flecs::world& world) {
         "RenderUIPhase not found! Make sure RenderSystems is imported before UISystems.");
     return;
   } else {
-    VIVID_LOG_SUCCESS("RenderUIPhase found: %s", RenderUIPhase.name());
+    VIVID_LOG_SUCCESS("RenderUIPhase found: %s", RenderUIPhase.name().c_str());
   }
 
   world.system("DrawSceneHierarchy").kind(flecs::PreUpdate).run(drawSceneHierarchy);

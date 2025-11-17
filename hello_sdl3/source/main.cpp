@@ -211,7 +211,8 @@ private:
     // Calculate initial Yaw and Pitch from Front vector to synchronize with mouse controls
     // Pitch = asin(front.y), Yaw = atan2(front.z, front.x)
     sideCameraController.Pitch = glm::degrees(asin(sideCameraController.Front.y));
-    sideCameraController.Yaw = glm::degrees(atan2(sideCameraController.Front.z, sideCameraController.Front.x));
+    sideCameraController.Yaw
+        = glm::degrees(atan2(sideCameraController.Front.z, sideCameraController.Front.x));
 
     sideCameraEntity.set<VIVID::RENDER::TagComponent>({"SideCamera"})
         .set<VIVID::RENDER::TransformComponent>(sideCamTransform)
