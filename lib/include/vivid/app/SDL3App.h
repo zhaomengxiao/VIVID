@@ -233,6 +233,18 @@ public:
     return *this;
   }
 
+  // 设置开启REST服务器
+  SDL3AppBuilder& enable_rest_server() {
+    app_->EnableRestServer();
+    return *this;
+  }
+
+  // 设置开启flecs::stats
+  SDL3AppBuilder& enable_stats() {
+    app_->EnableStats();
+    return *this;
+  }
+
   // =============================================================================
   // SDL3 日志和错误处理配置方法
   // =============================================================================

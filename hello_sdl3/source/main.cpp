@@ -1,16 +1,11 @@
 // SDL3 Hello World Example
 // This example demonstrates how to use the new SDL3 callback-based application system
 
-#include <iostream>
-#include <utility>
-
 #include "imgui.h"
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
 #include "vivid/input/input_system.h"
 #include "vivid/log/log.h"
-#include "vivid/physics/physics_component.h"
-#include "vivid/physics/physics_system.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
 #include "vivid/window/window_component.h"
@@ -112,7 +107,6 @@ struct Setup {
     VIVID_LOG_SYSTEM("Registering Setup module...");
 
     using namespace VIVID::RENDER;
-    using namespace VIVID::PHYSICS;
 
     // Register module
     world.module<Setup>();
@@ -375,6 +369,10 @@ VIVID_SDL3_MAIN(
         .set_default_log_level(VividLogLevel::Debug)
         .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
         // 应用配置
+
+        .enable_stats()
+        .enable_rest_server()  // Creates REST server on default port (27750), which is required for
+                               // using Flecs with the explorer.
         .insert_resource<MyResource>(100)
         .import_module<ModuleOverview>()                // Display module registration overview
         .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create

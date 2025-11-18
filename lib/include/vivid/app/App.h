@@ -109,6 +109,24 @@ public:
     VividLogger::app_info("Application finished.");
   }
 
+  // Set enable REST server
+  void EnableRestServer() {
+#ifndef __EMSCRIPTEN__
+
+    world_.set<flecs::Rest>({});
+    VividLogger::app_info("Rest Server Running, navigate to this URL: https://flecs.dev/explorer");
+#else
+    // Note: REST server not supported in Emscripten browser environment
+    VividLogger::app_warn("Skipping flecs::Rest in Emscripten (not supported in browser)");
+#endif
+  }
+
+  // Enable flecs::stats
+  void EnableStats() {
+    world_.import <flecs::stats>();
+    VividLogger::app_info("Stats Enabled");
+  }
+
   // SDL3 Callback mode support
 
   // Initialize application (corresponds to SDL_AppInit)
@@ -118,17 +136,6 @@ public:
 
     // ensure ensure resource exists, if not, create one
     world_.set<EventQueues>({});
-
-    // Optional, gather statistics for explorer
-    world_.import <flecs::stats>();
-
-    // Creates REST server on default port (27750)
-    // Note: REST server not supported in Emscripten browser environment
-#ifndef __EMSCRIPTEN__
-    world_.set<flecs::Rest>({});
-#else
-    VividLogger::app_warn("Skipping flecs::Rest in Emscripten (not supported in browser)");
-#endif
 
     // Run startup systems
     world_.progress(0);

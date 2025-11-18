@@ -5,7 +5,6 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -91,18 +90,125 @@ struct ViewportComponent {
   bool initialized = false;                     // Flag to ensure one-time initialization
 };
 
+template <typename Elem, typename Vector = std::vector<Elem>>
+flecs::opaque<Vector, Elem> std_vector_support(flecs::world& world) {
+  return flecs::opaque<Vector, Elem>()
+      .as_type(world.vector<Elem>())
+
+      // Forward elements of std::vector value to serializer
+      .serialize([](const flecs::serializer* s, const Vector* data) {
+        for (const auto& el : *data) {
+          s->value(el);
+        }
+        return 0;
+      })
+
+      // Return vector count
+      .count([](const Vector* data) { return data->size(); })
+
+      // Resize contents of vector
+      .resize([](Vector* data, size_t size) { data->resize(size); })
+
+      // Ensure element exists, return pointer
+      .ensure_element([](Vector* data, size_t elem) {
+        if (data->size() <= elem) {
+          data->resize(elem + 1);
+        }
+
+        return &data->data()[elem];
+      });
+}
+
 // Render Components Module
 struct RenderComponents {
   RenderComponents(flecs::world& world) {
     // Register module
     world.module<RenderComponents>();
 
+    // register type
+    world.component<glm::vec3>().member<float>("x").member<float>("y").member<float>("z");
+    world.component<std::string>()
+        .opaque(flecs::String)  // Opaque type that maps to string
+        .serialize([](const flecs::serializer* s, const std::string* data) {
+          const char* str = data->c_str();
+          return s->value(flecs::String, &str);  // Forward to serializer
+        })
+        .assign_string([](std::string* data, const char* value) {
+          *data = value;  // Assign new value to std::string
+        });
+
+    // Register reflection for std::vector<int>
+    world.component<std::vector<int>>().opaque(std_vector_support<int>);
+
+    // Register reflection for std::vector<std::string>
+    world.component<std::vector<std::string>>().opaque(std_vector_support<std::string>);
+
     // Register components
     world.component<TransformComponent>();
     world.component<TagComponent>();
     world.component<MeshComponent>();
-    world.component<MaterialComponent>();
-    world.component<LightComponent>();
+    world.component<MaterialComponent>()
+        .member<std::string>("ShaderPath")
+        .member<glm::vec3>("ObjectColor")
+        .member<glm::vec3>("SpecularColor")
+        .member<float>("Shininess");
+
+    world.component<LightComponent>()
+        .opaque(world.component()
+                    .member<float>("LightColor_x")
+                    .member<float>("LightColor_y")
+                    .member<float>("LightColor_z")
+                    .member<float>("AmbientColor_x")
+                    .member<float>("AmbientColor_y")
+                    .member<float>("AmbientColor_z")
+                    .member<float>("Constant")
+                    .member<float>("Linear")
+                    .member<float>("Quadratic"))
+        .serialize([](const flecs::serializer* s, const LightComponent* data) {
+          // 序列化真实成员x/y/z（直接读取glm::vec3的原生成员）
+          s->member("LightColor_x");
+          s->value(data->LightColor.x);
+          s->member("LightColor_y");
+          s->value(data->LightColor.y);
+          s->member("LightColor_z");
+          s->value(data->LightColor.z);
+          s->member("AmbientColor_x");
+          s->value(data->AmbientColor.x);
+          s->member("AmbientColor_y");
+          s->value(data->AmbientColor.y);
+          s->member("AmbientColor_z");
+          s->value(data->AmbientColor.z);
+          s->member("Constant");
+          s->value(data->Constant);
+          s->member("Linear");
+          s->value(data->Linear);
+          return 0;  // 序列化成功返回0
+        })
+        .ensure_member([](LightComponent* dst, const char* member_name) -> void* {
+          // 反序列化仅处理真实成员x/y/z，虚拟成员length不支持赋值
+          if (strcmp(member_name, "LightColor_x") == 0) {
+            return &(dst->LightColor.x);
+          } else if (strcmp(member_name, "LightColor_y") == 0) {
+            return &(dst->LightColor.y);
+          } else if (strcmp(member_name, "LightColor_z") == 0) {
+            return &(dst->LightColor.z);
+          } else if (strcmp(member_name, "AmbientColor_x") == 0) {
+            return &(dst->AmbientColor.x);
+          } else if (strcmp(member_name, "AmbientColor_y") == 0) {
+            return &(dst->AmbientColor.y);
+          } else if (strcmp(member_name, "AmbientColor_z") == 0) {
+            return &(dst->AmbientColor.z);
+          } else if (strcmp(member_name, "Constant") == 0) {
+            return &(dst->Constant);
+          } else if (strcmp(member_name, "Linear") == 0) {
+            return &(dst->Linear);
+          } else if (strcmp(member_name, "Quadratic") == 0) {
+            return &(dst->Quadratic);
+          } else {
+            return nullptr;
+          }
+        });
+
     world.component<CameraComponent>();
     world.component<ViewportComponent>();
   }
