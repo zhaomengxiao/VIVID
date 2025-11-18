@@ -80,6 +80,9 @@ struct ViewportComponent {
   bool IsFocused = false;
   bool IsHovered = false;
 
+  float contentStartPos_x = 0.0f;
+  float contentStartPos_y = 0.0f;
+
   // Offscreen rendering resources for ImGui viewport windows
   WGPUTexture renderTexture = nullptr;          // Offscreen render target texture
   WGPUTextureView renderTextureView = nullptr;  // Texture view for ImGui

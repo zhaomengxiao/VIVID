@@ -167,14 +167,11 @@ private:
     viewport.Width = 800.0f;
     viewport.Height = 600.0f;
 
-    CameraControllerComponent mainCameraController;
-    mainCameraController.IsActive = true;  // Enable camera controller by default
-
     cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
         .set<VIVID::RENDER::TransformComponent>(camTransform)
         .set<VIVID::RENDER::CameraComponent>({})
         .set<VIVID::RENDER::ViewportComponent>(viewport)  // Enables render window in ImGui
-        .set<CameraControllerComponent>(mainCameraController);
+        .set<CameraControllerComponent>({});
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 3.0)");
     VividLogger::app_info("Render window will appear in ImGui with title 'MainCamera'");
@@ -193,7 +190,6 @@ private:
     // Setup CameraControllerComponent to look at origin (0, 0, 0)
     // Front vector points from (3, 3, 3) to (0, 0, 0) = (-1, -1, -1), normalized
     CameraControllerComponent sideCameraController;
-    sideCameraController.IsActive = true;  // Enable camera controller by default
     sideCameraController.Front = glm::normalize(glm::vec3(-1.0f, -1.0f, -1.0f));
     sideCameraController.WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
     // Calculate Right and Up vectors based on Front and WorldUp

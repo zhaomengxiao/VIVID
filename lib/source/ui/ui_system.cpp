@@ -16,7 +16,6 @@
 #include <cstring>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
-#include <vector>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -32,19 +31,6 @@
 
 namespace VIVID {
 namespace UI {
-
-// Tooltip info structure for camera controller debug display
-struct TooltipInfo {
-  std::string title;
-  bool isActive;
-  bool isDragging;
-  float yaw, pitch;
-  float mouseX, mouseY;
-  bool mouseInViewport;
-  glm::vec3 front, up;
-  ImVec2 mousePos;
-  bool show = false;
-};
 
 void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
                               const RENDER::WebGPUContext& webgpuRes) {
@@ -181,16 +167,76 @@ void UISystems::shutDownUIImpl(const flecs::iter& it) {
   std::cout << "ImGui shutdown complete" << std::endl;
 }
 
+// Handle mouse input system - updates MouseInputComponent singleton
+void UISystems::handleMouseInputImpl(const flecs::iter& it) {
+  auto world = it.world();
+
+  // Initialize singleton if it doesn't exist
+  if (!world.has<VIVID::UI::MouseInputComponent>()) {
+    VividLogger::app_error("MouseInputComponent not found");
+    return;
+  }
+
+  // Get MouseInputComponent singleton (returns reference)
+  MouseInputComponent& mouseInput = world.get_mut<VIVID::UI::MouseInputComponent>();
+
+  // Get ImGui IO for mouse input
+  ImGuiIO& io = ImGui::GetIO();
+
+  // Get current mouse position from ImGui
+  ImVec2 currentMousePos = ImGui::GetMousePos();
+  mouseInput.MousePos = glm::vec2(currentMousePos.x, currentMousePos.y);
+
+  // Use ImGui's built-in mouse delta (already calculated)
+  mouseInput.MouseDelta = glm::vec2(io.MouseDelta.x, io.MouseDelta.y);
+
+  // Left mouse button events
+  mouseInput.MousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+  mouseInput.MouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  mouseInput.MouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+  mouseInput.MouseDoubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+  mouseInput.MouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+  if (mouseInput.MouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+    mouseInput.LeftMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.LeftMouseDragDelta = glm::vec2(0.0f);
+  }
+
+  // Middle mouse button events
+  mouseInput.MiddleMousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Middle);
+  if (mouseInput.MiddleMouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
+    mouseInput.MiddleMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.MiddleMouseDragDelta = glm::vec2(0.0f);
+  }
+
+  // Right mouse button events
+  mouseInput.RightMousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+  mouseInput.RightMouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+  mouseInput.RightMouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+  mouseInput.RightMouseDoubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Right);
+  mouseInput.RightMouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Right);
+  if (mouseInput.RightMouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
+    mouseInput.RightMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.RightMouseDragDelta = glm::vec2(0.0f);
+  }
+
+  // Mouse wheel events
+  mouseInput.MouseWheelDelta = io.MouseWheel;
+  mouseInput.MouseWheelH = io.MouseWheelH;
+}
+
 // Display viewport windows in ImGui (rendering handled by RenderSystems)
 void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   auto world = it.world();
   auto viewportQuery = world.query<RENDER::CameraComponent, RENDER::ViewportComponent>();
-
-  // Store tooltip info for all viewports (will be rendered after all viewports)
-  static std::vector<TooltipInfo> tooltips;
-
-  // Clear previous tooltips
-  tooltips.clear();
 
   viewportQuery.each([&](flecs::entity entity, const RENDER::CameraComponent& camera,
                          RENDER::ViewportComponent& viewport) {
@@ -204,6 +250,10 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
     // By default, ImGui only allows dragging windows by their title bar
     // The content area does not respond to drag events
     ImGui::Begin(windowTitle.c_str());
+    // Get content region start position in absolute coordinates (recommended API)
+    ImVec2 contentStartPos = ImGui::GetCursorScreenPos();
+    viewport.contentStartPos_x = contentStartPos.x;
+    viewport.contentStartPos_y = contentStartPos.y;
     viewport.IsFocused = ImGui::IsWindowFocused();
     viewport.IsHovered = ImGui::IsWindowHovered();
 
@@ -225,91 +275,6 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
       viewport.initialized = false;
     }
 
-    // Camera controller logic for viewport
-    if (entity.has<CameraControllerComponent>()) {
-      auto& cameraController = entity.get_mut<CameraControllerComponent>();
-      auto& transform = entity.get_mut<RENDER::TransformComponent>();
-
-      // Handle mouse input when viewport is focused and hovered
-      if (viewport.IsFocused && viewport.IsHovered) {
-        ImVec2 mousePos = ImGui::GetMousePos();
-        ImVec2 windowPos = ImGui::GetWindowPos();
-        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
-
-        // Convert to local viewport coordinates (relative to content area)
-        float localMouseX = mousePos.x - windowPos.x - contentMin.x;
-        float localMouseY = mousePos.y - windowPos.y - contentMin.y;
-
-        // Check if mouse is within viewport area
-        bool mouseInViewport = (localMouseX >= 0 && localMouseX <= viewport.Width
-                                && localMouseY >= 0 && localMouseY <= viewport.Height);
-
-        // Handle mouse button press/release events
-        // Check for mouse press (only when mouse is in viewport area)
-        if (mouseInViewport && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-          cameraController.MousePressed = true;
-          cameraController.IsActive = true;  // Keep camera controller active during drag
-          cameraController.LastMousePos = glm::vec2(localMouseX, localMouseY);
-          std::cout << "[MOUSE] Started dragging in viewport: " << windowTitle << std::endl;
-        }
-
-        // Check for mouse release (anywhere - to stop dragging)
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && cameraController.MousePressed) {
-          cameraController.MousePressed = false;
-          // Keep IsActive true so camera can still be controlled, but stop mouse tracking
-          std::cout << "[MOUSE] Stopped dragging: " << windowTitle << std::endl;
-        }
-
-        // Handle mouse drag for camera rotation (only when mouse is pressed, active, and still in
-        // viewport)
-        if (cameraController.MousePressed && cameraController.IsActive && mouseInViewport) {
-          glm::vec2 currentMousePos(localMouseX, localMouseY);
-          glm::vec2 mouseDelta = currentMousePos - cameraController.LastMousePos;
-
-          // Only update if there's actual mouse movement
-          if (glm::length(mouseDelta) > 0.1f) {  // Small threshold to avoid noise
-            // Apply mouse sensitivity and update yaw/pitch
-            cameraController.Yaw += mouseDelta.x * cameraController.MouseSensitivity;
-            cameraController.Pitch -= mouseDelta.y * cameraController.MouseSensitivity;
-
-            // Constrain pitch to prevent camera flipping
-            if (cameraController.Pitch > 89.0f) cameraController.Pitch = 89.0f;
-            if (cameraController.Pitch < -89.0f) cameraController.Pitch = -89.0f;
-
-            // Update camera vectors based on new yaw/pitch
-            cameraController.UpdateVectors();
-
-            // Update transform rotation from camera controller
-            transform.Rotation.x = cameraController.Pitch;
-            transform.Rotation.y = cameraController.Yaw;
-            transform.Rotation.z = 0.0f;
-          }
-
-          // Update last mouse position
-          cameraController.LastMousePos = currentMousePos;
-        }
-
-        // Store debug info for tooltip display (will be rendered after all viewports)
-        if (cameraController.IsActive || cameraController.MousePressed) {
-          TooltipInfo tooltip;
-          tooltip.title = windowTitle;
-          tooltip.isActive = cameraController.IsActive;
-          tooltip.isDragging = cameraController.MousePressed;
-          tooltip.yaw = cameraController.Yaw;
-          tooltip.pitch = cameraController.Pitch;
-          tooltip.mouseX = localMouseX;
-          tooltip.mouseY = localMouseY;
-          tooltip.mouseInViewport = mouseInViewport;
-          tooltip.front = cameraController.Front;
-          tooltip.up = cameraController.Up;
-          tooltip.mousePos = mousePos;
-          tooltip.show = true;
-
-          tooltips.push_back(tooltip);
-        }
-      }
-    }
-
     // Display texture
     if (viewport.renderTextureView && viewport.TextureID != 0) {
       ImGui::Image(reinterpret_cast<ImTextureID>(viewport.renderTextureView),
@@ -320,46 +285,109 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
 
     ImGui::End();
   });
+}
 
-  // // Render tooltips for all camera controllers (outside viewport windows)
-  // for (const auto& tooltip : tooltips) {
-  //   if (tooltip.show) {
-  //     ImGui::SetNextWindowPos(ImVec2(tooltip.mousePos.x + 15, tooltip.mousePos.y + 15));
-  //     ImGui::SetNextWindowBgAlpha(0.9f);
-  //     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-  //     ImGui::Begin((std::string("##") + tooltip.title + "_tooltip").c_str(), nullptr,
-  //                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-  //                  ImGuiWindowFlags_NoMove
-  //                      | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+// Control camera system - updates CameraControllerComponent based on mouse input and viewport state
+void UISystems::controlCameraImpl(const flecs::iter& it) {
+  auto world = it.world();
 
-  //     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s Camera Controller",
-  //                        tooltip.title.c_str());
-  //     ImGui::Separator();
+  // Get MouseInputComponent singleton (returns reference)
+  if (!world.has<VIVID::UI::MouseInputComponent>()) {
+    return;  // Mouse input not available
+  }
+  MouseInputComponent& mouseInput = world.get_mut<VIVID::UI::MouseInputComponent>();
 
-  //     ImGui::Text("Active: %s", tooltip.isActive ? "Yes" : "No");
-  //     ImGui::Text("Dragging: %s", tooltip.isDragging ? "Yes" : "No");
-  //     ImGui::Text("Yaw: %.1f°", tooltip.yaw);
-  //     ImGui::Text("Pitch: %.1f°", tooltip.pitch);
+  // Query entities with CameraControllerComponent and ViewportComponent
+  auto cameraQuery = world.query<CameraControllerComponent, RENDER::ViewportComponent,
+                                 RENDER::TransformComponent>();
 
-  //     if (tooltip.isDragging) {
-  //       ImGui::Text("Mouse: (%.0f, %.0f)", tooltip.mouseX, tooltip.mouseY);
-  //       ImGui::Text("In Viewport: %s", tooltip.mouseInViewport ? "Yes" : "No");
-  //     }
+  cameraQuery.each([&](flecs::entity entity, CameraControllerComponent& cameraController,
+                       const RENDER::ViewportComponent& viewport,
+                       RENDER::TransformComponent& transform) {
+    // Only handle mouse input when viewport is focused and hovered
+    if (!viewport.IsFocused || !viewport.IsHovered) {
+      return;
+    }
 
-  //     ImGui::Text("Front: (%.2f, %.2f, %.2f)", tooltip.front.x, tooltip.front.y,
-  //     tooltip.front.z); ImGui::Text("Up: (%.2f, %.2f, %.2f)", tooltip.up.x, tooltip.up.y,
-  //     tooltip.up.z);
+    // Convert to local viewport coordinates (relative to content area)
+    float localMouseX = mouseInput.MousePos.x - viewport.contentStartPos_x;
+    float localMouseY = mouseInput.MousePos.y - viewport.contentStartPos_y;
 
-  //     ImGui::End();
-  //     ImGui::PopStyleVar();
+    // Check if mouse is within viewport area
+    bool mouseInViewport = (localMouseX >= 0 && localMouseX <= viewport.Width && localMouseY >= 0
+                            && localMouseY <= viewport.Height);
 
-  //     // Bring tooltip to front to ensure it's visible above other windows
-  //     if (ImGuiWindow* window
-  //         = ImGui::FindWindowByName((std::string("##") + tooltip.title + "_tooltip").c_str())) {
-  //       ImGui::BringWindowToDisplayFront(window);
-  //     }
-  //   }
-  // }
+    // Handle mouse drag for camera rotation (when left mouse is dragging and in viewport)
+    // Use ImGui's drag detection - no need to check threshold manually
+    if (mouseInput.MouseDragging && mouseInViewport) {
+      glm::vec2 mouseDelta = mouseInput.LeftMouseDragDelta;
+
+      // Apply mouse sensitivity and update yaw/pitch
+      cameraController.Yaw += mouseDelta.x * cameraController.MouseSensitivity;
+      cameraController.Pitch -= mouseDelta.y * cameraController.MouseSensitivity;
+
+      // Constrain pitch to prevent camera flipping
+      if (cameraController.Pitch > 89.0f) cameraController.Pitch = 89.0f;
+      if (cameraController.Pitch < -89.0f) cameraController.Pitch = -89.0f;
+
+      // Update camera vectors based on new yaw/pitch
+      cameraController.UpdateVectors();
+
+      // Update transform rotation from camera controller
+      transform.Rotation.x = cameraController.Pitch;
+      transform.Rotation.y = cameraController.Yaw;
+      transform.Rotation.z = 0.0f;
+
+      // Reset drag delta to get per-frame delta (ImGui will recalculate from current position)
+      ImGui::ResetMouseDragDelta(ImGuiMouseButton_Left);
+    }
+
+    // Handle mouse wheel zoom (only when mouse is in viewport and viewport is focused)
+    if (mouseInViewport && std::abs(mouseInput.MouseWheelDelta) > 0.001f) {
+      // Calculate zoom amount based on wheel delta and zoom speed
+      float zoomAmount = mouseInput.MouseWheelDelta * cameraController.ZoomSpeed;
+
+      // Move camera along Front direction for zoom
+      glm::vec3 zoomDirection = cameraController.Front * zoomAmount;
+      glm::vec3 newPosition = transform.Position + zoomDirection;
+
+      // Calculate distance from origin to limit zoom range
+      // For a simple implementation, we use distance from origin as zoom distance
+      float currentDistance = glm::length(transform.Position);
+      float newDistance = glm::length(newPosition);
+
+      // Apply zoom limits
+      if (newDistance >= cameraController.MinZoom && newDistance <= cameraController.MaxZoom) {
+        transform.Position = newPosition;
+      } else {
+        // Clamp to zoom limits
+        glm::vec3 direction = currentDistance > 0.001f ? glm::normalize(transform.Position)
+                                                       : glm::vec3(0.0f, 0.0f, -1.0f);
+        if (newDistance < cameraController.MinZoom) {
+          transform.Position = direction * cameraController.MinZoom;
+        } else if (newDistance > cameraController.MaxZoom) {
+          transform.Position = direction * cameraController.MaxZoom;
+        }
+      }
+    }
+
+    // Handle middle mouse drag for camera panning
+    // Use ImGui's drag detection - no need to check threshold manually
+    if (mouseInput.MiddleMouseDragging && mouseInViewport) {
+      glm::vec2 mouseDelta = mouseInput.MiddleMouseDragDelta;
+
+      // Calculate pan amount using Right and Up vectors
+      float panX
+          = mouseDelta.x * cameraController.PanSpeed * -1.0f;  // Negative for natural panning
+      float panY = mouseDelta.y * cameraController.PanSpeed;
+
+      // Update camera position using Right and Up vectors
+      transform.Position += cameraController.Right * panX + cameraController.Up * panY;
+
+      // Reset drag delta to get per-frame delta (ImGui will recalculate from current position)
+      ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
+    }
+  });
 }
 
 }  // namespace UI
