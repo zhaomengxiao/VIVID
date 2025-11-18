@@ -49,17 +49,21 @@
 
 **步骤：**
 
-1. 在 CMake: Select a Target 中选择 `run-emrun`
+1. 在 CMake: Select a Target 中选择 `hello_sdl3-run-emrun` 或 `editor-run-emrun`
 2. 点击构建工具栏中的 "Run" 按钮
 
 或者在 VSCode 终端中：
 
 ```powershell
 # 方式 1：使用 emrun（推荐）
-cmake --build --preset VE --target run-emrun
+cmake --build --preset VE --target hello_sdl3-run-emrun
+# 或对于 editor 项目：
+cmake --build --preset VE --target editor-run-emrun
 
 # 方式 2：使用 HTTP 服务器
-cmake --build --preset VE --target run-http-server
+cmake --build --preset VE --target hello_sdl3-run-http-server
+# 或对于 editor 项目：
+cmake --build --preset VE --target editor-run-http-server
 ```
 
 **然后手动打开浏览器：**

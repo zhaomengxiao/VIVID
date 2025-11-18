@@ -337,19 +337,19 @@ void apply_sdl3_metadata(const SDL3AppMetadata& metadata);
 // 便捷宏，用于创建和运行SDL3应用
 // 用法: VIVID_SDL3_MAIN(.add_plugin<DefaultPlugin>().add_system(...))
 // 示例: VIVID_SDL3_MAIN(.add_plugin<DefaultPlugin>().add_startup_system(my_system))
-#define VIVID_SDL3_MAIN(chain_calls)                                       \
-  namespace VIVID {                                                        \
-  namespace APP {                                                          \
-  SDL3AppBuilder create_app_instance() {                                   \
-    try {                                                                  \
-      auto builder = create_sdl3_app();                                    \
-      return std::move(builder chain_calls);                               \
-    } catch (const std::exception& e) {                                    \
-      std::cerr << "Failed to create SDL3 app: " << e.what() << std::endl; \
-      throw;                                                               \
-    }                                                                      \
-  }                                                                        \
-  }                                                                        \
+#define VIVID_SDL3_MAIN(chain_calls)                                     \
+  namespace VIVID {                                                      \
+  namespace APP {                                                        \
+  SDL3AppBuilder create_app_instance() {                                 \
+    try {                                                                \
+      auto builder = create_sdl3_app();                                  \
+      return std::move(builder chain_calls);                             \
+    } catch (const std::exception& e) {                                  \
+      VividLogger::app_error("Failed to create SDL3 app: %s", e.what()); \
+      throw;                                                             \
+    }                                                                    \
+  }                                                                      \
+  }                                                                      \
   }
 
 // 注意：SDL3应用通过回调系统自动运行

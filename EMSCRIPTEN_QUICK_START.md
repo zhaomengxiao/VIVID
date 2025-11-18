@@ -96,7 +96,7 @@ emrun --port 6931 hello_sdl3/index.html
 在 CMake 工具栏中：
 
 1. 点击 "Select Target" 下拉菜单
-2. 选择 `run-emrun`
+2. 选择 `hello_sdl3-run-emrun`（对于 hello_sdl3 项目）或 `editor-run-emrun`（对于 editor 项目）
 3. 点击 "Run" 按钮
 
 ### 选项 3：终端命令

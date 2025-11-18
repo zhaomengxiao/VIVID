@@ -64,7 +64,7 @@ if(EMSCRIPTEN)
     
     # Add custom targets for running with emrun
     # This allows VSCode's "Launch Target" to run the WebAssembly with emrun
-    add_custom_target(run-emrun
+    add_custom_target(hello_sdl3-run-emrun
         COMMAND emrun --port 6931 "$<TARGET_FILE:${PROJECT_NAME}>"
         DEPENDS ${PROJECT_NAME}
         COMMENT "Running ${PROJECT_NAME} with emrun on port 6931"
@@ -72,7 +72,7 @@ if(EMSCRIPTEN)
     )
     
     # Alternative: Run with a simple HTTP server
-    add_custom_target(run-http-server
+    add_custom_target(hello_sdl3-run-http-server
         COMMAND python -m http.server 8000
         DEPENDS ${PROJECT_NAME}
         COMMENT "Starting HTTP server on port 8000 at ${CMAKE_CURRENT_BINARY_DIR}"

@@ -4,7 +4,6 @@
 #include <flecs.h>
 #include <vivid/log/log.h>
 
-#include <iostream>
 #include <vector>
 
 struct ShutdownPhase {};
@@ -91,7 +90,7 @@ public:
 
   // Traditional run mode (backward compatible)
   void Run() {
-    std::cout << "Starting application..." << std::endl;
+    VividLogger::app_info("Starting application...");
 
     // Run startup systems
     world_.progress(0);
@@ -103,11 +102,11 @@ public:
     }
 
     // Application shutdown
-    std::cout << "Application shutting down..." << std::endl;
+    VividLogger::app_info("Application shutting down...");
     // Shutdown systems using custom pipeline
     world_.set_pipeline(shutdown_pipeline_);
     world_.progress();
-    std::cout << "Application finished." << std::endl;
+    VividLogger::app_info("Application finished.");
   }
 
   // SDL3 Callback mode support
@@ -115,8 +114,7 @@ public:
   // Initialize application (corresponds to SDL_AppInit)
   bool Initialize(int argc, char** argv) {
     if (initialized_) return true;
-
-    std::cout << "Initializing SDL3 application..." << std::endl;
+    VividLogger::app_info("Initializing SDL3 application...");
 
     // ensure ensure resource exists, if not, create one
     world_.set<EventQueues>({});
@@ -125,7 +123,12 @@ public:
     world_.import <flecs::stats>();
 
     // Creates REST server on default port (27750)
+    // Note: REST server not supported in Emscripten browser environment
+#ifndef __EMSCRIPTEN__
     world_.set<flecs::Rest>({});
+#else
+    VividLogger::app_warn("Skipping flecs::Rest in Emscripten (not supported in browser)");
+#endif
 
     // Run startup systems
     world_.progress(0);
@@ -167,12 +170,12 @@ public:
   void Shutdown() {
     if (!initialized_) return;
 
-    std::cout << "SDL3 application shutting down..." << std::endl;
+    VividLogger::app_info("SDL3 application shutting down...");
     // Shutdown systems using custom pipeline
     world_.set_pipeline(shutdown_pipeline_);
     world_.progress();
 
-    std::cout << "SDL3 application finished." << std::endl;
+    VividLogger::app_info("SDL3 application finished.");
   }
 
   // Check if application is running

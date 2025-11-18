@@ -2,12 +2,49 @@
 
 #include <cstdarg>
 
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#endif
+
 // =============================================================================
 // VividLogger 静态成员定义和实现
 // =============================================================================
 
 VividLogConfig VividLogger::config_;
 bool VividLogger::initialized_ = false;
+
+#ifdef __EMSCRIPTEN__
+// Emscripten-specific log output function that maps SDL log priorities to browser console methods
+static void emscripten_log_output(void* userdata, int category, SDL_LogPriority priority,
+                                  const char* message) {
+  // Map SDL log priorities to browser console methods
+  switch (priority) {
+    case SDL_LOG_PRIORITY_TRACE:
+    case SDL_LOG_PRIORITY_VERBOSE:
+    case SDL_LOG_PRIORITY_DEBUG:
+      // Use console.debug for trace/verbose/debug messages
+      EM_ASM({ console.debug(UTF8ToString($0)); }, message);
+      break;
+    case SDL_LOG_PRIORITY_INFO:
+      // Use console.info for info messages
+      EM_ASM({ console.info(UTF8ToString($0)); }, message);
+      break;
+    case SDL_LOG_PRIORITY_WARN:
+      // Use console.warn for warning messages
+      EM_ASM({ console.warn(UTF8ToString($0)); }, message);
+      break;
+    case SDL_LOG_PRIORITY_ERROR:
+    case SDL_LOG_PRIORITY_CRITICAL:
+      // Use console.error for error and critical messages
+      EM_ASM({ console.error(UTF8ToString($0)); }, message);
+      break;
+    default:
+      // Fallback to console.log for unknown priorities
+      EM_ASM({ console.log(UTF8ToString($0)); }, message);
+      break;
+  }
+}
+#endif
 
 void VividLogger::initialize(const VividLogConfig& config) {
   config_ = config;
@@ -20,7 +57,25 @@ void VividLogger::initialize(const VividLogConfig& config) {
     SDL_SetLogPriority(static_cast<int>(category), static_cast<SDL_LogPriority>(level));
   }
 
-  // 设置自定义日志输出函数（如果有）
+  // 设置自定义日志输出函数
+#ifdef __EMSCRIPTEN__
+  // In Emscripten, use custom output function if provided, otherwise use browser console mapping
+  if (config_.custom_output) {
+    SDL_SetLogOutputFunction(
+        [](void* userdata, int category, SDL_LogPriority priority, const char* message) {
+          auto* config = static_cast<const VividLogConfig*>(userdata);
+          if (config && config->custom_output) {
+            config->custom_output(static_cast<VividLogCategory>(category),
+                                  static_cast<VividLogLevel>(priority), message);
+          }
+        },
+        const_cast<VividLogConfig*>(&config_));
+  } else {
+    // Automatically set browser console mapping for Emscripten
+    SDL_SetLogOutputFunction(emscripten_log_output, nullptr);
+  }
+#else
+  // For non-Emscripten platforms, use custom output if provided
   if (config_.custom_output) {
     SDL_SetLogOutputFunction(
         [](void* userdata, int category, SDL_LogPriority priority, const char* message) {
@@ -32,6 +87,7 @@ void VividLogger::initialize(const VividLogConfig& config) {
         },
         const_cast<VividLogConfig*>(&config_));
   }
+#endif
 
   initialized_ = true;
   VividLogger::info("VIVID Logger initialized successfully");

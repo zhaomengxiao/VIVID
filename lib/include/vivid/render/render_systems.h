@@ -29,7 +29,7 @@
 #endif
 
 #define VIVID_LOG_SYSTEM(msg) VividLogger::app_info("🔧 " msg);
-#define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, __VA_ARGS__);
+#define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, ##__VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
 namespace VIVID::RENDER {

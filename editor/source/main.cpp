@@ -1,19 +1,14 @@
 // SDL3 Hello World Example
 // This example demonstrates how to use the new SDL3 callback-based application system
 
-#include <iostream>
-#include <utility>
-
+#include "inspector/inspector_systems.h"
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
 #include "vivid/log/log.h"
-#include "vivid/physics/physics_component.h"
-#include "vivid/physics/physics_system.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
 #include "vivid/window/window_component.h"
 #include "vivid/window/window_systems.h"
-#include "inspector/inspector_systems.h"
 
 struct MyResource {
   int value;
@@ -80,7 +75,6 @@ struct Setup {
     VIVID_LOG_SYSTEM("Registering Setup module...");
 
     using namespace VIVID::RENDER;
-    using namespace VIVID::PHYSICS;
 
     // Register module
     world.module<Setup>();

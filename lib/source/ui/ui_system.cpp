@@ -9,13 +9,11 @@
 #include <vivid/render/render_component.h>
 #include <vivid/render/render_systems.h>
 #include <vivid/window/window_component.h>
-#include <webgpu/webgpu.h>
+// #include <webgpu/webgpu.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstring>
-#include <deque>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <vector>
@@ -28,9 +26,9 @@
 #  endif
 #endif
 
-#if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-#  include <webgpu/webgpu_cpp.h>
-#endif
+// #if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+// // #  include <webgpu/webgpu_cpp.h>
+// #endif
 
 namespace VIVID {
 namespace UI {
