@@ -4,6 +4,7 @@
 #include "inspector/inspector_systems.h"
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
+#include "vivid/input/input_system.h"
 #include "vivid/log/log.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
@@ -223,6 +224,7 @@ VIVID_SDL3_MAIN(
         // .import_module<WindowSetup>()                   // Create custom window entity first
         .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to PreUpdate)
         .import_module<VIVID::UI::UISystems>()          // ImGui UI
+        .import_module<VIVID::INPUT::InputSystems>()    // Input processing and camera control
         .import_module<editor::inspector::InspectorSystems>()
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
 

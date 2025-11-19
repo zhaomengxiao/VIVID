@@ -1,6 +1,9 @@
 // SDL3 Hello World Example
 // This example demonstrates how to use the new SDL3 callback-based application system
 
+#include <algorithm>
+#include <string>
+
 #include "imgui.h"
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
@@ -149,7 +152,7 @@ struct Setup {
 
     // Import required components
     world.import <RenderComponents>();
-    world.import <InputComponents>();
+    world.import <VIVID::INPUT::InputComponents>();
 
     // Register scene initialization system (runs at startup)
     world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
@@ -379,12 +382,10 @@ private:
 
     // Copy formatted JSON to buffer
     size_t jsonSize = formattedJson.size();
-    if (jsonSize < sizeof(worldJsonBuffer) - 1) {
-      std::strncpy(worldJsonBuffer, formattedJson.c_str(), sizeof(worldJsonBuffer) - 1);
-      worldJsonBuffer[sizeof(worldJsonBuffer) - 1] = '\0';
-    } else {
-      std::strncpy(worldJsonBuffer, formattedJson.c_str(), sizeof(worldJsonBuffer) - 1);
-      worldJsonBuffer[sizeof(worldJsonBuffer) - 1] = '\0';
+    size_t copySize = std::min(jsonSize, sizeof(worldJsonBuffer) - 1);
+    formattedJson.copy(worldJsonBuffer, copySize);
+    worldJsonBuffer[copySize] = '\0';
+    if (jsonSize >= sizeof(worldJsonBuffer) - 1) {
       worldJsonBuffer[sizeof(worldJsonBuffer) - 4] = '.';
       worldJsonBuffer[sizeof(worldJsonBuffer) - 3] = '.';
       worldJsonBuffer[sizeof(worldJsonBuffer) - 2] = '.';
@@ -524,6 +525,7 @@ VIVID_SDL3_MAIN(
         .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to
                                                         // PreUpdate)
         .import_module<VIVID::UI::UISystems>()          // ImGui UI
+        .import_module<VIVID::INPUT::InputSystems>()    // Input processing and camera control
         .import_module<ImGuiDemo>()                     // ImGui demo
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
 

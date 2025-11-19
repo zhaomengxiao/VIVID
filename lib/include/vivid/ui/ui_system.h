@@ -2,6 +2,8 @@
 
 #include <flecs.h>
 
+#include <flecs/addons/cpp/mixins/pipeline/decl.hpp>
+
 #include "ui_component.h"
 #include "vivid/app/App.h"
 #include "vivid/render/render_systems.h"
@@ -47,11 +49,8 @@ private:
   static void renderUIImpl(RENDER::WebGPUContext& webgpuRes);
   static void endFrameImpl(const flecs::iter& it);
   static void shutDownUIImpl(const flecs::iter& it);
-  static void handleMouseInputImpl(const flecs::iter& it);
   // Display viewport windows in ImGui
   static void displayViewportWindowsImpl(const flecs::iter& it);
-  // Control camera based on mouse input
-  static void controlCameraImpl(const flecs::iter& it);
 };
 
 // Constructor - Register module and systems
@@ -86,12 +85,8 @@ inline UISystems::UISystems(flecs::world& world) {
     VIVID_LOG_MODULE_INFO("    └── Executes: newFrameImpl()");
     VIVID_LOG_MODULE_INFO("└── 🔄 DisplayViewportWindows");
     VIVID_LOG_MODULE_INFO("    └── Executes: displayViewportWindowsImpl()");
-    VIVID_LOG_MODULE_INFO("└── 🔄 HandleMouseInput");
-    VIVID_LOG_MODULE_INFO("    └── Executes: handleMouseInputImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: EndFramePhase");
-    VIVID_LOG_MODULE_INFO("├── 🔄 ControlCamera");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: controlCameraImpl()");
     VIVID_LOG_MODULE_INFO("├── 🔄 EndFrame");
     VIVID_LOG_MODULE_INFO("│   ├── Requires: WebGPUContext");
     VIVID_LOG_MODULE_INFO("│   └── Executes: renderUIImpl()");
@@ -116,19 +111,9 @@ inline UISystems::UISystems(flecs::world& world) {
   // Import components module
   world.import <UIComponents>();
 
-  world.set<VIVID::UI::MouseInputComponent>({});
-
-  // add custom phases
-  // NewFramePhase -> DrawFramePhase -> EndFramePhase
-  // if other modules systems want to use UI, they should depend on DrawFramePhase
-  flecs::entity NewFramePhase
-      = world.entity("NewFramePhase").add(flecs::Phase).depends_on(flecs::PreUpdate);
-
+  // add custom phases for other modules ui to depend on
   flecs::entity DrawFramePhase
-      = world.entity("DrawFramePhase").add(flecs::Phase).depends_on(NewFramePhase);
-
-  flecs::entity EndFramePhase
-      = world.entity("EndFramePhase").add(flecs::Phase).depends_on(DrawFramePhase);
+      = world.entity("DrawFramePhase").add(flecs::Phase).depends_on(flecs::OnUpdate);
 
   // Register systems
   VIVID_LOG_SYSTEM("Registering InitImGui system...");
@@ -149,19 +134,13 @@ inline UISystems::UISystems(flecs::world& world) {
       .each(processImGuiEventImpl);
 
   // Start UI frame
-  world.system("NewFrame").kind(NewFramePhase).run(newFrameImpl);
+  world.system("NewFrame").kind(flecs::PreUpdate).run(newFrameImpl);
 
   // Display viewport windows
   world.system("DisplayViewportWindows").kind(DrawFramePhase).run(displayViewportWindowsImpl);
 
-  // Handle mouse input - runs after DisplayViewportWindows
-  world.system("HandleMouseInput").kind(DrawFramePhase).run(handleMouseInputImpl);
-
   // End UI frame
-  world.system("EndFrame").kind(EndFramePhase).run(endFrameImpl);
-
-  // Control camera based on mouse input - runs after HandleMouseInput
-  world.system("ControlCamera").kind(EndFramePhase).run(controlCameraImpl);
+  world.system("EndFrame").kind(flecs::PostUpdate).run(endFrameImpl);
 
   VIVID_LOG_SYSTEM("Looking up RenderUIPhase from RenderSystems...");
 

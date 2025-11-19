@@ -1,195 +1,185 @@
-// #include "vivid/input/input_system.h"
+#include "vivid/input/input_system.h"
 
-// #include <GLFW/glfw3.h>
-// #include <glm/glm.hpp>
-// #include "vivid/rendering/render_component.h"
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <vivid/log/log.h>
+#include <vivid/render/render_component.h>
 
-// GLFWwindow *InputSystem::s_Window = nullptr;
-// glm::vec2 InputSystem::s_MousePosition = glm::vec2(0.0f);
-// glm::vec2 InputSystem::s_LastMousePosition = glm::vec2(0.0f);
-// bool InputSystem::s_MousePressed = false;
-// bool InputSystem::s_FirstMouse = true;
+#include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 
-// void InputSystem::Initialize(GLFWwindow *window)
-// {
-//     s_Window = window;
-//     glfwSetCursorPosCallback(window, MousePositionCallback);
-//     glfwSetMouseButtonCallback(window, MouseButtonCallback);
-//     glfwSetScrollCallback(window, ScrollCallback);
-//     glfwSetKeyCallback(window, KeyCallback);
+namespace VIVID::INPUT {
 
-//     // Initially show cursor (don't capture it)
-//     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-// }
+// Constructor - Register module and systems
+InputSystems::InputSystems(flecs::world& world) {
+  VividLogger::app_info("Registering InputSystems...");
 
-// void InputSystem::Update(entt::registry &registry)
-// {
-//     if (!s_Window)
-//         return;
+  // Register module
+  world.module<InputSystems>();
 
-//     // Find the main camera with camera controller
-//     auto cameraView = registry.view<TransformComponent, CameraComponent,
-//     CameraControllerComponent>(); if (cameraView.size_hint() == 0)
-//         return;
+  // Import components module
+  world.import <InputComponents>();
 
-//     auto cameraEntity = cameraView.front();
-//     auto &transform = cameraView.get<TransformComponent>(cameraEntity);
-//     auto &cameraController = cameraView.get<CameraControllerComponent>(cameraEntity);
+  // Initialize MouseInputResource singleton
+  world.set<MouseInputResource>({});
 
-//     // Handle keyboard movement
-//     if (glfwGetKey(s_Window, GLFW_KEY_W) == GLFW_PRESS)
-//         transform.Position += cameraController.Front * cameraController.MovementSpeed * 0.016f;
-//         // Assuming 60 FPS
-//     if (glfwGetKey(s_Window, GLFW_KEY_S) == GLFW_PRESS)
-//         transform.Position -= cameraController.Front * cameraController.MovementSpeed * 0.016f;
-//     if (glfwGetKey(s_Window, GLFW_KEY_A) == GLFW_PRESS)
-//         transform.Position -= cameraController.Right * cameraController.MovementSpeed * 0.016f;
-//     if (glfwGetKey(s_Window, GLFW_KEY_D) == GLFW_PRESS)
-//         transform.Position += cameraController.Right * cameraController.MovementSpeed * 0.016f;
-//     if (glfwGetKey(s_Window, GLFW_KEY_Q) == GLFW_PRESS)
-//         transform.Position += cameraController.Up * cameraController.MovementSpeed * 0.016f;
-//     if (glfwGetKey(s_Window, GLFW_KEY_E) == GLFW_PRESS)
-//         transform.Position -= cameraController.Up * cameraController.MovementSpeed * 0.016f;
+  // MouseWheel must be handled after NewFrame to get the correct mouse wheel delta
+  world.system<MouseInputResource>("HandleMouseInput")
+      .kind(flecs::OnUpdate)
+      .each(handleMouseInputImpl);
+  world
+      .system<CameraControllerComponent, VIVID::RENDER::ViewportComponent,
+              VIVID::RENDER::TransformComponent, MouseInputResource>("ControlCamera")
+      .term_at(3)
+      .src<MouseInputResource>()
+      .kind(flecs::OnUpdate)
+      .each(controlCameraImpl);
 
-//     // Update camera vectors based on current yaw and pitch
-//     cameraController.UpdateVectors();
+  VividLogger::app_info("InputSystems module registration completed!");
+}
 
-//     // Update rotation from camera controller
-//     transform.Rotation.x = cameraController.Pitch;
-//     transform.Rotation.y = cameraController.Yaw;
-//     transform.Rotation.z = 0.0f;
-// }
+// Handle mouse input system - updates MouseInputResource singleton
+void InputSystems::handleMouseInputImpl(MouseInputResource& mouseInput) {
+  // Get ImGui IO for mouse input
+  ImGuiIO& io = ImGui::GetIO();
 
-// void InputSystem::Shutdown()
-// {
-//     if (s_Window)
-//     {
-//         glfwSetCursorPosCallback(s_Window, nullptr);
-//         glfwSetMouseButtonCallback(s_Window, nullptr);
-//         glfwSetScrollCallback(s_Window, nullptr);
-//         glfwSetKeyCallback(s_Window, nullptr);
-//     }
-// }
+  // Get current mouse position from ImGui
+  ImVec2 currentMousePos = ImGui::GetMousePos();
+  mouseInput.MousePos = glm::vec2(currentMousePos.x, currentMousePos.y);
 
-// void InputSystem::MousePositionCallback(GLFWwindow *window, double xpos, double ypos)
-// {
-//     if (s_FirstMouse)
-//     {
-//         s_LastMousePosition.x = static_cast<float>(xpos);
-//         s_LastMousePosition.y = static_cast<float>(ypos);
-//         s_FirstMouse = false;
-//         return;
-//     }
+  // Use ImGui's built-in mouse delta (already calculated)
+  mouseInput.MouseDelta = glm::vec2(io.MouseDelta.x, io.MouseDelta.y);
 
-//     float xoffset = static_cast<float>(xpos) - s_LastMousePosition.x;
-//     float yoffset = s_LastMousePosition.y - static_cast<float>(ypos); // Reversed since
-//     y-coordinates go from bottom to top
+  // Left mouse button events
+  mouseInput.MousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+  mouseInput.MouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+  mouseInput.MouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+  mouseInput.MouseDoubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+  mouseInput.MouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+  if (mouseInput.MouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+    mouseInput.LeftMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.LeftMouseDragDelta = glm::vec2(0.0f);
+  }
 
-//     s_LastMousePosition.x = static_cast<float>(xpos);
-//     s_LastMousePosition.y = static_cast<float>(ypos);
+  // Middle mouse button events
+  mouseInput.MiddleMousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Middle);
+  mouseInput.MiddleMouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Middle);
+  if (mouseInput.MiddleMouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
+    mouseInput.MiddleMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.MiddleMouseDragDelta = glm::vec2(0.0f);
+  }
 
-//     if (!s_Window)
-//         return;
+  // Right mouse button events
+  mouseInput.RightMousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+  mouseInput.RightMouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+  mouseInput.RightMouseReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+  mouseInput.RightMouseDoubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Right);
+  mouseInput.RightMouseDragging = ImGui::IsMouseDragging(ImGuiMouseButton_Right);
+  if (mouseInput.RightMouseDragging) {
+    ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
+    mouseInput.RightMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
+  } else {
+    mouseInput.RightMouseDragDelta = glm::vec2(0.0f);
+  }
 
-//     // Get the entt registry from window user pointer
-//     entt::registry *registry = static_cast<entt::registry *>(glfwGetWindowUserPointer(window));
-//     if (!registry)
-//         return;
+  // Mouse wheel events
+  mouseInput.MouseWheelDelta = io.MouseWheel;
+  mouseInput.MouseWheelH = io.MouseWheelH;
+}
 
-//     // Find camera with controller
-//     auto cameraView = registry->view<TransformComponent, CameraComponent,
-//     CameraControllerComponent>(); if (cameraView.size_hint() == 0)
-//         return;
+// Control camera system - updates CameraControllerComponent based on mouse input and viewport state
+void InputSystems::controlCameraImpl(CameraControllerComponent& cameraController,
+                                     const VIVID::RENDER::ViewportComponent& viewport,
+                                     VIVID::RENDER::TransformComponent& transform,
+                                     MouseInputResource& mouseInput) {
+  // Only handle mouse input when viewport is focused and hovered
+  if (!viewport.IsFocused || !viewport.IsHovered) {
+    return;
+  }
 
-//     auto cameraEntity = cameraView.front();
-//     auto &cameraController = cameraView.get<CameraControllerComponent>(cameraEntity);
+  // Convert to local viewport coordinates (relative to content area)
+  float localMouseX = mouseInput.MousePos.x - viewport.contentStartPos_x;
+  float localMouseY = mouseInput.MousePos.y - viewport.contentStartPos_y;
 
-//     // Only process mouse movement if mouse is pressed (dragging)
-//     if (cameraController.MousePressed && cameraController.IsActive)
-//     {
-//         xoffset *= cameraController.MouseSensitivity;
-//         yoffset *= cameraController.MouseSensitivity;
+  // Check if mouse is within viewport area
+  bool mouseInViewport = (localMouseX >= 0 && localMouseX <= viewport.Width && localMouseY >= 0
+                          && localMouseY <= viewport.Height);
 
-//         cameraController.Yaw += xoffset;
-//         cameraController.Pitch += yoffset;
+  // Handle mouse drag for camera rotation (when left mouse is dragging and in viewport)
+  // Use ImGui's drag detection - no need to check threshold manually
+  if (mouseInput.MouseDragging && mouseInViewport) {
+    glm::vec2 mouseDelta = mouseInput.LeftMouseDragDelta;
 
-//         // Constrain pitch
-//         if (cameraController.Pitch > 89.0f)
-//             cameraController.Pitch = 89.0f;
-//         if (cameraController.Pitch < -89.0f)
-//             cameraController.Pitch = -89.0f;
-//     }
-// }
+    // Apply mouse sensitivity and update yaw/pitch
+    cameraController.Yaw += mouseDelta.x * cameraController.MouseSensitivity;
+    cameraController.Pitch -= mouseDelta.y * cameraController.MouseSensitivity;
 
-// void InputSystem::MouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
-// {
-//     if (button == GLFW_MOUSE_BUTTON_LEFT)
-//     {
-//         entt::registry *registry = static_cast<entt::registry
-//         *>(glfwGetWindowUserPointer(window)); if (!registry)
-//             return;
+    // Constrain pitch to prevent camera flipping
+    if (cameraController.Pitch > 89.0f) cameraController.Pitch = 89.0f;
+    if (cameraController.Pitch < -89.0f) cameraController.Pitch = -89.0f;
 
-//         // Find camera with controller
-//         auto cameraView = registry->view<TransformComponent, CameraComponent,
-//         CameraControllerComponent, ViewportComponent>(); if (cameraView.size_hint() == 0)
-//             return;
+    // Update camera vectors based on new yaw/pitch
+    cameraController.UpdateVectors();
 
-//         auto cameraEntity = cameraView.front();
-//         auto &cameraController = cameraView.get<CameraControllerComponent>(cameraEntity);
+    // Update transform rotation from camera controller
+    transform.Rotation.x = cameraController.Pitch;
+    transform.Rotation.y = cameraController.Yaw;
+    transform.Rotation.z = 0.0f;
 
-//         if (action == GLFW_PRESS)
-//         {
-//             cameraController.MousePressed = true;
-//             cameraController.IsActive = true;
-//             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // Hide cursor when
-//             dragging
-//         }
-//         else if (action == GLFW_RELEASE)
-//         {
-//             cameraController.MousePressed = false;
-//             cameraController.IsActive = false;
-//             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); // Show cursor when
-//             released
-//         }
-//     }
-// }
+    // Reset drag delta to get per-frame delta (ImGui will recalculate from current position)
+    ImGui::ResetMouseDragDelta(ImGuiMouseButton_Left);
+  }
 
-// void InputSystem::ScrollCallback(GLFWwindow *window, double xoffset, double yoffset)
-// {
-//     if (!s_Window)
-//         return;
+  // Handle mouse wheel zoom (only when mouse is in viewport and viewport is focused)
+  if (mouseInViewport && std::abs(mouseInput.MouseWheelDelta) > 0.001f) {
+    // Calculate zoom amount based on wheel delta and zoom speed
+    float zoomAmount = mouseInput.MouseWheelDelta * cameraController.ZoomSpeed;
 
-//     entt::registry *registry = static_cast<entt::registry *>(glfwGetWindowUserPointer(window));
-//     if (!registry)
-//         return;
+    // Move camera along Front direction for zoom
+    glm::vec3 zoomDirection = cameraController.Front * zoomAmount;
+    glm::vec3 newPosition = transform.Position + zoomDirection;
 
-//     auto cameraView = registry->view<TransformComponent, CameraComponent,
-//     CameraControllerComponent, ViewportComponent>(); if (cameraView.size_hint() == 0)
-//         return;
+    // Calculate distance from origin to limit zoom range
+    // For a simple implementation, we use distance from origin as zoom distance
+    float currentDistance = glm::length(transform.Position);
+    float newDistance = glm::length(newPosition);
 
-//     auto cameraEntity = cameraView.front();
-//     auto &transform = cameraView.get<TransformComponent>(cameraEntity);
-//     auto &cameraController = cameraView.get<CameraControllerComponent>(cameraEntity);
+    // Apply zoom limits
+    if (newDistance >= cameraController.MinZoom && newDistance <= cameraController.MaxZoom) {
+      transform.Position = newPosition;
+    } else {
+      // Clamp to zoom limits
+      glm::vec3 direction = currentDistance > 0.001f ? glm::normalize(transform.Position)
+                                                     : glm::vec3(0.0f, 0.0f, -1.0f);
+      if (newDistance < cameraController.MinZoom) {
+        transform.Position = direction * cameraController.MinZoom;
+      } else if (newDistance > cameraController.MaxZoom) {
+        transform.Position = direction * cameraController.MaxZoom;
+      }
+    }
+  }
 
-//     // Zoom works without needing to press mouse button, just when hovering
-//     float zoomAmount = static_cast<float>(yoffset) * cameraController.ZoomSpeed;
-//     transform.Position += cameraController.Front * zoomAmount;
-// }
+  // Handle middle mouse drag for camera panning
+  // Use ImGui's drag detection - no need to check threshold manually
+  if (mouseInput.MiddleMouseDragging && mouseInViewport) {
+    glm::vec2 mouseDelta = mouseInput.MiddleMouseDragDelta;
 
-// void InputSystem::KeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
-// {
-//     // Handle special keys like ESC to toggle cursor capture
-//     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-//     {
-//         static bool cursorCaptured = true;
-//         if (cursorCaptured)
-//         {
-//             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-//         }
-//         else
-//         {
-//             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-//         }
-//         cursorCaptured = !cursorCaptured;
-//     }
-// }
+    // Calculate pan amount using Right and Up vectors
+    float panX = mouseDelta.x * cameraController.PanSpeed * -1.0f;  // Negative for natural panning
+    float panY = mouseDelta.y * cameraController.PanSpeed;
+
+    // Update camera position using Right and Up vectors
+    transform.Position += cameraController.Right * panX + cameraController.Up * panY;
+
+    // Reset drag delta to get per-frame delta (ImGui will recalculate from current position)
+    ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
+  }
+}
+
+}  // namespace VIVID::INPUT
