@@ -100,7 +100,43 @@ struct WindowSetup {
     VividLogger::app_info("Custom window entity 'MainWindow' created (1024x768)");
   }
 };
+void print_value(const flecs::world& world, const flecs::cursor& cur) {
+  // Get unit entity and component
+  flecs::entity u = cur.get_unit();
+  const flecs::Unit& u_data = u.get<flecs::Unit>();
 
+  // 获取成员实体以访问元数据（如 Range）
+  flecs::entity member = world.entity(ecs_meta_get_member_id(&cur.cursor_));
+  if (member.is_valid()) {
+    if (member.has<flecs::MemberRanges>()) {
+      const flecs::MemberRanges& range = member.get<flecs::MemberRanges>();
+      ImGui::Text("Range: %f - %f", range.value.min, range.value.max);
+    } else {
+      ImGui::Text("No Range");
+    }
+
+  } else {
+    ImGui::Text("Invalid Member");
+  }
+
+  flecs::entity rgbUnit = world.entity<flecs::units::color::Rgb>();
+
+  // Print value with unit symbol
+  //   std::cout << cur.get_member() << ": " << cur.get_float() << " "
+  //             << (u_data.symbol ? u_data.symbol : "") << "\n";
+  char* symbol = nullptr;
+  if (u == rgbUnit) {
+    symbol = const_cast<char*>("RGB");
+  } else {
+    symbol = u_data.symbol;
+  }
+
+  ImGui::Separator();
+
+  ImGui::Text("%s", cur.get_member().c_str());
+  ImGui::Text("%f", cur.get_float());
+  ImGui::Text("%s", symbol);
+}
 // Scene initialization module - creates cube, light, and camera entities
 struct Setup {
   Setup(flecs::world& world) {
@@ -119,6 +155,11 @@ struct Setup {
     world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
 
     VIVID_LOG_SUCCESS("Setup module registration completed!");
+
+    // Moved from SceneInitialization system to guarantee immediate component addition
+    auto testEntity = world.entity("TestEntity");
+    testEntity.ensure<VIVID::RENDER::Color3f>();
+    VividLogger::app_info("TestEntity: %s", world.to_json(&testEntity).c_str());
   }
 
 private:
@@ -248,6 +289,111 @@ private:
     static int counter = 0;
 
     ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
+
+    // get testEntity
+    flecs::entity testEntity = it.world().lookup("Setup::TestEntity");
+
+    // Use cursor API to print values with units
+    // Create cursor for the component
+    VIVID::RENDER::Color3f& colorData = testEntity.ensure<VIVID::RENDER::Color3f>();
+    flecs::cursor cur = it.world().cursor<VIVID::RENDER::Color3f>(&colorData);
+    cur.push();
+    print_value(it.world(), cur);
+    cur.next();
+    print_value(it.world(), cur);
+    cur.next();
+    print_value(it.world(), cur);
+    cur.pop();
+    std::string json = std::string(it.world().to_json(&colorData).c_str());
+    ImGui::Text("%s", json.c_str());
+
+    ImGui::Separator();
+    // Serialize world to JSON
+    static char worldJsonBuffer[65536] = "";  // 64KB buffer for JSON text
+    std::string worldJson = std::string(it.world().to_json().c_str());
+
+    // Format JSON with basic indentation for better readability
+    std::string formattedJson;
+    int indentLevel = 0;
+    const std::string indentStr = "  ";  // 2 spaces per indent level
+    bool inString = false;
+    bool escapeNext = false;
+
+    for (size_t i = 0; i < worldJson.size(); ++i) {
+      char c = worldJson[i];
+
+      if (escapeNext) {
+        formattedJson += c;
+        escapeNext = false;
+        continue;
+      }
+
+      if (c == '\\') {
+        escapeNext = true;
+        formattedJson += c;
+        continue;
+      }
+
+      if (c == '"') {
+        inString = !inString;
+        formattedJson += c;
+        continue;
+      }
+
+      if (inString) {
+        formattedJson += c;
+        continue;
+      }
+
+      // Format based on JSON structure
+      if (c == '{' || c == '[') {
+        formattedJson += c;
+        formattedJson += '\n';
+        indentLevel++;
+        for (int j = 0; j < indentLevel; ++j) {
+          formattedJson += indentStr;
+        }
+      } else if (c == '}' || c == ']') {
+        formattedJson += '\n';
+        indentLevel--;
+        for (int j = 0; j < indentLevel; ++j) {
+          formattedJson += indentStr;
+        }
+        formattedJson += c;
+      } else if (c == ',') {
+        formattedJson += c;
+        formattedJson += '\n';
+        for (int j = 0; j < indentLevel; ++j) {
+          formattedJson += indentStr;
+        }
+      } else if (c == ':') {
+        formattedJson += c;
+        formattedJson += ' ';
+      } else if (c == ' ' || c == '\n' || c == '\t') {
+        // Skip whitespace outside strings
+        continue;
+      } else {
+        formattedJson += c;
+      }
+    }
+
+    // Copy formatted JSON to buffer
+    size_t jsonSize = formattedJson.size();
+    if (jsonSize < sizeof(worldJsonBuffer) - 1) {
+      std::strncpy(worldJsonBuffer, formattedJson.c_str(), sizeof(worldJsonBuffer) - 1);
+      worldJsonBuffer[sizeof(worldJsonBuffer) - 1] = '\0';
+    } else {
+      std::strncpy(worldJsonBuffer, formattedJson.c_str(), sizeof(worldJsonBuffer) - 1);
+      worldJsonBuffer[sizeof(worldJsonBuffer) - 1] = '\0';
+      worldJsonBuffer[sizeof(worldJsonBuffer) - 4] = '.';
+      worldJsonBuffer[sizeof(worldJsonBuffer) - 3] = '.';
+      worldJsonBuffer[sizeof(worldJsonBuffer) - 2] = '.';
+    }
+
+    ImVec2 textSize = ImGui::GetContentRegionAvail();
+    textSize.y = ImGui::GetTextLineHeight() * 20;  // Set height to 20 lines
+    ImGui::InputTextMultiline("##WorldJson", worldJsonBuffer, sizeof(worldJsonBuffer), textSize,
+                              ImGuiInputTextFlags_ReadOnly);
 
     ImGui::Text(
         "This is some useful text.");  // Display some text (you can use a format strings too)

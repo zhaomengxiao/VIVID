@@ -26,6 +26,8 @@
 #endif
 #include <webgpu/webgpu_cpp.h>
 
+using namespace VIVID::RENDER;
+
 // Utility functions
 std::string_view toStdStringView(WGPUStringView wgpuStringView) {
   return wgpuStringView.data == nullptr ? std::string_view()
@@ -64,8 +66,8 @@ struct SceneRenderContext {
   glm::mat4 projectionMatrix;
   glm::vec3 viewPos;
   glm::vec3 lightPos;
-  glm::vec3 lightColor;
-  glm::vec3 ambientColor;
+  Color3f lightColor;
+  Color3f ambientColor;
   float constant;
   float linear;
   float quadratic;
@@ -250,8 +252,8 @@ static SceneRenderContext querySceneContext(flecs::world& world, uint32_t viewpo
 
   // Query light (first light found becomes active)
   ctx.lightPos = glm::vec3(5.0f, 5.0f, 5.0f);
-  ctx.lightColor = glm::vec3(1.0f);
-  ctx.ambientColor = glm::vec3(0.2f);
+  ctx.lightColor = Color3f(1.0f, 1.0f, 1.0f);
+  ctx.ambientColor = Color3f(0.2f, 0.2f, 0.2f);
   ctx.constant = 1.0f;
   ctx.linear = 0.09f;
   ctx.quadratic = 0.032f;

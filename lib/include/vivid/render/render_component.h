@@ -3,12 +3,29 @@
 #include <flecs.h>
 #include <webgpu/webgpu.h>
 
+#include <flecs/addons/cpp/mixins/units/decl.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 #include <string>
 #include <vector>
 
 namespace VIVID::RENDER {
+
+// typedef glm::vec3 Color3f;
+typedef glm::vec3 Vector3f;
+
+struct Color3f {
+  float r;
+  float g;
+  float b;
+
+  // Default constructor with default values
+  Color3f() : r(1.0f), g(1.0f), b(1.0f) {}
+
+  // Constructor with three float parameters
+  Color3f(float r_val, float g_val, float b_val) : r(r_val), g(g_val), b(b_val) {}
+};
 
 //
 // 基础组件
@@ -50,15 +67,15 @@ struct MeshComponent {
 // 材质组件，定义物体的外观和着色器
 struct MaterialComponent {
   std::string ShaderPath = "res/shaders/BlinnPhong.shader";  // 默认着色器
-  glm::vec3 ObjectColor{0.8f, 0.8f, 0.8f};                   // 默认颜色为灰色
-  glm::vec3 SpecularColor{0.5f, 0.5f, 0.5f};
+  Color3f ObjectColor{0.8f, 0.8f, 0.8f};                     // 默认颜色为灰色
+  Color3f SpecularColor{0.5f, 0.5f, 0.5f};
   float Shininess = 32.0f;
 };
 
 // 光源组件
 struct LightComponent {
-  glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
-  glm::vec3 AmbientColor{0.2f, 0.2f, 0.2f};
+  Color3f LightColor{1.0f, 1.0f, 1.0f};
+  Color3f AmbientColor{0.2f, 0.2f, 0.2f};
   // 衰减系数
   float Constant = 1.0f;
   float Linear = 0.09f;
@@ -128,8 +145,33 @@ struct RenderComponents {
     // Register module
     world.module<RenderComponents>();
 
+    world.import <flecs::units>();
+
     // register type
-    world.component<glm::vec3>().member<float>("x").member<float>("y").member<float>("z");
+    // world.component<glm::vec3>()
+    //     .member<float, flecs::units::color::Rgb>("x")
+    //     .range(0.0, 1.0f)
+    //     .member<float, flecs::units::color::Rgb>("y")
+    //     .range(0.0, 1.0f)
+    //     .member<float, flecs::units::color::Rgb>("z")
+    //     .range(0.0, 1.0f);
+
+    world.component<Color3f>()
+        .member<float, flecs::units::color::Rgb>("r")
+        .range(0.0f, 1.0f)
+        .member<float, flecs::units::color::Rgb>("g")
+        .range(0.0f, 1.0f)
+        .member<float, flecs::units::color::Rgb>("b")
+        .range(0.0f, 1.0f);
+
+    // world.component<Vector3f>()
+    //     .member<float>("x")
+    //     .range(-1.0f, 1.0f)
+    //     .member<float>("y")
+    //     .range(-1.0f, 1.0f)
+    //     .member<float>("z")
+    //     .range(-1.0f, 1.0f);
+
     world.component<std::string>()
         .opaque(flecs::String)  // Opaque type that maps to string
         .serialize([](const flecs::serializer* s, const std::string* data) {
@@ -152,65 +194,20 @@ struct RenderComponents {
     world.component<MeshComponent>();
     world.component<MaterialComponent>()
         .member<std::string>("ShaderPath")
-        .member<glm::vec3>("ObjectColor")
-        .member<glm::vec3>("SpecularColor")
-        .member<float>("Shininess");
+        .member<Color3f>("ObjectColor")
+        .member<Color3f>("SpecularColor")
+        .member<float>("Shininess")
+        .range(0.0, 100.0);
 
     world.component<LightComponent>()
-        .opaque(world.component()
-                    .member<float>("LightColor_x")
-                    .member<float>("LightColor_y")
-                    .member<float>("LightColor_z")
-                    .member<float>("AmbientColor_x")
-                    .member<float>("AmbientColor_y")
-                    .member<float>("AmbientColor_z")
-                    .member<float>("Constant")
-                    .member<float>("Linear")
-                    .member<float>("Quadratic"))
-        .serialize([](const flecs::serializer* s, const LightComponent* data) {
-          // 序列化真实成员x/y/z（直接读取glm::vec3的原生成员）
-          s->member("LightColor_x");
-          s->value(data->LightColor.x);
-          s->member("LightColor_y");
-          s->value(data->LightColor.y);
-          s->member("LightColor_z");
-          s->value(data->LightColor.z);
-          s->member("AmbientColor_x");
-          s->value(data->AmbientColor.x);
-          s->member("AmbientColor_y");
-          s->value(data->AmbientColor.y);
-          s->member("AmbientColor_z");
-          s->value(data->AmbientColor.z);
-          s->member("Constant");
-          s->value(data->Constant);
-          s->member("Linear");
-          s->value(data->Linear);
-          return 0;  // 序列化成功返回0
-        })
-        .ensure_member([](LightComponent* dst, const char* member_name) -> void* {
-          // 反序列化仅处理真实成员x/y/z，虚拟成员length不支持赋值
-          if (strcmp(member_name, "LightColor_x") == 0) {
-            return &(dst->LightColor.x);
-          } else if (strcmp(member_name, "LightColor_y") == 0) {
-            return &(dst->LightColor.y);
-          } else if (strcmp(member_name, "LightColor_z") == 0) {
-            return &(dst->LightColor.z);
-          } else if (strcmp(member_name, "AmbientColor_x") == 0) {
-            return &(dst->AmbientColor.x);
-          } else if (strcmp(member_name, "AmbientColor_y") == 0) {
-            return &(dst->AmbientColor.y);
-          } else if (strcmp(member_name, "AmbientColor_z") == 0) {
-            return &(dst->AmbientColor.z);
-          } else if (strcmp(member_name, "Constant") == 0) {
-            return &(dst->Constant);
-          } else if (strcmp(member_name, "Linear") == 0) {
-            return &(dst->Linear);
-          } else if (strcmp(member_name, "Quadratic") == 0) {
-            return &(dst->Quadratic);
-          } else {
-            return nullptr;
-          }
-        });
+        .member<Color3f>("LightColor")
+        .member<Color3f>("AmbientColor")
+        .member<float>("Constant")
+        .range(0.0, 1.0)
+        .member<float>("Linear")
+        .range(0.0, 1.0)
+        .member<float>("Quadratic")
+        .range(0.0, 1.0);
 
     world.component<CameraComponent>();
     world.component<ViewportComponent>();
