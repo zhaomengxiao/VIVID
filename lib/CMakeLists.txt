@@ -405,6 +405,42 @@ if(NOT EMSCRIPTEN)
     endfunction()
   endif()
 
+  # ---- Define helper function for copying VIVID resources to executable targets ----
+  # Users can call vivid_copy_resources_to_target(target_name) to automatically
+  # copy VIVID library resources (fonts, shaders, etc.) to their executable's output directory.
+  # This ensures that resources are available at runtime relative to the executable.
+  
+  set(VIVID_RES_DIR "${PROJECT_SOURCE_DIR}/res" CACHE INTERNAL "VIVID resources directory")
+  
+  function(vivid_copy_resources_to_target TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+      message(WARNING "VIVID: Target '${TARGET_NAME}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    get_target_property(_TARGET_TYPE ${TARGET_NAME} TYPE)
+    if(NOT _TARGET_TYPE STREQUAL "EXECUTABLE")
+      message(WARNING "VIVID: Target '${TARGET_NAME}' is not an executable. Resources are only needed for executables.")
+      return()
+    endif()
+    
+    if(NOT EXISTS "${VIVID_RES_DIR}")
+      message(WARNING "VIVID: Resources directory '${VIVID_RES_DIR}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    message(STATUS "VIVID: Setting up resource copy for target '${TARGET_NAME}'")
+    message(STATUS "VIVID: Resources directory: ${VIVID_RES_DIR}")
+    
+    # Copy the entire res directory to the executable's output directory
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${VIVID_RES_DIR}"
+        "$<TARGET_FILE_DIR:${TARGET_NAME}>/res"
+      COMMENT "VIVID: Copying resources to executable directory"
+    )
+  endfunction()
+
   # ---- Create an installable target ----
   # this allows users to install and find the library via `find_package()`.
 

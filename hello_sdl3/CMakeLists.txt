@@ -41,6 +41,10 @@ if(NOT EMSCRIPTEN)
     vivid_copy_system_dlls_to_target(${PROJECT_NAME})
 endif()
 
+# Copy VIVID resources (fonts, shaders, etc.) to executable directory
+# This works for both native and Emscripten builds
+vivid_copy_resources_to_target(${PROJECT_NAME})
+
 if(EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "index")

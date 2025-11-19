@@ -13,7 +13,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <iostream>
+#include <string>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -80,28 +82,32 @@ void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
   VividLogger::app_info("ImGui initialized successfully");
 
   // Load Fonts
-  // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
-  // fonts and use ImGui::PushFont()/PopFont() to select them.
-  // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the
-  // font among multiple.
-  // - If the file cannot be loaded, the function will return a nullptr. Please handle those
-  // errors in your application (e.g. use an assertion, or display an error and quit).
-  // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher
-  // quality font rendering.
-  // - Read 'docs/FONTS.md' for more instructions and details. If you like the default font but
-  // want it to scale better, consider using the 'ProggyVector' from the same author!
-  // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to
-  // write a double backslash \\ !
-  // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the
-  // "fonts/" folder. See Makefile.emscripten for details.
-  // style.FontSizeBase = 20.0f;
-  // io.Fonts->AddFontDefault();
-  // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf");
-  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf");
-  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf");
-  // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf");
-  // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
-  // IM_ASSERT(font != nullptr);
+  // Try multiple possible paths for the font file
+  const float fontSize = 28.0f;  // Set larger font size
+  const char* fontPaths[] = {
+      "res/fonts/NotoSans-Regular.ttf",            // Relative to executable (most common)
+      "lib/res/fonts/NotoSans-Regular.ttf",        // Relative to project root
+      "../lib/res/fonts/NotoSans-Regular.ttf",     // From build directory
+      "../../lib/res/fonts/NotoSans-Regular.ttf",  // From deeper build directory
+  };
+
+  ImFont* font = nullptr;
+
+  for (const char* fontPath : fontPaths) {
+    // Check if file exists
+    std::ifstream file(fontPath);
+    if (file.good()) {
+      file.close();
+      font = io.Fonts->AddFontFromFileTTF(fontPath, fontSize);
+      if (font != nullptr) {
+        VividLogger::app_info("Successfully loaded font from: %s (size: %.1f)", fontPath, fontSize);
+        break;
+      } else {
+        VividLogger::app_warn("Failed to load font from: %s (file exists but loading failed)",
+                              fontPath);
+      }
+    }
+  }
 }
 
 // Process ImGui events system
