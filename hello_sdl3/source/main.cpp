@@ -2,6 +2,7 @@
 // This example demonstrates how to use the new SDL3 callback-based application system
 
 #include <algorithm>
+#include <array>
 #include <string>
 
 #include "imgui.h"
@@ -16,13 +17,14 @@
 #include "vivid/window/window_systems.h"
 
 struct MyResource {
-  int value;
+  int value_;
 };
 
+namespace {
 vivid::render::MeshComponent CreateCubeMesh() {
   // Cube vertices with correct winding order (CCW when viewed from outside)
   // Each vertex: position (3 floats) + normal (3 floats) = 6 floats
-  std::vector<float> const vertices = {
+  std::vector<float> const kVertices = {
       // Back face (z = -0.5) - viewed from +z direction, CCW order
       -0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,  // 0: bottom-left
       0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,   // 1: bottom-right
@@ -48,45 +50,46 @@ vivid::render::MeshComponent CreateCubeMesh() {
       0.5F, 0.5F, -0.5F, 1.0F, 0.0F, 0.0F,   // 15: top-back
 
       // Bottom face (y = -0.5) - viewed from +y direction, CCW order
-      -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,  // 16: back-left
-      -0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,   // 17: front-left
-      0.5f, -0.5f, 0.5f, 0.0f, -1.0f, 0.0f,    // 18: front-right
-      0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,   // 19: back-right
+      -0.5F, -0.5F, -0.5F, 0.0F, -1.0F, 0.0F,  // 16: back-left
+      -0.5F, -0.5F, 0.5F, 0.0F, -1.0F, 0.0F,   // 17: front-left
+      0.5F, -0.5F, 0.5F, 0.0F, -1.0F, 0.0F,    // 18: front-right
+      0.5F, -0.5F, -0.5F, 0.0F, -1.0F, 0.0F,   // 19: back-right
 
       // Top face (y = 0.5) - viewed from -y direction, CCW order
-      -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // 20: back-left
-      0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,   // 21: back-right
-      0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,    // 22: front-right
-      -0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f    // 23: front-left
+      -0.5F, 0.5F, -0.5F, 0.0F, 1.0F, 0.0F,  // 20: back-left
+      0.5F, 0.5F, -0.5F, 0.0F, 1.0F, 0.0F,   // 21: back-right
+      0.5F, 0.5F, 0.5F, 0.0F, 1.0F, 0.0F,    // 22: front-right
+      -0.5F, 0.5F, 0.5F, 0.0F, 1.0F, 0.0F    // 23: front-left
   };
 
   // Indices for each face (2 triangles per face, CCW winding)
-  std::vector<unsigned int> indices = {// Back face
-                                       0, 1, 2, 2, 3, 0,
-                                       // Front face
-                                       4, 5, 6, 6, 7, 4,  // CCW from camera (+z direction)
-                                                          // Left face
-                                       8, 9, 10, 10, 11, 8,
-                                       // Right face
-                                       12, 13, 14, 14, 15, 12,
-                                       // Bottom face
-                                       16, 17, 18, 18, 19, 16,
-                                       // Top face
-                                       20, 21, 22, 22, 23, 20};
+  std::vector<unsigned int> const kIndices = {// Back face
+                                              0, 1, 2, 2, 3, 0,
+                                              // Front face
+                                              4, 5, 6, 6, 7, 4,  // CCW from camera (+z direction)
+                                                                 // Left face
+                                              8, 9, 10, 10, 11, 8,
+                                              // Right face
+                                              12, 13, 14, 14, 15, 12,
+                                              // Bottom face
+                                              16, 17, 18, 18, 19, 16,
+                                              // Top face
+                                              20, 21, 22, 22, 23, 20};
 
-  return {vertices, indices, indices.size()};
+  return {kVertices, kIndices, kIndices.size()};
 }
+}  // namespace
 
 // Window setup module - creates custom window before WindowSystems
 struct WindowSetup {
-  WindowSetup(flecs::world& world) {
-    using namespace vivid::window;
+  explicit WindowSetup(flecs::world& world) {
+    using vivid::window::WindowContext;
 
     // Register module
     world.module<WindowSetup>();
 
     // Import WindowComponents first to register component types
-    world.import <WindowComponents>();
+    world.import <vivid::window::WindowComponents>();
 
     // Create custom window entity with specific configuration
     WindowContext window_config;
@@ -104,16 +107,18 @@ struct WindowSetup {
     VividLogger::app_info("Custom window entity 'MainWindow' created (1024x768)");
   }
 };
+
+namespace {
 void print_value(const flecs::world& world, const flecs::cursor& cur) {
   // Get unit entity and component
-  flecs::entity u = cur.get_unit();
-  const flecs::Unit& u_data = u.get<flecs::Unit>();
+  const flecs::entity kUnit = cur.get_unit();
+  const auto& u_data = kUnit.get<flecs::Unit>();
 
   // 获取成员实体以访问元数据（如 Range）
-  flecs::entity member = world.entity(ecs_meta_get_member_id(&cur.cursor_));
-  if (member.is_valid()) {
-    if (member.has<flecs::MemberRanges>()) {
-      const flecs::MemberRanges& range = member.get<flecs::MemberRanges>();
+  const flecs::entity kMember = world.entity(ecs_meta_get_member_id(&cur.cursor_));
+  if (kMember.is_valid()) {
+    if (kMember.has<flecs::MemberRanges>()) {
+      const flecs::MemberRanges& range = kMember.get<flecs::MemberRanges>();
       ImGui::Text("Range: %f - %f", range.value.min, range.value.max);
     } else {
       ImGui::Text("No Range");
@@ -123,13 +128,13 @@ void print_value(const flecs::world& world, const flecs::cursor& cur) {
     ImGui::Text("Invalid Member");
   }
 
-  flecs::entity rgbUnit = world.entity<flecs::units::color::Rgb>();
+  const flecs::entity kRgbUnit = world.entity<flecs::units::color::Rgb>();
 
   // Print value with unit symbol
   //   std::cout << cur.get_member() << ": " << cur.get_float() << " "
   //             << (u_data.symbol ? u_data.symbol : "") << "\n";
-  char* symbol = nullptr;
-  if (u == rgbUnit) {
+  const char* symbol = nullptr;
+  if (kUnit == kRgbUnit) {
     symbol = const_cast<char*>("RGB");
   } else {
     symbol = u_data.symbol;
@@ -141,9 +146,10 @@ void print_value(const flecs::world& world, const flecs::cursor& cur) {
   ImGui::Text("%f", cur.get_float());
   ImGui::Text("%s", symbol);
 }
+}  // namespace
 // Scene initialization module - creates cube, light, and camera entities
 struct Setup {
-  Setup(flecs::world& world) {
+  explicit Setup(flecs::world& world) {
     VividLogger::app_info("Registering Setup module...");
 
     // Register module
@@ -159,9 +165,9 @@ struct Setup {
     VividLogger::app_info("Setup module registration completed!");
 
     // Moved from SceneInitialization system to guarantee immediate component addition
-    auto testEntity = world.entity("TestEntity");
-    testEntity.ensure<vivid::render::Color3f>();
-    VividLogger::app_info("TestEntity: %s", world.to_json(&testEntity).c_str());
+    const auto kTestEntity = world.entity("TestEntity");
+    kTestEntity.ensure<vivid::render::Color3f>();
+    VividLogger::app_info("TestEntity: %s", world.to_json(&kTestEntity).c_str());
   }
 
 private:
@@ -172,8 +178,8 @@ private:
     VividLogger::app_info("Initializing scene entities...");
 
     // --- Create Cube Entity ---
-    auto cubeEntity = world.entity("MyCube");
-    cubeEntity.set<vivid::render::TagComponent>({"MyCube"})
+    const auto kCubeEntity = world.entity("MyCube");
+    kCubeEntity.set<vivid::render::TagComponent>({"MyCube"})
         .set<vivid::render::TransformComponent>({})
         .set<vivid::render::MeshComponent>(CreateCubeMesh())
         .set<vivid::render::MaterialComponent>({
@@ -185,12 +191,12 @@ private:
     VividLogger::app_info("Created cube entity");
 
     // --- Create Light Entity ---
-    auto lightEntity = world.entity("PointLight");
-    vivid::render::TransformComponent lightTransform;
-    lightTransform.position_ = {1.2F, 1.0F, 2.0F};
+    const auto kLightEntity = world.entity("PointLight");
+    vivid::render::TransformComponent light_transform;
+    light_transform.position_ = {1.2F, 1.0F, 2.0F};
 
-    lightEntity.set<vivid::render::TagComponent>({"PointLight"})
-        .set<vivid::render::TransformComponent>(lightTransform)
+    kLightEntity.set<vivid::render::TagComponent>({"PointLight"})
+        .set<vivid::render::TransformComponent>(light_transform)
         .set<vivid::render::LightComponent>({});
 
     VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
@@ -198,11 +204,11 @@ private:
     // --- Create Camera Entity for Render Window ---
     // Entities with both CameraComponent and ViewportComponent will automatically
     // render to an ImGui window. The window title will be from TagComponent.Tag.
-    auto cameraEntity = world.entity("MainCamera");
-    vivid::render::TransformComponent camTransform;
+    const auto kCameraEntity = world.entity("MainCamera");
+    vivid::render::TransformComponent cam_transform;
     // Move camera closer to cube for better perspective effect
     // Position at (0, 0, 3) instead of (0, 0, 5) to make perspective more visible
-    camTransform.position_ = {0.0F, 0.0F, 3.0F};
+    cam_transform.position_ = {0.0F, 0.0F, 3.0F};
 
     // Setup ViewportComponent with initial size for ImGui window
     // The size will automatically adjust based on ImGui window size
@@ -210,8 +216,8 @@ private:
     viewport.width_ = 800.0F;
     viewport.height_ = 600.0F;
 
-    cameraEntity.set<vivid::render::TagComponent>({"MainCamera"})
-        .set<vivid::render::TransformComponent>(camTransform)
+    kCameraEntity.set<vivid::render::TagComponent>({"MainCamera"})
+        .set<vivid::render::TransformComponent>(cam_transform)
         .set<vivid::render::CameraComponent>({})
         .set<vivid::render::ViewportComponent>(viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>({});
@@ -221,37 +227,37 @@ private:
 
     // --- Create Second Camera Entity with 45-degree angle view ---
     // This camera will render from a diagonal angle (3, 3, 3) looking at the origin
-    auto sideCameraEntity = world.entity("SideCamera");
-    vivid::render::TransformComponent sideCamTransform;
-    sideCamTransform.position_ = {3.0F, 3.0F, 3.0F};  // Position at diagonal angle
+    const auto kSideCameraEntity = world.entity("SideCamera");
+    vivid::render::TransformComponent side_cam_transform;
+    side_cam_transform.position_ = {3.0F, 3.0F, 3.0F};  // Position at diagonal angle
 
     // Setup ViewportComponent for the side camera
-    vivid::render::ViewportComponent sideViewport;
-    sideViewport.width_ = 800.0F;
-    sideViewport.height_ = 600.0F;
+    vivid::render::ViewportComponent side_viewport;
+    side_viewport.width_ = 800.0F;
+    side_viewport.height_ = 600.0F;
 
     // Setup CameraControllerComponent to look at origin (0, 0, 0)
     // Front vector points from (3, 3, 3) to (0, 0, 0) = (-1, -1, -1), normalized
-    CameraControllerComponent sideCameraController;
-    sideCameraController.front_ = glm::normalize(glm::vec3(-1.0F, -1.0F, -1.0F));
-    sideCameraController.world_up_ = glm::vec3(0.0F, 1.0F, 0.0F);
+    CameraControllerComponent side_camera_controller;
+    side_camera_controller.front_ = glm::normalize(glm::vec3(-1.0F, -1.0F, -1.0F));
+    side_camera_controller.world_up_ = glm::vec3(0.0F, 1.0F, 0.0F);
     // Calculate Right and Up vectors based on Front and WorldUp
-    sideCameraController.right_
-        = glm::normalize(glm::cross(sideCameraController.front_, sideCameraController.world_up_));
-    sideCameraController.up_
-        = glm::normalize(glm::cross(sideCameraController.right_, sideCameraController.front_));
+    side_camera_controller.right_ = glm::normalize(
+        glm::cross(side_camera_controller.front_, side_camera_controller.world_up_));
+    side_camera_controller.up_
+        = glm::normalize(glm::cross(side_camera_controller.right_, side_camera_controller.front_));
 
     // Calculate initial Yaw and Pitch from Front vector to synchronize with mouse controls
     // Pitch = asin(front.y), Yaw = atan2(front.z, front.x)
-    sideCameraController.pitch_ = glm::degrees(asin(sideCameraController.front_.y));
-    sideCameraController.yaw_
-        = glm::degrees(atan2(sideCameraController.front_.z, sideCameraController.front_.x));
+    side_camera_controller.pitch_ = glm::degrees(asin(side_camera_controller.front_.y));
+    side_camera_controller.yaw_
+        = glm::degrees(atan2(side_camera_controller.front_.z, side_camera_controller.front_.x));
 
-    sideCameraEntity.set<vivid::render::TagComponent>({"SideCamera"})
-        .set<vivid::render::TransformComponent>(sideCamTransform)
+    kSideCameraEntity.set<vivid::render::TagComponent>({"SideCamera"})
+        .set<vivid::render::TransformComponent>(side_cam_transform)
         .set<vivid::render::CameraComponent>({})
-        .set<vivid::render::ViewportComponent>(sideViewport)  // Enables render window in ImGui
-        .set<CameraControllerComponent>(sideCameraController);
+        .set<vivid::render::ViewportComponent>(side_viewport)  // Enables render window in ImGui
+        .set<CameraControllerComponent>(side_camera_controller);
 
     VividLogger::app_info("Created side camera entity at position (3.0, 3.0, 3.0)");
     VividLogger::app_info("Render window will appear in ImGui with title 'SideCamera'");
@@ -261,18 +267,18 @@ private:
 };
 
 struct ImGuiDemo {
-  ImGuiDemo(flecs::world& world) {
+  explicit ImGuiDemo(flecs::world& world) {
     world.module<ImGuiDemo>();
 
     // get draw frame phase
-    flecs::entity DrawFramePhase = world.lookup("VIVID::UI::UISystems::DrawFramePhase");
-    if (DrawFramePhase.id() == 0) {
+    const flecs::entity kDrawFramePhase = world.lookup("VIVID::UI::UISystems::DrawFramePhase");
+    if (kDrawFramePhase.id() == 0) {
       VividLogger::error(
           "DrawFramePhase not found! Make sure UISystems is imported before ImGuiDemo.");
       return;
     }
 
-    world.system("ImGuiDemo").kind(DrawFramePhase).run(ImGuiDemoImpl);
+    world.system("ImGuiDemo").kind(kDrawFramePhase).run(ImGuiDemoImpl);
   }
 
 private:
@@ -293,12 +299,12 @@ private:
     ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
 
     // get testEntity
-    flecs::entity testEntity = it.world().lookup("Setup::TestEntity");
+    const flecs::entity kTestEntity = it.world().lookup("Setup::TestEntity");
 
     // Use cursor API to print values with units
     // Create cursor for the component
-    auto& colorData = testEntity.ensure<vivid::render::Color3f>();
-    flecs::cursor cur = it.world().cursor<vivid::render::Color3f>(&colorData);
+    auto& color_data = kTestEntity.ensure<vivid::render::Color3f>();
+    flecs::cursor cur = it.world().cursor<vivid::render::Color3f>(&color_data);
     cur.push();
     print_value(it.world(), cur);
     cur.next();
@@ -306,94 +312,94 @@ private:
     cur.next();
     print_value(it.world(), cur);
     cur.pop();
-    std::string const json = std::string(it.world().to_json(&colorData).c_str());
-    ImGui::Text("%s", json.c_str());
+    std::string const kJson = std::string(it.world().to_json(&color_data).c_str());
+    ImGui::Text("%s", kJson.c_str());
 
     ImGui::Separator();
     // Serialize world to JSON
-    static char worldJsonBuffer[65536] = "";  // 64KB buffer for JSON text
-    std::string worldJson = std::string(it.world().to_json().c_str());
+    static std::array<char, 65536> world_json_buffer{};  // 64KB buffer for JSON text
+    std::string world_json = std::string(it.world().to_json().c_str());
 
     // Format JSON with basic indentation for better readability
-    std::string formattedJson;
-    int indentLevel = 0;
-    const std::string indentStr = "  ";  // 2 spaces per indent level
-    bool inString = false;
-    bool escapeNext = false;
+    std::string formatted_json;
+    int indent_level = 0;
+    const std::string kIndentStr = "  ";  // 2 spaces per indent level
+    bool in_string = false;
+    bool escape_next = false;
 
-    for (size_t i = 0; i < worldJson.size(); ++i) {
-      char c = worldJson[i];
+    for (size_t i = 0; i < world_json.size(); ++i) {
+      const char kChar = world_json[i];
 
-      if (escapeNext) {
-        formattedJson += c;
-        escapeNext = false;
+      if (escape_next) {
+        formatted_json += kChar;
+        escape_next = false;
         continue;
       }
 
-      if (c == '\\') {
-        escapeNext = true;
-        formattedJson += c;
+      if (kChar == '\\') {
+        escape_next = true;
+        formatted_json += kChar;
         continue;
       }
 
-      if (c == '"') {
-        inString = !inString;
-        formattedJson += c;
+      if (kChar == '"') {
+        in_string = !in_string;
+        formatted_json += kChar;
         continue;
       }
 
-      if (inString) {
-        formattedJson += c;
+      if (in_string) {
+        formatted_json += kChar;
         continue;
       }
 
       // Format based on JSON structure
-      if (c == '{' || c == '[') {
-        formattedJson += c;
-        formattedJson += '\n';
-        indentLevel++;
-        for (int j = 0; j < indentLevel; ++j) {
-          formattedJson += indentStr;
+      if (kChar == '{' || kChar == '[') {
+        formatted_json += kChar;
+        formatted_json += '\n';
+        indent_level++;
+        for (int j = 0; j < indent_level; ++j) {
+          formatted_json += kIndentStr;
         }
-      } else if (c == '}' || c == ']') {
-        formattedJson += '\n';
-        indentLevel--;
-        for (int j = 0; j < indentLevel; ++j) {
-          formattedJson += indentStr;
+      } else if (kChar == '}' || kChar == ']') {
+        formatted_json += '\n';
+        indent_level--;
+        for (int j = 0; j < indent_level; ++j) {
+          formatted_json += kIndentStr;
         }
-        formattedJson += c;
-      } else if (c == ',') {
-        formattedJson += c;
-        formattedJson += '\n';
-        for (int j = 0; j < indentLevel; ++j) {
-          formattedJson += indentStr;
+        formatted_json += kChar;
+      } else if (kChar == ',') {
+        formatted_json += kChar;
+        formatted_json += '\n';
+        for (int j = 0; j < indent_level; ++j) {
+          formatted_json += kIndentStr;
         }
-      } else if (c == ':') {
-        formattedJson += c;
-        formattedJson += ' ';
-      } else if (c == ' ' || c == '\n' || c == '\t') {
+      } else if (kChar == ':') {
+        formatted_json += kChar;
+        formatted_json += ' ';
+      } else if (kChar == ' ' || kChar == '\n' || kChar == '\t') {
         // Skip whitespace outside strings
         continue;
       } else {
-        formattedJson += c;
+        formatted_json += kChar;
       }
     }
 
     // Copy formatted JSON to buffer
-    size_t jsonSize = formattedJson.size();
-    size_t copySize = std::min(jsonSize, sizeof(worldJsonBuffer) - 1);
-    formattedJson.copy(worldJsonBuffer, copySize);
-    worldJsonBuffer[copySize] = '\0';
-    if (jsonSize >= sizeof(worldJsonBuffer) - 1) {
-      worldJsonBuffer[sizeof(worldJsonBuffer) - 4] = '.';
-      worldJsonBuffer[sizeof(worldJsonBuffer) - 3] = '.';
-      worldJsonBuffer[sizeof(worldJsonBuffer) - 2] = '.';
+    const size_t kJsonSize = formatted_json.size();
+    const size_t kCopySize = std::min(kJsonSize, world_json_buffer.size() - 1);
+    formatted_json.copy(world_json_buffer.data(), kCopySize);
+    world_json_buffer.at(kCopySize) = '\0';
+    if (kJsonSize >= world_json_buffer.size() - 1) {
+      constexpr size_t kEllipsisOffset = 3;
+      world_json_buffer[world_json_buffer.size() - kEllipsisOffset - 1] = '.';
+      world_json_buffer[world_json_buffer.size() - kEllipsisOffset] = '.';
+      world_json_buffer[world_json_buffer.size() - kEllipsisOffset + 1] = '.';
     }
 
-    ImVec2 textSize = ImGui::GetContentRegionAvail();
-    textSize.y = ImGui::GetTextLineHeight() * 20;  // Set height to 20 lines
-    ImGui::InputTextMultiline("##WorldJson", worldJsonBuffer, sizeof(worldJsonBuffer), textSize,
-                              ImGuiInputTextFlags_ReadOnly);
+    const ImVec2 kTextSize = ImGui::GetContentRegionAvail();
+    ImGui::InputTextMultiline("##WorldJson", world_json_buffer.data(), world_json_buffer.size(),
+                              kTextSize, ImGuiInputTextFlags_ReadOnly);
 
     ImGui::Text(
         "This is some useful text.");  // Display some text (you can use a format strings too)
@@ -401,12 +407,14 @@ private:
                     &show_demo_window);  // Edit bools storing our window open/close state
     ImGui::Checkbox("Another Window", &show_another_window);
 
-    ImGui::SliderFloat("float", &f, 0.0F, 1.0F);             // Edit 1 float using a slider
-    ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
+    ImGui::SliderFloat("float", &f, 0.0F, 1.0F);  // Edit 1 float using a slider
+    ImGui::ColorEdit3("clear color", reinterpret_cast<float*>(
+                                         &clear_color));  // Edit 3 floats representing a color
 
-    if (ImGui::Button("Button"))  // Buttons return true when clicked (most widgets return true
-                                  // when edited/activated)
+    if (ImGui::Button("Button")) {  // Buttons return true when clicked (most widgets return true
+                                    // when edited/activated)
       counter++;
+    }
     ImGui::SameLine();
     ImGui::Text("counter = %d", counter);
 
@@ -425,7 +433,9 @@ private:
           &show_another_window);  // Pass a pointer to our bool variable (the window will have a
                                   // closing button that will clear the bool when clicked)
       ImGui::Text("Hello from another window!");
-      if (ImGui::Button("Close Me")) show_another_window = false;
+      if (ImGui::Button("Close Me")) {
+        show_another_window = false;
+      }
       ImGui::End();
     }
   }
@@ -433,7 +443,7 @@ private:
 
 // Module registration overview display
 struct ModuleOverview {
-  explicit ModuleOverview(flecs::world& world) {
+  explicit ModuleOverview([[maybe_unused]] flecs::world& world) {
     // Only show detailed overview in Debug builds to reduce verbosity
 #ifndef NDEBUG
     VividLogger::app_info(

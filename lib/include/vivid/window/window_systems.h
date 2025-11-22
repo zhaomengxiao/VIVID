@@ -113,12 +113,14 @@ struct WindowSystems {
 
 private:
   // Static member functions for system implementations
-  static void windowInitImpl(flecs::entity e, WindowContext& windowContext);
-  static void processWindowEventsImpl(vivid::app::EventQueues& eventQueues,
-                                      WindowContext& windowContext);
-  static void windowUpdateImpl(const flecs::entity e, WindowContext& windowContext);
-  static void cleanEventsImpl(vivid::app::EventQueues& eventQueues);
-  static void windowCleanupImpl(const flecs::entity e, WindowContext& windowContext);
+  static void windowInitImpl([[maybe_unused]] flecs::entity entity, WindowContext& window_context);
+  static void processWindowEventsImpl(vivid::app::EventQueues& event_queues,
+                                      WindowContext& window_context);
+  static void windowUpdateImpl([[maybe_unused]] flecs::entity entity,
+                               WindowContext& window_context);
+  static void cleanEventsImpl(vivid::app::EventQueues& event_queues);
+  static void windowCleanupImpl([[maybe_unused]] flecs::entity entity,
+                                WindowContext& window_context);
 };
 
 }  // namespace vivid::window

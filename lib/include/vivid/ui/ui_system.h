@@ -41,15 +41,15 @@ struct UISystems {
 
 private:
   // Static member functions for system implementations
-  static void initImGuiImpl(const vivid::window::WindowContext& windowContext,
-                            const vivid::render::WebGPUContext& webgpuRes);
-  static void processImGuiEventImpl(vivid::app::EventQueues& eventQueues);
-  static void newFrameImpl(const flecs::iter& it);
-  static void renderUIImpl(vivid::render::WebGPUContext& webgpuRes);
-  static void endFrameImpl(const flecs::iter& it);
-  static void shutDownUIImpl(const flecs::iter& it);
+  static void initImGuiImpl(const vivid::window::WindowContext& window_context,
+                            const vivid::render::WebGPUContext& webgpu_res);
+  static void processImGuiEventImpl(vivid::app::EventQueues& event_queues);
+  static void newFrameImpl([[maybe_unused]] const flecs::iter& it);
+  static void renderUIImpl(vivid::render::WebGPUContext& webgpu_res);
+  static void endFrameImpl([[maybe_unused]] const flecs::iter& it);
+  static void shutDownUIImpl([[maybe_unused]] const flecs::iter& it);
   // Display viewport windows in ImGui
-  static void displayViewportWindowsImpl(const flecs::iter& it);
+  static void displayViewportWindowsImpl([[maybe_unused]] const flecs::iter& it);
 };
 
 // Constructor - Register module and systems
@@ -139,17 +139,15 @@ inline UISystems::UISystems(flecs::world& world) {
 
   VIVID_LOG_SYSTEM("Looking up renderUIPhase from RenderSystems...");
 
-  flecs::entity render_ui_phase = world.lookup("vivid::render::RenderSystems::RenderUIPhase");
-  if (render_ui_phase.id() == 0) {
+  const flecs::entity kRenderUiPhase = world.lookup("vivid::render::RenderSystems::RenderUIPhase");
+  if (kRenderUiPhase.id() == 0) {
     VIVID_LOG_ERROR(
         "renderUIPhase not found! Make sure RenderSystems is imported before UISystems.");
     return;
   }
 
   // Render ImGui draw data within the render pass
-  world.system<vivid::render::WebGPUContext>("RenderImGui")
-      .kind(render_ui_phase)
-      .each(renderUIImpl);
+  world.system<vivid::render::WebGPUContext>("RenderImGui").kind(kRenderUiPhase).each(renderUIImpl);
 
   // Shutdown ImGui - runs once at shutdown
   world.system("ShutDownUI").kind<ShutdownPhase>().run(shutDownUIImpl);

@@ -11,6 +11,7 @@
 // #include <webgpu/webgpu.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -31,8 +32,8 @@
 
 namespace vivid::ui {
 
-void UISystems::initImGuiImpl(const vivid::window::WindowContext& windowContext,
-                              const vivid::render::WebGPUContext& webgpuRes) {
+void UISystems::initImGuiImpl(const vivid::window::WindowContext& window_context,
+                              const vivid::render::WebGPUContext& webgpu_res) {
   VividLogger::app_debug("=== InitImGui system called ===");
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
@@ -42,7 +43,7 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& windowContext,
   }
 
   // Check if WebGPU is initialized
-  if (webgpuRes.device == nullptr) {
+  if (webgpu_res.device == nullptr) {
     VividLogger::app_error("WebGPU not yet initialized, import RenderSystems first!");
     return;
   }
@@ -63,7 +64,7 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& windowContext,
   // ImGui::StyleColorsLight();
 
   // Setup scaling
-  ImGuiStyle& style = ImGui::GetStyle();
+  [[maybe_unused]] const ImGuiStyle& style = ImGui::GetStyle();
   // style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a
   // solution for dynamic style scaling, changing this requires resetting Style + calling this
   // again) style.FontScaleDpi = main_scale;        // Set initial font scale. (using
@@ -71,52 +72,52 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& windowContext,
   // purpose) Setup Platform/Renderer backends
 
   // Setup Platform/Renderer backends
-  ImGui_ImplSDL3_InitForOther(windowContext.window_handle_);
+  ImGui_ImplSDL3_InitForOther(window_context.window_handle_);
   ImGui_ImplWGPU_InitInfo init_info;
-  init_info.Device = webgpuRes.device;
+  init_info.Device = webgpu_res.device;
   init_info.NumFramesInFlight = 3;
-  init_info.RenderTargetFormat = webgpuRes.surfaceFormat;
-  init_info.DepthStencilFormat = webgpuRes.depthFormat;
+  init_info.RenderTargetFormat = webgpu_res.surfaceFormat;
+  init_info.DepthStencilFormat = webgpu_res.depthFormat;
   ImGui_ImplWGPU_Init(&init_info);
   VividLogger::app_info("ImGui initialized successfully");
 
   // Load Fonts
   // Try multiple possible paths for the font file
-  const float fontSize = 28.0f;  // Set larger font size
-  const char* fontPaths[] = {
+  const float kFontSize = 28.0F;  // Set larger font size
+  const std::array<const char*, 4> kFontPaths = {{
       "res/fonts/NotoSans-Regular.ttf",            // Relative to executable (most common)
       "lib/res/fonts/NotoSans-Regular.ttf",        // Relative to project root
       "../lib/res/fonts/NotoSans-Regular.ttf",     // From build directory
       "../../lib/res/fonts/NotoSans-Regular.ttf",  // From deeper build directory
-  };
+  }};
 
-  ImFont* font = nullptr;
+  const ImFont* font = nullptr;
 
-  for (const char* fontPath : fontPaths) {
+  for (const char* font_path : kFontPaths) {
     // Check if file exists
-    std::ifstream file(fontPath);
+    std::ifstream file(font_path);
     if (file.good()) {
       file.close();
-      font = io.Fonts->AddFontFromFileTTF(fontPath, fontSize);
+      font = io.Fonts->AddFontFromFileTTF(font_path, kFontSize);
       if (font != nullptr) {
-        VividLogger::app_info("Successfully loaded font from: %s (size: %.1f)", fontPath, fontSize);
+        VividLogger::app_info("Successfully loaded font from: %s (size: %.1f)", font_path,
+                              kFontSize);
         break;
-      } else {
-        VividLogger::app_warn("Failed to load font from: %s (file exists but loading failed)",
-                              fontPath);
       }
+      VividLogger::app_warn("Failed to load font from: %s (file exists but loading failed)",
+                            font_path);
     }
   }
 }
 
 // Process ImGui events system
-void UISystems::processImGuiEventImpl(vivid::app::EventQueues& eventQueues) {
-  for (auto& event : eventQueues.raw_sdl_events_) {
+void UISystems::processImGuiEventImpl(vivid::app::EventQueues& event_queues) {
+  for (auto& event : event_queues.raw_sdl_events_) {
     ImGui_ImplSDL3_ProcessEvent(&event);
   }
 }
 
-void UISystems::newFrameImpl(const flecs::iter& it) {
+void UISystems::newFrameImpl([[maybe_unused]] const flecs::iter& it) {
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
@@ -127,89 +128,90 @@ void UISystems::newFrameImpl(const flecs::iter& it) {
   ImGui::SetNextWindowSize(viewport->Size);
   ImGui::SetNextWindowViewport(viewport->ID);
 
-  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
-  window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
-                  | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-  window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-  window_flags |= ImGuiWindowFlags_NoBackground;
+  const ImGuiWindowFlags kWindowFlags
+      = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+        | ImGuiWindowFlags_NoBackground;
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
 
-  ImGui::Begin("DockSpace", nullptr, window_flags);
+  ImGui::Begin("DockSpace", nullptr, kWindowFlags);
   ImGui::PopStyleVar(3);
 
   // Create the dock space
-  ImGuiID const dockspace_id = ImGui::GetID("MyDockSpace");
-  ImGui::DockSpace(dockspace_id, ImVec2(0.0F, 0.0F), ImGuiDockNodeFlags_PassthruCentralNode);
+  const ImGuiID kDockspaceId = ImGui::GetID("MyDockSpace");
+  ImGui::DockSpace(kDockspaceId, ImVec2(0.0F, 0.0F), ImGuiDockNodeFlags_PassthruCentralNode);
 
   ImGui::End();
 }
 
 // Render ImGui draw data inside active render pass
-void UISystems::renderUIImpl(vivid::render::WebGPUContext& webgpuRes) {
-  if (webgpuRes.renderPass != nullptr) {
-    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpuRes.renderPass);
+void UISystems::renderUIImpl(vivid::render::WebGPUContext& webgpu_res) {
+  if (webgpu_res.renderPass != nullptr) {
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpu_res.renderPass);
   }
 }
 
-void UISystems::endFrameImpl(const flecs::iter& it) {
+void UISystems::endFrameImpl([[maybe_unused]] const flecs::iter& it) {
   ImGui::Render();  // Render() will call EndFrame() internally
 }
 
 // Shutdown ImGui system
-void UISystems::shutDownUIImpl(const flecs::iter& it) {
-  std::cout << "Shutting down ImGui..." << std::endl;
+void UISystems::shutDownUIImpl([[maybe_unused]] const flecs::iter& it) {
+  std::cout << "Shutting down ImGui...\n";
 
   ImGui::DestroyPlatformWindows();
   ImGui_ImplWGPU_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
 
-  std::cout << "ImGui shutdown complete" << std::endl;
+  std::cout << "ImGui shutdown complete\n";
 }
 
 // Display viewport windows in ImGui
-void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
+void UISystems::displayViewportWindowsImpl([[maybe_unused]] const flecs::iter& it) {
   auto world = it.world();
-  auto viewportQuery
+  const auto kViewportQuery
       = world.query<vivid::render::CameraComponent, vivid::render::ViewportComponent>();
 
-  viewportQuery.each([&](flecs::entity entity, const vivid::render::CameraComponent& camera,
-                         vivid::render::ViewportComponent& viewport) {
+  kViewportQuery.each([&](flecs::entity entity,
+                          [[maybe_unused]] const vivid::render::CameraComponent& camera,
+                          vivid::render::ViewportComponent& viewport) {
     // Get window title
-    std::string windowTitle = "Viewport";
+    std::string window_title = "Viewport";
     if (const char* name = entity.name(); name && strlen(name) > 0) {
-      windowTitle = name;
+      window_title = name;
     }
 
     // Create dockable viewport window
     // By default, ImGui only allows dragging windows by their title bar
     // The content area does not respond to drag events
-    ImGui::Begin(windowTitle.c_str());
+    ImGui::Begin(window_title.c_str());
     // Get content region start position in absolute coordinates (recommended API)
-    ImVec2 contentStartPos = ImGui::GetCursorScreenPos();
-    viewport.content_start_pos_x_ = contentStartPos.x;
-    viewport.content_start_pos_y_ = contentStartPos.y;
+    const ImVec2 kContentStartPos = ImGui::GetCursorScreenPos();
+    viewport.content_start_pos_x_ = kContentStartPos.x;
+    viewport.content_start_pos_y_ = kContentStartPos.y;
     viewport.is_focused_ = ImGui::IsWindowFocused();
     viewport.is_hovered_ = ImGui::IsWindowHovered();
 
     // // DEBUG TEXT
-    // ImGui::Text("Viewport: %s", windowTitle.c_str());
+    // ImGui::Text("Viewport: %s", window_title.c_str());
     // ImGui::Text("IsFocused: %s", viewport.IsFocused ? "Yes" : "No");
     // ImGui::Text("IsHovered: %s", viewport.IsHovered ? "Yes" : "No");
 
     // Update viewport size if window size changed
-    ImVec2 contentSize = ImGui::GetContentRegionAvail();
-    float newWidth = std::max(1.0f, std::min(contentSize.x, 4096.0f));
-    float newHeight = std::max(1.0f, std::min(contentSize.y, 4096.0f));
+    const ImVec2 kContentSize = ImGui::GetContentRegionAvail();
+    const float kNewWidth = std::max(1.0F, std::min(kContentSize.x, 4096.0F));
+    const float kNewHeight = std::max(1.0F, std::min(kContentSize.y, 4096.0F));
 
-    if (newWidth > 0 && newHeight > 0
-        && (std::abs(viewport.width_ - newWidth) > 1.0f
-            || std::abs(viewport.height_ - newHeight) > 1.0f)) {
-      viewport.width_ = newWidth;
-      viewport.height_ = newHeight;
+    if (kNewWidth > 0 && kNewHeight > 0
+        && (std::abs(viewport.width_ - kNewWidth) > 1.0F
+            || std::abs(viewport.height_ - kNewHeight) > 1.0F)) {
+      viewport.width_ = kNewWidth;
+      viewport.height_ = kNewHeight;
       viewport.initialized_ = false;
     }
 
