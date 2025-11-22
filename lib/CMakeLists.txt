@@ -278,8 +278,9 @@ set(headers
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/window/window_systems.h
 
   # Input headers
-  # ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_component.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_system.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_visual_debug_systems.h
 
   # Physics headers
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/physics/physics_component.h
@@ -296,6 +297,7 @@ set(sources
   
   # Input sources
   ${CMAKE_CURRENT_SOURCE_DIR}/source/input/input_system.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/input/input_visual_debug_systems.cpp
   
   # Physics sources
   ${CMAKE_CURRENT_SOURCE_DIR}/source/physics/physics_system.cpp

@@ -9,7 +9,6 @@ Checks: >
   cppcoreguidelines-*,
   modernize-*,
   performance-*,
-  portability-*,
   readability-*,
   google-*,
   -modernize-use-trailing-return-type,
@@ -19,7 +18,8 @@ Checks: >
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-const-cast,
   -readability-identifier-length,
-  -modernize-use-nodiscard
+  -modernize-use-nodiscard,
+  -llvmlibc-*
 
 WarningsAsErrors: ""
 

@@ -5,6 +5,7 @@
 #include <vivid/log/log.h>
 #include <vivid/render/render_component.h>
 
+#include <algorithm>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -60,7 +61,7 @@ void InputSystems::handleMouseInputImpl(MouseInputResource& mouseInput) {
     ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
     mouseInput.LeftMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
   } else {
-    mouseInput.LeftMouseDragDelta = glm::vec2(0.0f);
+    mouseInput.LeftMouseDragDelta = glm::vec2(0.0F);
   }
 
   // Middle mouse button events
@@ -72,7 +73,7 @@ void InputSystems::handleMouseInputImpl(MouseInputResource& mouseInput) {
     ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
     mouseInput.MiddleMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
   } else {
-    mouseInput.MiddleMouseDragDelta = glm::vec2(0.0f);
+    mouseInput.MiddleMouseDragDelta = glm::vec2(0.0F);
   }
 
   // Right mouse button events
@@ -85,7 +86,7 @@ void InputSystems::handleMouseInputImpl(MouseInputResource& mouseInput) {
     ImVec2 dragDelta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right);
     mouseInput.RightMouseDragDelta = glm::vec2(dragDelta.x, dragDelta.y);
   } else {
-    mouseInput.RightMouseDragDelta = glm::vec2(0.0f);
+    mouseInput.RightMouseDragDelta = glm::vec2(0.0F);
   }
 
   // Mouse wheel events
@@ -121,8 +122,8 @@ void InputSystems::controlCameraImpl(CameraControllerComponent& cameraController
     cameraController.Pitch -= mouseDelta.y * cameraController.MouseSensitivity;
 
     // Constrain pitch to prevent camera flipping
-    if (cameraController.Pitch > 89.0f) cameraController.Pitch = 89.0f;
-    if (cameraController.Pitch < -89.0f) cameraController.Pitch = -89.0f;
+    cameraController.Pitch = std::min(cameraController.Pitch, 89.0F);
+    cameraController.Pitch = std::max(cameraController.Pitch, -89.0F);
 
     // Update camera vectors based on new yaw/pitch
     cameraController.UpdateVectors();
@@ -130,14 +131,14 @@ void InputSystems::controlCameraImpl(CameraControllerComponent& cameraController
     // Update transform rotation from camera controller
     transform.Rotation.x = cameraController.Pitch;
     transform.Rotation.y = cameraController.Yaw;
-    transform.Rotation.z = 0.0f;
+    transform.Rotation.z = 0.0F;
 
     // Reset drag delta to get per-frame delta (ImGui will recalculate from current position)
     ImGui::ResetMouseDragDelta(ImGuiMouseButton_Left);
   }
 
   // Handle mouse wheel zoom (only when mouse is in viewport and viewport is focused)
-  if (mouseInViewport && std::abs(mouseInput.MouseWheelDelta) > 0.001f) {
+  if (mouseInViewport && std::abs(mouseInput.MouseWheelDelta) > 0.001F) {
     // Calculate zoom amount based on wheel delta and zoom speed
     float zoomAmount = mouseInput.MouseWheelDelta * cameraController.ZoomSpeed;
 
@@ -155,8 +156,8 @@ void InputSystems::controlCameraImpl(CameraControllerComponent& cameraController
       transform.Position = newPosition;
     } else {
       // Clamp to zoom limits
-      glm::vec3 direction = currentDistance > 0.001f ? glm::normalize(transform.Position)
-                                                     : glm::vec3(0.0f, 0.0f, -1.0f);
+      glm::vec3 direction = currentDistance > 0.001F ? glm::normalize(transform.Position)
+                                                     : glm::vec3(0.0F, 0.0F, -1.0F);
       if (newDistance < cameraController.MinZoom) {
         transform.Position = direction * cameraController.MinZoom;
       } else if (newDistance > cameraController.MaxZoom) {
@@ -171,7 +172,7 @@ void InputSystems::controlCameraImpl(CameraControllerComponent& cameraController
     glm::vec2 mouseDelta = mouseInput.MiddleMouseDragDelta;
 
     // Calculate pan amount using Right and Up vectors
-    float panX = mouseDelta.x * cameraController.PanSpeed * -1.0f;  // Negative for natural panning
+    float panX = mouseDelta.x * cameraController.PanSpeed * -1.0F;  // Negative for natural panning
     float panY = mouseDelta.y * cameraController.PanSpeed;
 
     // Update camera position using Right and Up vectors

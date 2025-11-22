@@ -31,8 +31,7 @@
 #define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, ##__VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
-namespace VIVID {
-namespace UI {
+namespace VIVID::UI {
 
 struct ShutdownPhase {};  // Custom phase for cleanup systems
 
@@ -111,10 +110,6 @@ inline UISystems::UISystems(flecs::world& world) {
   // Import components module
   world.import <UIComponents>();
 
-  // add custom phases for other modules ui to depend on
-  flecs::entity DrawFramePhase
-      = world.entity("DrawFramePhase").add(flecs::Phase).depends_on(flecs::OnUpdate);
-
   // Register systems
   VIVID_LOG_SYSTEM("Registering InitImGui system...");
 
@@ -137,7 +132,7 @@ inline UISystems::UISystems(flecs::world& world) {
   world.system("NewFrame").kind(flecs::PreUpdate).run(newFrameImpl);
 
   // Display viewport windows
-  world.system("DisplayViewportWindows").kind(DrawFramePhase).run(displayViewportWindowsImpl);
+  world.system("DisplayViewportWindows").kind(flecs::OnUpdate).run(displayViewportWindowsImpl);
 
   // End UI frame
   world.system("EndFrame").kind(flecs::PostUpdate).run(endFrameImpl);
@@ -160,5 +155,4 @@ inline UISystems::UISystems(flecs::world& world) {
   VIVID_LOG_SUCCESS("UISystems module registration completed!");
 }
 
-}  // namespace UI
-}  // namespace VIVID
+}  // namespace VIVID::UI

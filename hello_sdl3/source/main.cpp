@@ -8,6 +8,7 @@
 #include "vivid/app/SDL3App.h"
 #include "vivid/input/camera_controller.h"
 #include "vivid/input/input_system.h"
+#include "vivid/input/input_visual_debug_systems.h"
 #include "vivid/log/log.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
@@ -526,7 +527,8 @@ VIVID_SDL3_MAIN(
                                                         // PreUpdate)
         .import_module<VIVID::UI::UISystems>()          // ImGui UI
         .import_module<VIVID::INPUT::InputSystems>()    // Input processing and camera control
-        .import_module<ImGuiDemo>()                     // ImGui demo
+        .import_module<VIVID::INPUT::InputVisualDebugSystems>()  // Mouse input debug panel
+        .import_module<ImGuiDemo>()                              // ImGui demo
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
 
 )

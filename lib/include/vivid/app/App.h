@@ -8,8 +8,7 @@
 
 struct ShutdownPhase {};
 
-namespace VIVID {
-namespace APP {
+namespace VIVID::APP {
 
 struct EventQueues {
   std::vector<SDL_Event> raw_sdl_events;  // 原始SDL事件
@@ -131,7 +130,9 @@ public:
 
   // Initialize application (corresponds to SDL_AppInit)
   bool Initialize(int argc, char** argv) {
-    if (initialized_) return true;
+    if (initialized_) {
+      return true;
+    }
     VividLogger::app_info("Initializing SDL3 application...");
 
     // ensure ensure resource exists, if not, create one
@@ -146,7 +147,9 @@ public:
 
   // Single iteration (corresponds to SDL_AppIterate)
   bool Iterate() {
-    if (!initialized_ || !running_) return false;
+    if (!initialized_ || !running_) {
+      return false;
+    }
 
     static int frame_count = 0;
     if (frame_count == 0) {
@@ -175,7 +178,9 @@ public:
 
   // Close application (corresponds to SDL_AppQuit)
   void Shutdown() {
-    if (!initialized_) return;
+    if (!initialized_) {
+      return;
+    }
 
     VividLogger::app_info("SDL3 application shutting down...");
     // Shutdown systems using custom pipeline
@@ -186,13 +191,12 @@ public:
   }
 
   // Check if application is running
-  bool IsRunning() const { return running_; }
+  auto IsRunning() const -> bool { return running_; }
 
   // Check if application is initialized
-  bool IsInitialized() const { return initialized_; }
+  auto IsInitialized() const -> bool { return initialized_; }
 
 private:
 };
 
-}  // namespace APP
-}  // namespace VIVID
+}  // namespace VIVID::APP

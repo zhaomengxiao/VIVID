@@ -29,8 +29,7 @@
 // // #  include <webgpu/webgpu_cpp.h>
 // #endif
 
-namespace VIVID {
-namespace UI {
+namespace VIVID::UI {
 
 void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
                               const RENDER::WebGPUContext& webgpuRes) {
@@ -171,7 +170,7 @@ void UISystems::shutDownUIImpl(const flecs::iter& it) {
   std::cout << "ImGui shutdown complete" << std::endl;
 }
 
-// Display viewport windows in ImGui (rendering handled by RenderSystems)
+// Display viewport windows in ImGui
 void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   auto world = it.world();
   auto viewportQuery = world.query<RENDER::CameraComponent, RENDER::ViewportComponent>();
@@ -195,10 +194,10 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
     viewport.IsFocused = ImGui::IsWindowFocused();
     viewport.IsHovered = ImGui::IsWindowHovered();
 
-    // DEBUG TEXT
-    ImGui::Text("Viewport: %s", windowTitle.c_str());
-    ImGui::Text("IsFocused: %s", viewport.IsFocused ? "Yes" : "No");
-    ImGui::Text("IsHovered: %s", viewport.IsHovered ? "Yes" : "No");
+    // // DEBUG TEXT
+    // ImGui::Text("Viewport: %s", windowTitle.c_str());
+    // ImGui::Text("IsFocused: %s", viewport.IsFocused ? "Yes" : "No");
+    // ImGui::Text("IsHovered: %s", viewport.IsHovered ? "Yes" : "No");
 
     // Update viewport size if window size changed
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -225,5 +224,4 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   });
 }
 
-}  // namespace UI
-}  // namespace VIVID
+}  // namespace VIVID::UI
