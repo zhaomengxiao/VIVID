@@ -13,6 +13,8 @@ Diagnostics:
         "performance-*",
         "readability-*",
         "google-*",
+        "portability-*",
+        "misc-*",
       ]
     Remove:
       [
@@ -26,6 +28,7 @@ Diagnostics:
         "modernize-use-nodiscard",
         "cppcoreguidelines-pro-type-vararg",
         "cppcoreguidelines-pro-type-union-access",
+        "misc-non-private-member-variables-in-classes",
       ]
     CheckOptions:
       # Naming conventions (Google Style)
@@ -38,8 +41,8 @@ Diagnostics:
 
       # Functions: PascalCase (Google allows both, but PascalCase is preferred in many Google projects)
       # Or use snake_case: lower_case
-      readability-identifier-naming.FunctionCase: CamelCase
-      readability-identifier-naming.MethodCase: CamelCase
+      readability-identifier-naming.FunctionCase: PascalCase
+      readability-identifier-naming.MethodCase: PascalCase
 
       # Variables: snake_case
       readability-identifier-naming.VariableCase: lower_case
@@ -47,13 +50,8 @@ Diagnostics:
       readability-identifier-naming.LocalVariableCase: lower_case
 
       # Member variables: snake_case with trailing underscore
-      readability-identifier-naming.PrivateMemberCase: lower_case
-      readability-identifier-naming.PrivateMemberSuffix: "_"
-      readability-identifier-naming.ProtectedMemberCase: lower_case
-      readability-identifier-naming.ProtectedMemberSuffix: "_"
-
-      # Public members: snake_case (no trailing underscore for structs)
-      readability-identifier-naming.PublicMemberCase: lower_case
+      readability-identifier-naming.MemberCase: lower_case
+      readability-identifier-naming.MemberSuffix: "_"
 
       # Constants: kConstantName (Google style)
       readability-identifier-naming.ConstantCase: CamelCase

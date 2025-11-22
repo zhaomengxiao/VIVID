@@ -6,28 +6,28 @@
 
 #include <string>
 
-namespace VIVID::INPUT {
+namespace vivid::input {
 
 // Color constants for debug display
 namespace {
-constexpr ImVec4 GREEN_BACKGROUND(0.0F, 0.5F, 0.0F, 1.0F);  // Dark green background for true values
+constexpr ImVec4 kGreenBackground(0.0F, 0.5F, 0.0F, 1.0F);  // Dark green background for true values
 
 // Helper function to display bool value with green background when true
 void DisplayBoolValue(const char* label, bool value) {
-  std::string text = "  " + std::string(label) + ": " + (value ? "Yes" : "No");
+  const std::string kText = "  " + std::string(label) + ": " + (value ? "Yes" : "No");
 
   // Disable button interaction to make it display-only
   ImGui::BeginDisabled();
 
   if (value) {
     // Push green background color for the button frame when value is true
-    ImGui::PushStyleColor(ImGuiCol_Button, GREEN_BACKGROUND);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, GREEN_BACKGROUND);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, GREEN_BACKGROUND);
+    ImGui::PushStyleColor(ImGuiCol_Button, kGreenBackground);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kGreenBackground);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, kGreenBackground);
   }
 
   // Use Button with full width (-1) to show text with background color that fills the width
-  ImGui::Button(text.c_str(), ImVec2(-1, 0));
+  ImGui::Button(kText.c_str(), ImVec2(-1, 0));
 
   if (value) {
     ImGui::PopStyleColor(3);
@@ -59,7 +59,7 @@ InputVisualDebugSystems::InputVisualDebugSystems(flecs::world& world) {
 }
 
 // Display mouse input debug panel - shows all MouseInputResource values
-void InputVisualDebugSystems::displayMouseInputDebugImpl(MouseInputResource& mouseInput) {
+void InputVisualDebugSystems::displayMouseInputDebugImpl(const MouseInputResource& mouse_input) {
   if (!ImGui::Begin("Mouse Input Debug")) {
     ImGui::End();
     return;
@@ -67,58 +67,58 @@ void InputVisualDebugSystems::displayMouseInputDebugImpl(MouseInputResource& mou
 
   // Mouse Position & Delta section
   ImGui::Text("Mouse Position & Delta");
-  ImGui::Text("  Position: (%.2f, %.2f)", mouseInput.MousePos.x, mouseInput.MousePos.y);
-  ImGui::Text("  Delta: (%.2f, %.2f)", mouseInput.MouseDelta.x, mouseInput.MouseDelta.y);
+  ImGui::Text("  Position: (%.2f, %.2f)", mouse_input.mouse_pos_.x, mouse_input.mouse_pos_.y);
+  ImGui::Text("  Delta: (%.2f, %.2f)", mouse_input.mouse_delta_.x, mouse_input.mouse_delta_.y);
 
   ImGui::Separator();
 
   // Left Mouse Button section
   ImGui::Text("Left Mouse Button");
   ImGui::PushID("LeftMouse");
-  DisplayBoolValue("Pressed", mouseInput.MousePressed);
-  DisplayBoolValue("Clicked", mouseInput.MouseClicked);
-  DisplayBoolValue("Released", mouseInput.MouseReleased);
-  DisplayBoolValue("Double Clicked", mouseInput.MouseDoubleClicked);
-  DisplayBoolValue("Dragging", mouseInput.MouseDragging);
+  DisplayBoolValue("Pressed", mouse_input.mouse_pressed_);
+  DisplayBoolValue("Clicked", mouse_input.mouse_clicked_);
+  DisplayBoolValue("Released", mouse_input.mouse_released_);
+  DisplayBoolValue("Double Clicked", mouse_input.mouse_double_clicked_);
+  DisplayBoolValue("Dragging", mouse_input.mouse_dragging_);
   ImGui::PopID();
-  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouseInput.LeftMouseDragDelta.x,
-              mouseInput.LeftMouseDragDelta.y);
+  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouse_input.left_mouse_drag_delta_.x,
+              mouse_input.left_mouse_drag_delta_.y);
 
   ImGui::Separator();
 
   // Middle Mouse Button section
   ImGui::Text("Middle Mouse Button");
   ImGui::PushID("MiddleMouse");
-  DisplayBoolValue("Pressed", mouseInput.MiddleMousePressed);
-  DisplayBoolValue("Clicked", mouseInput.MiddleMouseClicked);
-  DisplayBoolValue("Released", mouseInput.MiddleMouseReleased);
-  DisplayBoolValue("Dragging", mouseInput.MiddleMouseDragging);
+  DisplayBoolValue("Pressed", mouse_input.middle_mouse_pressed_);
+  DisplayBoolValue("Clicked", mouse_input.middle_mouse_clicked_);
+  DisplayBoolValue("Released", mouse_input.middle_mouse_released_);
+  DisplayBoolValue("Dragging", mouse_input.middle_mouse_dragging_);
   ImGui::PopID();
-  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouseInput.MiddleMouseDragDelta.x,
-              mouseInput.MiddleMouseDragDelta.y);
+  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouse_input.middle_mouse_drag_delta_.x,
+              mouse_input.middle_mouse_drag_delta_.y);
 
   ImGui::Separator();
 
   // Right Mouse Button section
   ImGui::Text("Right Mouse Button");
   ImGui::PushID("RightMouse");
-  DisplayBoolValue("Pressed", mouseInput.RightMousePressed);
-  DisplayBoolValue("Clicked", mouseInput.RightMouseClicked);
-  DisplayBoolValue("Released", mouseInput.RightMouseReleased);
-  DisplayBoolValue("Double Clicked", mouseInput.RightMouseDoubleClicked);
-  DisplayBoolValue("Dragging", mouseInput.RightMouseDragging);
+  DisplayBoolValue("Pressed", mouse_input.right_mouse_pressed_);
+  DisplayBoolValue("Clicked", mouse_input.right_mouse_clicked_);
+  DisplayBoolValue("Released", mouse_input.right_mouse_released_);
+  DisplayBoolValue("Double Clicked", mouse_input.right_mouse_double_clicked_);
+  DisplayBoolValue("Dragging", mouse_input.right_mouse_dragging_);
   ImGui::PopID();
-  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouseInput.RightMouseDragDelta.x,
-              mouseInput.RightMouseDragDelta.y);
+  ImGui::Text("  Drag Delta: (%.2f, %.2f)", mouse_input.right_mouse_drag_delta_.x,
+              mouse_input.right_mouse_drag_delta_.y);
 
   ImGui::Separator();
 
   // Mouse Wheel section
   ImGui::Text("Mouse Wheel");
-  ImGui::Text("  Vertical Delta: %.2f", mouseInput.MouseWheelDelta);
-  ImGui::Text("  Horizontal Delta: %.2f", mouseInput.MouseWheelH);
+  ImGui::Text("  Vertical Delta: %.2f", mouse_input.mouse_wheel_delta_);
+  ImGui::Text("  Horizontal Delta: %.2f", mouse_input.mouse_wheel_h_);
 
   ImGui::End();
 }
 
-}  // namespace VIVID::INPUT
+}  // namespace vivid::input

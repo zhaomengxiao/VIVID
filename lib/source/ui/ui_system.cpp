@@ -29,10 +29,10 @@
 // // #  include <webgpu/webgpu_cpp.h>
 // #endif
 
-namespace VIVID::UI {
+namespace vivid::ui {
 
-void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
-                              const RENDER::WebGPUContext& webgpuRes) {
+void UISystems::initImGuiImpl(const vivid::window::WindowContext& windowContext,
+                              const vivid::render::WebGPUContext& webgpuRes) {
   VividLogger::app_debug("=== InitImGui system called ===");
 
   // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
@@ -71,7 +71,7 @@ void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
   // purpose) Setup Platform/Renderer backends
 
   // Setup Platform/Renderer backends
-  ImGui_ImplSDL3_InitForOther(windowContext.window_handle);
+  ImGui_ImplSDL3_InitForOther(windowContext.window_handle_);
   ImGui_ImplWGPU_InitInfo init_info;
   init_info.Device = webgpuRes.device;
   init_info.NumFramesInFlight = 3;
@@ -110,8 +110,8 @@ void UISystems::initImGuiImpl(const WINDOW::WindowContext& windowContext,
 }
 
 // Process ImGui events system
-void UISystems::processImGuiEventImpl(VIVID::APP::EventQueues& eventQueues) {
-  for (auto& event : eventQueues.raw_sdl_events) {
+void UISystems::processImGuiEventImpl(vivid::app::EventQueues& eventQueues) {
+  for (auto& event : eventQueues.raw_sdl_events_) {
     ImGui_ImplSDL3_ProcessEvent(&event);
   }
 }
@@ -122,7 +122,7 @@ void UISystems::newFrameImpl(const flecs::iter& it) {
   ImGui::NewFrame();
 
   // Create a full-screen dock space for organizing viewports
-  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGuiViewport const* viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->Pos);
   ImGui::SetNextWindowSize(viewport->Size);
   ImGui::SetNextWindowViewport(viewport->ID);
@@ -133,22 +133,22 @@ void UISystems::newFrameImpl(const flecs::iter& it) {
   window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
   window_flags |= ImGuiWindowFlags_NoBackground;
 
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
 
   ImGui::Begin("DockSpace", nullptr, window_flags);
   ImGui::PopStyleVar(3);
 
   // Create the dock space
-  ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-  ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+  ImGuiID const dockspace_id = ImGui::GetID("MyDockSpace");
+  ImGui::DockSpace(dockspace_id, ImVec2(0.0F, 0.0F), ImGuiDockNodeFlags_PassthruCentralNode);
 
   ImGui::End();
 }
 
 // Render ImGui draw data inside active render pass
-void UISystems::renderUIImpl(RENDER::WebGPUContext& webgpuRes) {
+void UISystems::renderUIImpl(vivid::render::WebGPUContext& webgpuRes) {
   if (webgpuRes.renderPass != nullptr) {
     ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpuRes.renderPass);
   }
@@ -173,10 +173,11 @@ void UISystems::shutDownUIImpl(const flecs::iter& it) {
 // Display viewport windows in ImGui
 void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   auto world = it.world();
-  auto viewportQuery = world.query<RENDER::CameraComponent, RENDER::ViewportComponent>();
+  auto viewportQuery
+      = world.query<vivid::render::CameraComponent, vivid::render::ViewportComponent>();
 
-  viewportQuery.each([&](flecs::entity entity, const RENDER::CameraComponent& camera,
-                         RENDER::ViewportComponent& viewport) {
+  viewportQuery.each([&](flecs::entity entity, const vivid::render::CameraComponent& camera,
+                         vivid::render::ViewportComponent& viewport) {
     // Get window title
     std::string windowTitle = "Viewport";
     if (const char* name = entity.name(); name && strlen(name) > 0) {
@@ -189,10 +190,10 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
     ImGui::Begin(windowTitle.c_str());
     // Get content region start position in absolute coordinates (recommended API)
     ImVec2 contentStartPos = ImGui::GetCursorScreenPos();
-    viewport.contentStartPos_x = contentStartPos.x;
-    viewport.contentStartPos_y = contentStartPos.y;
-    viewport.IsFocused = ImGui::IsWindowFocused();
-    viewport.IsHovered = ImGui::IsWindowHovered();
+    viewport.content_start_pos_x_ = contentStartPos.x;
+    viewport.content_start_pos_y_ = contentStartPos.y;
+    viewport.is_focused_ = ImGui::IsWindowFocused();
+    viewport.is_hovered_ = ImGui::IsWindowHovered();
 
     // // DEBUG TEXT
     // ImGui::Text("Viewport: %s", windowTitle.c_str());
@@ -205,17 +206,17 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
     float newHeight = std::max(1.0f, std::min(contentSize.y, 4096.0f));
 
     if (newWidth > 0 && newHeight > 0
-        && (std::abs(viewport.Width - newWidth) > 1.0f
-            || std::abs(viewport.Height - newHeight) > 1.0f)) {
-      viewport.Width = newWidth;
-      viewport.Height = newHeight;
-      viewport.initialized = false;
+        && (std::abs(viewport.width_ - newWidth) > 1.0f
+            || std::abs(viewport.height_ - newHeight) > 1.0f)) {
+      viewport.width_ = newWidth;
+      viewport.height_ = newHeight;
+      viewport.initialized_ = false;
     }
 
     // Display texture
-    if (viewport.renderTextureView && viewport.TextureID != 0) {
-      ImGui::Image(reinterpret_cast<ImTextureID>(viewport.renderTextureView),
-                   ImVec2(viewport.Width, viewport.Height));
+    if (viewport.render_texture_view_ && viewport.texture_id_ != 0) {
+      ImGui::Image(reinterpret_cast<ImTextureID>(viewport.render_texture_view_),
+                   ImVec2(viewport.width_, viewport.height_));
     } else {
       ImGui::Text("Rendering...");
     }
@@ -224,4 +225,4 @@ void UISystems::displayViewportWindowsImpl(const flecs::iter& it) {
   });
 }
 
-}  // namespace VIVID::UI
+}  // namespace vivid::ui

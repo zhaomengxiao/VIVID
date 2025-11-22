@@ -19,33 +19,33 @@ struct MyResource {
   int value;
 };
 
-VIVID::RENDER::MeshComponent CreateCubeMesh() {
+vivid::render::MeshComponent CreateCubeMesh() {
   // Cube vertices with correct winding order (CCW when viewed from outside)
   // Each vertex: position (3 floats) + normal (3 floats) = 6 floats
-  std::vector<float> vertices = {
+  std::vector<float> const vertices = {
       // Back face (z = -0.5) - viewed from +z direction, CCW order
-      -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,  // 0: bottom-left
-      0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f,   // 1: bottom-right
-      0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,    // 2: top-right
-      -0.5f, 0.5f, -0.5f, 0.0f, 0.0f, -1.0f,   // 3: top-left
+      -0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,  // 0: bottom-left
+      0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,   // 1: bottom-right
+      0.5F, 0.5F, -0.5F, 0.0F, 0.0F, -1.0F,    // 2: top-right
+      -0.5F, 0.5F, -0.5F, 0.0F, 0.0F, -1.0F,   // 3: top-left
 
       // Front face (z = 0.5) - viewed from +z direction (camera side), CCW order
-      -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,  // 4: bottom-left
-      0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,   // 5: bottom-right
-      0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,    // 6: top-right
-      -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f,   // 7: top-left
+      -0.5F, -0.5F, 0.5F, 0.0F, 0.0F, 1.0F,  // 4: bottom-left
+      0.5F, -0.5F, 0.5F, 0.0F, 0.0F, 1.0F,   // 5: bottom-right
+      0.5F, 0.5F, 0.5F, 0.0F, 0.0F, 1.0F,    // 6: top-right
+      -0.5F, 0.5F, 0.5F, 0.0F, 0.0F, 1.0F,   // 7: top-left
 
       // Left face (x = -0.5) - viewed from +x direction, CCW order
-      -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f,  // 8: bottom-back
-      -0.5f, 0.5f, -0.5f, -1.0f, 0.0f, 0.0f,   // 9: top-back
-      -0.5f, 0.5f, 0.5f, -1.0f, 0.0f, 0.0f,    // 10: top-front
-      -0.5f, -0.5f, 0.5f, -1.0f, 0.0f, 0.0f,   // 11: bottom-front
+      -0.5F, -0.5F, -0.5F, -1.0F, 0.0F, 0.0F,  // 8: bottom-back
+      -0.5F, 0.5F, -0.5F, -1.0F, 0.0F, 0.0F,   // 9: top-back
+      -0.5F, 0.5F, 0.5F, -1.0F, 0.0F, 0.0F,    // 10: top-front
+      -0.5F, -0.5F, 0.5F, -1.0F, 0.0F, 0.0F,   // 11: bottom-front
 
       // Right face (x = 0.5) - viewed from -x direction, CCW order
-      0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,  // 12: bottom-back
-      0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,   // 13: bottom-front
-      0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,    // 14: top-front
-      0.5f, 0.5f, -0.5f, 1.0f, 0.0f, 0.0f,   // 15: top-back
+      0.5F, -0.5F, -0.5F, 1.0F, 0.0F, 0.0F,  // 12: bottom-back
+      0.5F, -0.5F, 0.5F, 1.0F, 0.0F, 0.0F,   // 13: bottom-front
+      0.5F, 0.5F, 0.5F, 1.0F, 0.0F, 0.0F,    // 14: top-front
+      0.5F, 0.5F, -0.5F, 1.0F, 0.0F, 0.0F,   // 15: top-back
 
       // Bottom face (y = -0.5) - viewed from +y direction, CCW order
       -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f,  // 16: back-left
@@ -80,7 +80,7 @@ VIVID::RENDER::MeshComponent CreateCubeMesh() {
 // Window setup module - creates custom window before WindowSystems
 struct WindowSetup {
   WindowSetup(flecs::world& world) {
-    using namespace VIVID::WINDOW;
+    using namespace vivid::window;
 
     // Register module
     world.module<WindowSetup>();
@@ -90,14 +90,14 @@ struct WindowSetup {
 
     // Create custom window entity with specific configuration
     WindowContext window_config;
-    window_config.title = "VIVID Hello SDL3 with WebGPU Rendering";
-    window_config.width = 1024;
-    window_config.height = 768;
-    window_config.x = SDL_WINDOWPOS_CENTERED;
-    window_config.y = SDL_WINDOWPOS_CENTERED;
-    window_config.flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-    window_config.visible = true;
-    window_config.should_close = false;
+    window_config.title_ = "VIVID Hello SDL3 with WebGPU Rendering";
+    window_config.width_ = 1024;
+    window_config.height_ = 768;
+    window_config.x_ = SDL_WINDOWPOS_CENTERED;
+    window_config.y_ = SDL_WINDOWPOS_CENTERED;
+    window_config.flags_ = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+    window_config.visible_ = true;
+    window_config.should_close_ = false;
 
     world.set<WindowContext>(window_config);
 
@@ -144,25 +144,23 @@ void print_value(const flecs::world& world, const flecs::cursor& cur) {
 // Scene initialization module - creates cube, light, and camera entities
 struct Setup {
   Setup(flecs::world& world) {
-    VIVID_LOG_SYSTEM("Registering Setup module...");
-
-    using namespace VIVID::RENDER;
+    VividLogger::app_info("Registering Setup module...");
 
     // Register module
     world.module<Setup>();
 
     // Import required components
-    world.import <RenderComponents>();
-    world.import <VIVID::INPUT::InputComponents>();
+    world.import <vivid::render::RenderComponents>();
+    world.import <vivid::input::InputComponents>();
 
     // Register scene initialization system (runs at startup)
     world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
 
-    VIVID_LOG_SUCCESS("Setup module registration completed!");
+    VividLogger::app_info("Setup module registration completed!");
 
     // Moved from SceneInitialization system to guarantee immediate component addition
     auto testEntity = world.entity("TestEntity");
-    testEntity.ensure<VIVID::RENDER::Color3f>();
+    testEntity.ensure<vivid::render::Color3f>();
     VividLogger::app_info("TestEntity: %s", world.to_json(&testEntity).c_str());
   }
 
@@ -175,25 +173,25 @@ private:
 
     // --- Create Cube Entity ---
     auto cubeEntity = world.entity("MyCube");
-    cubeEntity.set<VIVID::RENDER::TagComponent>({"MyCube"})
-        .set<VIVID::RENDER::TransformComponent>({})
-        .set<VIVID::RENDER::MeshComponent>(CreateCubeMesh())
-        .set<VIVID::RENDER::MaterialComponent>({
+    cubeEntity.set<vivid::render::TagComponent>({"MyCube"})
+        .set<vivid::render::TransformComponent>({})
+        .set<vivid::render::MeshComponent>(CreateCubeMesh())
+        .set<vivid::render::MaterialComponent>({
             "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
             "BlinnPhong.shader",
-            {1.0f, 0.5f, 0.2f}  // Orange color
+            {1.0F, 0.5F, 0.2F}  // Orange color
         });
 
     VividLogger::app_info("Created cube entity");
 
     // --- Create Light Entity ---
     auto lightEntity = world.entity("PointLight");
-    VIVID::RENDER::TransformComponent lightTransform;
-    lightTransform.Position = {1.2f, 1.0f, 2.0f};
+    vivid::render::TransformComponent lightTransform;
+    lightTransform.position_ = {1.2F, 1.0F, 2.0F};
 
-    lightEntity.set<VIVID::RENDER::TagComponent>({"PointLight"})
-        .set<VIVID::RENDER::TransformComponent>(lightTransform)
-        .set<VIVID::RENDER::LightComponent>({});
+    lightEntity.set<vivid::render::TagComponent>({"PointLight"})
+        .set<vivid::render::TransformComponent>(lightTransform)
+        .set<vivid::render::LightComponent>({});
 
     VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
 
@@ -201,21 +199,21 @@ private:
     // Entities with both CameraComponent and ViewportComponent will automatically
     // render to an ImGui window. The window title will be from TagComponent.Tag.
     auto cameraEntity = world.entity("MainCamera");
-    VIVID::RENDER::TransformComponent camTransform;
+    vivid::render::TransformComponent camTransform;
     // Move camera closer to cube for better perspective effect
     // Position at (0, 0, 3) instead of (0, 0, 5) to make perspective more visible
-    camTransform.Position = {0.0f, 0.0f, 3.0f};
+    camTransform.position_ = {0.0F, 0.0F, 3.0F};
 
     // Setup ViewportComponent with initial size for ImGui window
     // The size will automatically adjust based on ImGui window size
-    VIVID::RENDER::ViewportComponent viewport;
-    viewport.Width = 800.0f;
-    viewport.Height = 600.0f;
+    vivid::render::ViewportComponent viewport;
+    viewport.width_ = 800.0F;
+    viewport.height_ = 600.0F;
 
-    cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
-        .set<VIVID::RENDER::TransformComponent>(camTransform)
-        .set<VIVID::RENDER::CameraComponent>({})
-        .set<VIVID::RENDER::ViewportComponent>(viewport)  // Enables render window in ImGui
+    cameraEntity.set<vivid::render::TagComponent>({"MainCamera"})
+        .set<vivid::render::TransformComponent>(camTransform)
+        .set<vivid::render::CameraComponent>({})
+        .set<vivid::render::ViewportComponent>(viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>({});
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 3.0)");
@@ -224,35 +222,35 @@ private:
     // --- Create Second Camera Entity with 45-degree angle view ---
     // This camera will render from a diagonal angle (3, 3, 3) looking at the origin
     auto sideCameraEntity = world.entity("SideCamera");
-    VIVID::RENDER::TransformComponent sideCamTransform;
-    sideCamTransform.Position = {3.0f, 3.0f, 3.0f};  // Position at diagonal angle
+    vivid::render::TransformComponent sideCamTransform;
+    sideCamTransform.position_ = {3.0F, 3.0F, 3.0F};  // Position at diagonal angle
 
     // Setup ViewportComponent for the side camera
-    VIVID::RENDER::ViewportComponent sideViewport;
-    sideViewport.Width = 800.0f;
-    sideViewport.Height = 600.0f;
+    vivid::render::ViewportComponent sideViewport;
+    sideViewport.width_ = 800.0F;
+    sideViewport.height_ = 600.0F;
 
     // Setup CameraControllerComponent to look at origin (0, 0, 0)
     // Front vector points from (3, 3, 3) to (0, 0, 0) = (-1, -1, -1), normalized
     CameraControllerComponent sideCameraController;
-    sideCameraController.Front = glm::normalize(glm::vec3(-1.0f, -1.0f, -1.0f));
-    sideCameraController.WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    sideCameraController.front_ = glm::normalize(glm::vec3(-1.0F, -1.0F, -1.0F));
+    sideCameraController.world_up_ = glm::vec3(0.0F, 1.0F, 0.0F);
     // Calculate Right and Up vectors based on Front and WorldUp
-    sideCameraController.Right
-        = glm::normalize(glm::cross(sideCameraController.Front, sideCameraController.WorldUp));
-    sideCameraController.Up
-        = glm::normalize(glm::cross(sideCameraController.Right, sideCameraController.Front));
+    sideCameraController.right_
+        = glm::normalize(glm::cross(sideCameraController.front_, sideCameraController.world_up_));
+    sideCameraController.up_
+        = glm::normalize(glm::cross(sideCameraController.right_, sideCameraController.front_));
 
     // Calculate initial Yaw and Pitch from Front vector to synchronize with mouse controls
     // Pitch = asin(front.y), Yaw = atan2(front.z, front.x)
-    sideCameraController.Pitch = glm::degrees(asin(sideCameraController.Front.y));
-    sideCameraController.Yaw
-        = glm::degrees(atan2(sideCameraController.Front.z, sideCameraController.Front.x));
+    sideCameraController.pitch_ = glm::degrees(asin(sideCameraController.front_.y));
+    sideCameraController.yaw_
+        = glm::degrees(atan2(sideCameraController.front_.z, sideCameraController.front_.x));
 
-    sideCameraEntity.set<VIVID::RENDER::TagComponent>({"SideCamera"})
-        .set<VIVID::RENDER::TransformComponent>(sideCamTransform)
-        .set<VIVID::RENDER::CameraComponent>({})
-        .set<VIVID::RENDER::ViewportComponent>(sideViewport)  // Enables render window in ImGui
+    sideCameraEntity.set<vivid::render::TagComponent>({"SideCamera"})
+        .set<vivid::render::TransformComponent>(sideCamTransform)
+        .set<vivid::render::CameraComponent>({})
+        .set<vivid::render::ViewportComponent>(sideViewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>(sideCameraController);
 
     VividLogger::app_info("Created side camera entity at position (3.0, 3.0, 3.0)");
@@ -282,14 +280,14 @@ private:
     // Static state for demo windows
     static bool show_demo_window = true;
     static bool show_another_window = false;
-    static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    static ImVec4 clear_color = ImVec4(0.45F, 0.55F, 0.60F, 1.00F);
 
     // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named
     // window.
 
     // Our state
 
-    static float f = 0.0f;
+    static float f = 0.0F;
     static int counter = 0;
 
     ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
@@ -299,8 +297,8 @@ private:
 
     // Use cursor API to print values with units
     // Create cursor for the component
-    VIVID::RENDER::Color3f& colorData = testEntity.ensure<VIVID::RENDER::Color3f>();
-    flecs::cursor cur = it.world().cursor<VIVID::RENDER::Color3f>(&colorData);
+    auto& colorData = testEntity.ensure<vivid::render::Color3f>();
+    flecs::cursor cur = it.world().cursor<vivid::render::Color3f>(&colorData);
     cur.push();
     print_value(it.world(), cur);
     cur.next();
@@ -308,7 +306,7 @@ private:
     cur.next();
     print_value(it.world(), cur);
     cur.pop();
-    std::string json = std::string(it.world().to_json(&colorData).c_str());
+    std::string const json = std::string(it.world().to_json(&colorData).c_str());
     ImGui::Text("%s", json.c_str());
 
     ImGui::Separator();
@@ -403,7 +401,7 @@ private:
                     &show_demo_window);  // Edit bools storing our window open/close state
     ImGui::Checkbox("Another Window", &show_another_window);
 
-    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);             // Edit 1 float using a slider
+    ImGui::SliderFloat("float", &f, 0.0F, 1.0F);             // Edit 1 float using a slider
     ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
 
     if (ImGui::Button("Button"))  // Buttons return true when clicked (most widgets return true
@@ -412,7 +410,7 @@ private:
     ImGui::SameLine();
     ImGui::Text("counter = %d", counter);
 
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0F / ImGui::GetIO().Framerate,
                 ImGui::GetIO().Framerate);
     ImGui::End();
 
@@ -435,7 +433,7 @@ private:
 
 // Module registration overview display
 struct ModuleOverview {
-  ModuleOverview(flecs::world& world) {
+  explicit ModuleOverview(flecs::world& world) {
     // Only show detailed overview in Debug builds to reduce verbosity
 #ifndef NDEBUG
     VividLogger::app_info(
@@ -500,35 +498,38 @@ struct ModuleOverview {
   }
 };
 
-VIVID_SDL3_MAIN(
+namespace vivid::app {
+SDL3AppBuilder CreateAppInstance() {
+  return CreateAppInstance([](SDL3AppBuilder& builder) {
+    builder
         .set_app_info("VIVID Hello SDL3 with WebGPU Rendering", "1.0.0", "com.vivid.hello_sdl3")
         // 使用枚举设置其他元数据
-        .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
-        .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
-        .set_metadata(SDL3MetadataProperty::Url, "https://github.com/vivid-engine/vivid")
-        .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+        .set_metadata(SDL3MetadataProperty::kCreator, "VIVID Engine Team")
+        .set_metadata(SDL3MetadataProperty::kCopyright, "Copyright (c) 2024 VIVID Engine")
+        .set_metadata(SDL3MetadataProperty::kUrl, "https://github.com/vivid-engine/vivid")
+        .set_metadata(SDL3MetadataProperty::kType, sdl3_app_type::kApplication)
         // 自定义属性
         .set_custom_metadata("custom_property", "custom_value")
         // 配置日志系统 - 设置为Debug级别以显示详细日志
         .set_default_log_level(VividLogLevel::Debug)
         .set_log_level(VividLogCategory::Application, VividLogLevel::Debug)
         // 应用配置
-
         .enable_stats()
         .enable_rest_server()  // Creates REST server on default port (27750), which is required for
                                // using Flecs with the explorer.
         .insert_resource<MyResource>(100)
         .import_module<ModuleOverview>()                // Display module registration overview
-        .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create
+        .import_module<vivid::window::WindowSystems>()  // Window management (won't create
                                                         // default)
         .import_module<Setup>()                         // Scene initialization (after window)
         // .import_module<WindowSetup>()                   // Create custom window entity first
-        .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to
+        .import_module<vivid::render::RenderSystems>()  // WebGPU rendering (deferred to
                                                         // PreUpdate)
-        .import_module<VIVID::UI::UISystems>()          // ImGui UI
-        .import_module<VIVID::INPUT::InputSystems>()    // Input processing and camera control
-        .import_module<VIVID::INPUT::InputVisualDebugSystems>()  // Mouse input debug panel
-        .import_module<ImGuiDemo>()                              // ImGui demo
+        .import_module<vivid::ui::UISystems>()          // ImGui UI
+        .import_module<vivid::input::InputSystems>()    // Input processing and camera control
+        .import_module<vivid::input::InputVisualDebugSystems>()  // Mouse input debug panel
+        .import_module<ImGuiDemo>();                             // ImGui demo
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
-
-)
+  });
+}
+}  // namespace vivid::app

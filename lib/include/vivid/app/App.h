@@ -8,10 +8,10 @@
 
 struct ShutdownPhase {};
 
-namespace VIVID::APP {
+namespace vivid::app {
 
 struct EventQueues {
-  std::vector<SDL_Event> raw_sdl_events;  // 原始SDL事件
+  std::vector<SDL_Event> raw_sdl_events_;  // 原始SDL事件
   // std::queue<InputEvent> input_events;            // 输入事件
   // std::queue<WindowEvent> window_events;          // 窗口事件
   // std::queue<SystemEvent> system_events;          // 系统事件
@@ -129,7 +129,7 @@ public:
   // SDL3 Callback mode support
 
   // Initialize application (corresponds to SDL_AppInit)
-  bool Initialize(int argc, char** argv) {
+  bool Initialize(int /*argc*/, char** /*argv*/) {
     if (initialized_) {
       return true;
     }
@@ -170,7 +170,7 @@ public:
 
     // push event to event queues
     auto& event_queues = world_.get_mut<EventQueues>();
-    event_queues.raw_sdl_events.push_back(*event);
+    event_queues.raw_sdl_events_.push_back(*event);
     // VividLogger::app_info("SDL_AppEvent: %d", event->type);
     // VividLogger::app_info("event_queues size: %zu", event_queues.raw_sdl_events.size());
     return running_;
@@ -199,4 +199,4 @@ public:
 private:
 };
 
-}  // namespace VIVID::APP
+}  // namespace vivid::app

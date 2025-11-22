@@ -4,20 +4,20 @@
 
 #include <glm/glm.hpp>
 
-namespace VIVID::UI {
+namespace vivid::ui {
 
 // ImGui state component - stores UI demo state
 struct ImGuiState {
-  bool show_demo_window = true;
-  bool show_another_window = false;
-  glm::vec4 clear_color = glm::vec4(0.45F, 0.55f, 0.60f, 1.00f);
-  float f = 0.0f;
-  int counter = 0;
+  bool show_demo_window_ = true;
+  bool show_another_window_ = false;
+  glm::vec4 clear_color_ = glm::vec4(0.45F, 0.55F, 0.60F, 1.00F);
+  float f_ = 0.0F;
+  int counter_ = 0;
 };
 
 // UI Components Module
 struct UIComponents {
-  UIComponents(flecs::world& world) {
+  explicit UIComponents(flecs::world& world) {
     // Register module
     world.module<UIComponents>();
 
@@ -26,4 +26,4 @@ struct UIComponents {
   }
 };
 
-}  // namespace VIVID::UI
+}  // namespace vivid::ui

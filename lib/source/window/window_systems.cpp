@@ -5,8 +5,8 @@
 
 #include "vivid/app/App.h"
 
-namespace VIVID {
-namespace WINDOW {
+namespace vivid {
+namespace window {
 
 // Static member function implementations
 
@@ -14,9 +14,9 @@ namespace WINDOW {
 void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowContext) {
   VividLogger::app_info("=== WindowInitialization system executing ===");
   VividLogger::app_info("Entity: %s", entity.name().c_str());
-  VividLogger::app_info("Window handle before init: %p", windowContext.window_handle);
+  VividLogger::app_info("Window handle before init: %p", windowContext.window_handle_);
 
-  if (windowContext.window_handle) {
+  if (windowContext.window_handle_) {
     VividLogger::app_warn("Window already initialized");
     return;
   }
@@ -31,24 +31,25 @@ void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowCo
   SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
 
   // Create SDL window
-  windowContext.window_handle = SDL_CreateWindow(windowContext.title.c_str(), windowContext.width,
-                                                 windowContext.height, windowContext.flags);
+  windowContext.window_handle_
+      = SDL_CreateWindow(windowContext.title_.c_str(), windowContext.width_, windowContext.height_,
+                         windowContext.flags_);
 
-  if (!VividErrorHandler::check_sdl_pointer(windowContext.window_handle, "SDL_CreateWindow")) {
+  if (!VividErrorHandler::check_sdl_pointer(windowContext.window_handle_, "SDL_CreateWindow")) {
     return;  // Error already logged
   }
 
   if (!VividErrorHandler::check_sdl_result(
-          SDL_GetWindowSizeInPixels(windowContext.window_handle, &windowContext.pixel_width,
-                                    &windowContext.pixel_height),
+          SDL_GetWindowSizeInPixels(windowContext.window_handle_, &windowContext.pixel_width_,
+                                    &windowContext.pixel_height_),
           "SDL_GetWindowSizeInPixels")) {
     return;
   }
 
   // Set window position if specified
-  if (windowContext.x != SDL_WINDOWPOS_CENTERED && windowContext.y != SDL_WINDOWPOS_CENTERED) {
+  if (windowContext.x_ != SDL_WINDOWPOS_CENTERED && windowContext.y_ != SDL_WINDOWPOS_CENTERED) {
     VividErrorHandler::check_sdl_result(
-        SDL_SetWindowPosition(windowContext.window_handle, windowContext.x, windowContext.y),
+        SDL_SetWindowPosition(windowContext.window_handle_, windowContext.x_, windowContext.y_),
         "SDL_SetWindowPosition");
   }
 
@@ -58,44 +59,44 @@ void WindowSystems::windowInitImpl(flecs::entity entity, WindowContext& windowCo
   entity.set<WindowEventsComponent>({});
 
   // Show window if visible
-  if (windowContext.visible) {
-    VividErrorHandler::check_sdl_result(SDL_ShowWindow(windowContext.window_handle),
+  if (windowContext.visible_) {
+    VividErrorHandler::check_sdl_result(SDL_ShowWindow(windowContext.window_handle_),
                                         "SDL_ShowWindow");
   }
 
-  VividLogger::app_info("Window created successfully: %s (%dx%d)", windowContext.title.c_str(),
-                        windowContext.width, windowContext.height);
+  VividLogger::app_info("Window created successfully: %s (%dx%d)", windowContext.title_.c_str(),
+                        windowContext.width_, windowContext.height_);
 }
 
 // Window event processing system
-void WindowSystems::processWindowEventsImpl(VIVID::APP::EventQueues& eventQueues,
+void WindowSystems::processWindowEventsImpl(vivid::app::EventQueues& eventQueues,
                                             WindowContext& windowContext) {
-  if (!windowContext.window_handle) {
+  if (!windowContext.window_handle_) {
     return;
   }
 
-  for (auto& event : eventQueues.raw_sdl_events) {
+  for (auto& event : eventQueues.raw_sdl_events_) {
     // Check if event belongs to this window
     if (!(event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST)) {
       continue;
     }
 
-    if (event.window.windowID != SDL_GetWindowID(windowContext.window_handle)) {
+    if (event.window.windowID != SDL_GetWindowID(windowContext.window_handle_)) {
       continue;
     }
 
     switch (event.type) {
       case SDL_EVENT_WINDOW_RESIZED:
-        windowContext.width = event.window.data1;
-        windowContext.height = event.window.data2;
-        windowContext.markDirty(WindowContext::DirtyFlag::Size);
+        windowContext.width_ = event.window.data1;
+        windowContext.height_ = event.window.data2;
+        windowContext.MarkDirty(WindowContext::DirtyFlag::kSize);
         // SDL_Log("Window resize event received: %dx%d", event.window.data1, event.window.data2);
         break;
 
       case SDL_EVENT_WINDOW_MOVED:
-        windowContext.x = event.window.data1;
-        windowContext.y = event.window.data2;
-        windowContext.markDirty(WindowContext::DirtyFlag::Position);
+        windowContext.x_ = event.window.data1;
+        windowContext.y_ = event.window.data2;
+        windowContext.MarkDirty(WindowContext::DirtyFlag::kPosition);
         // SDL_Log("Window moved event received: (%d, %d)", event.window.data1, event.window.data2);
         break;
 
@@ -108,54 +109,54 @@ void WindowSystems::processWindowEventsImpl(VIVID::APP::EventQueues& eventQueues
 
 // Window update system
 void WindowSystems::windowUpdateImpl(const flecs::entity entity, WindowContext& windowContext) {
-  if (!windowContext.window_handle) {
+  if (!windowContext.window_handle_) {
     return;
   }
 
   // Only update properties that have actually changed
-  if (windowContext.isDirty(WindowContext::DirtyFlag::Title)) {
-    SDL_SetWindowTitle(windowContext.window_handle, windowContext.title.c_str());
-    windowContext.clearDirty(WindowContext::DirtyFlag::Title);
+  if (windowContext.IsDirty(WindowContext::DirtyFlag::kTitle)) {
+    SDL_SetWindowTitle(windowContext.window_handle_, windowContext.title_.c_str());
+    windowContext.ClearDirty(WindowContext::DirtyFlag::kTitle);
   }
 
-  if (windowContext.isDirty(WindowContext::DirtyFlag::Size)) {
+  if (windowContext.IsDirty(WindowContext::DirtyFlag::kSize)) {
     if (!VividErrorHandler::check_sdl_result(
-            SDL_GetWindowSizeInPixels(windowContext.window_handle, &windowContext.pixel_width,
-                                      &windowContext.pixel_height),
+            SDL_GetWindowSizeInPixels(windowContext.window_handle_, &windowContext.pixel_width_,
+                                      &windowContext.pixel_height_),
             "SDL_GetWindowSizeInPixels")) {
       return;
     }
-    windowContext.clearDirty(WindowContext::DirtyFlag::Size);
+    windowContext.ClearDirty(WindowContext::DirtyFlag::kSize);
   }
 
-  if (windowContext.isDirty(WindowContext::DirtyFlag::Position)) {
-    SDL_SetWindowPosition(windowContext.window_handle, windowContext.x, windowContext.y);
-    windowContext.clearDirty(WindowContext::DirtyFlag::Position);
+  if (windowContext.IsDirty(WindowContext::DirtyFlag::kPosition)) {
+    SDL_SetWindowPosition(windowContext.window_handle_, windowContext.x_, windowContext.y_);
+    windowContext.ClearDirty(WindowContext::DirtyFlag::kPosition);
   }
 
   // Handle visibility changes
-  if (windowContext.isDirty(WindowContext::DirtyFlag::Visibility)) {
-    if (windowContext.visible) {
-      SDL_ShowWindow(windowContext.window_handle);
+  if (windowContext.IsDirty(WindowContext::DirtyFlag::kVisibility)) {
+    if (windowContext.visible_) {
+      SDL_ShowWindow(windowContext.window_handle_);
     } else {
-      SDL_HideWindow(windowContext.window_handle);
+      SDL_HideWindow(windowContext.window_handle_);
     }
-    windowContext.clearDirty(WindowContext::DirtyFlag::Visibility);
+    windowContext.ClearDirty(WindowContext::DirtyFlag::kVisibility);
   }
 }
 
 // Clean events system
-void WindowSystems::cleanEventsImpl(APP::EventQueues& eventQueues) {
-  eventQueues.raw_sdl_events.clear();
+void WindowSystems::cleanEventsImpl(vivid::app::EventQueues& eventQueues) {
+  eventQueues.raw_sdl_events_.clear();
 }
 
 // Window cleanup system
 void WindowSystems::windowCleanupImpl(const flecs::entity entity, WindowContext& windowContext) {
   VividLogger::app_info("WindowCleanup system executing...");
 
-  if (windowContext.window_handle) {
-    SDL_DestroyWindow(windowContext.window_handle);
-    windowContext.window_handle = nullptr;
+  if (windowContext.window_handle_) {
+    SDL_DestroyWindow(windowContext.window_handle_);
+    windowContext.window_handle_ = nullptr;
     VividLogger::app_info("Window destroyed");
   }
 
@@ -168,5 +169,5 @@ void WindowSystems::windowCleanupImpl(const flecs::entity entity, WindowContext&
   VividLogger::app_info("Window cleanup complete");
 }
 
-}  // namespace WINDOW
-}  // namespace VIVID
+}  // namespace window
+}  // namespace vivid

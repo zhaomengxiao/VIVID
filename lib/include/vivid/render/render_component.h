@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace VIVID::RENDER {
+namespace vivid::render {
 
 // typedef glm::vec3 Color3f;
 typedef glm::vec3 Vector3f;
@@ -33,24 +33,24 @@ struct Color3f {
 
 // 变换组件，存储物体的位置、旋转、缩放
 struct TransformComponent {
-  glm::vec3 Position{0.0f, 0.0f, 0.0f};
-  glm::vec3 Rotation{0.0f, 0.0f, 0.0f};  // 欧拉角
-  glm::vec3 Scale{1.0f, 1.0f, 1.0f};
+  glm::vec3 position_{0.0f, 0.0f, 0.0f};
+  glm::vec3 rotation_{0.0f, 0.0f, 0.0f};  // 欧拉角
+  glm::vec3 scale_{1.0f, 1.0f, 1.0f};
 
   // 辅助函数，用于计算模型矩阵
   glm::mat4 GetTransform() const {
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), Position);
-    transform = glm::rotate(transform, Rotation.x, {1, 0, 0});
-    transform = glm::rotate(transform, Rotation.y, {0, 1, 0});
-    transform = glm::rotate(transform, Rotation.z, {0, 0, 1});
-    transform = glm::scale(transform, Scale);
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), position_);
+    transform = glm::rotate(transform, rotation_.x, {1, 0, 0});
+    transform = glm::rotate(transform, rotation_.y, {0, 1, 0});
+    transform = glm::rotate(transform, rotation_.z, {0, 0, 1});
+    transform = glm::scale(transform, scale_);
     return transform;
   }
 };
 
 // 标签组件，用于给实体一个可读的名称
 struct TagComponent {
-  std::string Tag;
+  std::string tag_;
 };
 
 //
@@ -59,55 +59,55 @@ struct TagComponent {
 
 // 网格组件，持有渲染所需的顶点数据
 struct MeshComponent {
-  std::vector<float> m_Vertices;  // Combined positions and normals
-  std::vector<unsigned int> m_Indices;
-  size_t m_IndexCount;
+  std::vector<float> vertices_;  // Combined positions and normals
+  std::vector<unsigned int> indices_;
+  size_t index_count_;
 };
 
 // 材质组件，定义物体的外观和着色器
 struct MaterialComponent {
-  std::string ShaderPath = "res/shaders/BlinnPhong.shader";  // 默认着色器
-  Color3f ObjectColor{0.8f, 0.8f, 0.8f};                     // 默认颜色为灰色
-  Color3f SpecularColor{0.5f, 0.5f, 0.5f};
-  float Shininess = 32.0f;
+  std::string shader_path_ = "res/shaders/BlinnPhong.shader";  // 默认着色器
+  Color3f object_color_{0.8f, 0.8f, 0.8f};                     // 默认颜色为灰色
+  Color3f specular_color_{0.5f, 0.5f, 0.5f};
+  float shininess_ = 32.0f;
 };
 
 // 光源组件
 struct LightComponent {
-  Color3f LightColor{1.0f, 1.0f, 1.0f};
-  Color3f AmbientColor{0.2f, 0.2f, 0.2f};
+  Color3f light_color_{1.0f, 1.0f, 1.0f};
+  Color3f ambient_color_{0.2f, 0.2f, 0.2f};
   // 衰减系数
-  float Constant = 1.0f;
-  float Linear = 0.09f;
-  float Quadratic = 0.032f;
+  float constant_ = 1.0f;
+  float linear_ = 0.09f;
+  float quadratic_ = 0.032f;
 };
 
 // 相机组件
 struct CameraComponent {
-  glm::mat4 ProjectionMatrix{1.0f};
-  bool IsPrimary = true;  // 标记为主相机
-                          // 视图矩阵由相机位置（TransformComponent）计算而来
+  glm::mat4 projection_matrix_{1.0f};
+  bool is_primary_ = true;  // 标记为主相机
+                            // 视图矩阵由相机位置（TransformComponent）计算而来
 };
 
 struct ViewportComponent {
-  float Width = 1280.0f;
-  float Height = 720.0f;
-  uintptr_t TextureID = 0;
+  float width_ = 1280.0f;
+  float height_ = 720.0f;
+  uintptr_t texture_id_ = 0;
 
-  bool IsFocused = false;
-  bool IsHovered = false;
+  bool is_focused_ = false;
+  bool is_hovered_ = false;
 
-  float contentStartPos_x = 0.0f;
-  float contentStartPos_y = 0.0f;
+  float content_start_pos_x_ = 0.0f;
+  float content_start_pos_y_ = 0.0f;
 
   // Offscreen rendering resources for ImGui viewport windows
-  WGPUTexture renderTexture = nullptr;          // Offscreen render target texture
-  WGPUTextureView renderTextureView = nullptr;  // Texture view for ImGui
-  WGPUTexture depthTexture = nullptr;           // Depth texture for offscreen rendering
-  WGPUTextureView depthView = nullptr;          // Depth texture view
-  uint32_t configuredWidth = 0;                 // Track configured texture width
-  uint32_t configuredHeight = 0;                // Track configured texture height
-  bool initialized = false;                     // Flag to ensure one-time initialization
+  WGPUTexture render_texture_ = nullptr;          // Offscreen render target texture
+  WGPUTextureView render_texture_view_ = nullptr;  // Texture view for ImGui
+  WGPUTexture depth_texture_ = nullptr;           // Depth texture for offscreen rendering
+  WGPUTextureView depth_view_ = nullptr;          // Depth texture view
+  uint32_t configured_width_ = 0;                 // Track configured texture width
+  uint32_t configured_height_ = 0;                // Track configured texture height
+  bool initialized_ = false;                      // Flag to ensure one-time initialization
 };
 
 template <typename Elem, typename Vector = std::vector<Elem>>
@@ -193,20 +193,20 @@ struct RenderComponents {
     world.component<TagComponent>();
     world.component<MeshComponent>();
     world.component<MaterialComponent>()
-        .member<std::string>("ShaderPath")
-        .member<Color3f>("ObjectColor")
-        .member<Color3f>("SpecularColor")
-        .member<float>("Shininess")
+        .member<std::string>("shader_path_")
+        .member<Color3f>("object_color_")
+        .member<Color3f>("specular_color_")
+        .member<float>("shininess_")
         .range(0.0, 100.0);
 
     world.component<LightComponent>()
-        .member<Color3f>("LightColor")
-        .member<Color3f>("AmbientColor")
-        .member<float>("Constant")
+        .member<Color3f>("light_color_")
+        .member<Color3f>("ambient_color_")
+        .member<float>("constant_")
         .range(0.0, 1.0)
-        .member<float>("Linear")
+        .member<float>("linear_")
         .range(0.0, 1.0)
-        .member<float>("Quadratic")
+        .member<float>("quadratic_")
         .range(0.0, 1.0);
 
     world.component<CameraComponent>();
@@ -214,4 +214,4 @@ struct RenderComponents {
   }
 };
 
-}  // namespace VIVID::RENDER
+}  // namespace vivid::render

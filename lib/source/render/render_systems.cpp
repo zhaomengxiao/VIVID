@@ -26,7 +26,7 @@
 #endif
 #include <webgpu/webgpu_cpp.h>
 
-using namespace VIVID::RENDER;
+using namespace vivid::render;
 
 // Utility functions
 std::string_view toStdStringView(WGPUStringView wgpuStringView) {
@@ -181,7 +181,7 @@ void fetchBufferDataSync(WGPUInstance instance, WGPUBuffer buffer, size_t buffer
 
 // Components
 
-namespace VIVID::RENDER {
+namespace vivid::render {
 
 // Internal structs
 // Uniforms for Blinn-Phong shading. Layout is 16-byte aligned for WGSL std140-like rules.
@@ -228,22 +228,22 @@ static SceneRenderContext querySceneContext(flecs::world& world, uint32_t viewpo
     const auto& mainCameraTransform = mainCameraEntity.get<TransformComponent>();
     const auto& mainCameraComponent = mainCameraEntity.get<CameraComponent>();
 
-    ctx.viewPos = mainCameraTransform.Position;
+    ctx.viewPos = mainCameraTransform.position_;
 
     // Build view matrix (check for camera controller component)
     if (mainCameraEntity.has<CameraControllerComponent>()) {
       const auto& controller = mainCameraEntity.get<CameraControllerComponent>();
-      glm::vec3 target = mainCameraTransform.Position + controller.Front;
-      ctx.viewMatrix = glm::lookAt(mainCameraTransform.Position, target, controller.Up);
+      glm::vec3 target = mainCameraTransform.position_ + controller.front_;
+      ctx.viewMatrix = glm::lookAt(mainCameraTransform.position_, target, controller.up_);
 
     } else {
       ctx.viewMatrix
-          = glm::lookAt(mainCameraTransform.Position,
-                        mainCameraTransform.Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+          = glm::lookAt(mainCameraTransform.position_,
+                        mainCameraTransform.position_ + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
     }
 
     // Build projection matrix (use provided or compute from aspect ratio)
-    ctx.projectionMatrix = mainCameraComponent.ProjectionMatrix;
+    ctx.projectionMatrix = mainCameraComponent.projection_matrix_;
     if (ctx.projectionMatrix == glm::mat4(1.0f) && viewportHeight > 0) {
       float aspect = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
       ctx.projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
@@ -273,12 +273,12 @@ static SceneRenderContext querySceneContext(flecs::world& world, uint32_t viewpo
     const auto& lightTransform = lightEntity.get<TransformComponent>();
     const auto& lightComponent = lightEntity.get<LightComponent>();
 
-    ctx.lightPos = lightTransform.Position;
-    ctx.lightColor = lightComponent.LightColor;
-    ctx.ambientColor = lightComponent.AmbientColor;
-    ctx.constant = lightComponent.Constant;
-    ctx.linear = lightComponent.Linear;
-    ctx.quadratic = lightComponent.Quadratic;
+    ctx.lightPos = lightTransform.position_;
+    ctx.lightColor = lightComponent.light_color_;
+    ctx.ambientColor = lightComponent.ambient_color_;
+    ctx.constant = lightComponent.constant_;
+    ctx.linear = lightComponent.linear_;
+    ctx.quadratic = lightComponent.quadratic_;
   }
 
   return ctx;
@@ -310,14 +310,14 @@ static void renderSceneToTarget(flecs::world& world, const RenderTarget& target,
     uniforms.viewPos = {sceneCtx.viewPos.x, sceneCtx.viewPos.y, sceneCtx.viewPos.z, 0.0f};
     uniforms.lightPos = {sceneCtx.lightPos.x, sceneCtx.lightPos.y, sceneCtx.lightPos.z, 0.0f};
     uniforms.objectColor
-        = {material.ObjectColor.r, material.ObjectColor.g, material.ObjectColor.b, 0.0f};
+        = {material.object_color_.r, material.object_color_.g, material.object_color_.b, 0.0f};
     uniforms.lightColor
         = {sceneCtx.lightColor.r, sceneCtx.lightColor.g, sceneCtx.lightColor.b, 0.0f};
     uniforms.ambientColor
         = {sceneCtx.ambientColor.r, sceneCtx.ambientColor.g, sceneCtx.ambientColor.b, 0.0f};
-    uniforms.specularColor
-        = {material.SpecularColor.r, material.SpecularColor.g, material.SpecularColor.b, 0.0f};
-    uniforms.params = {sceneCtx.constant, sceneCtx.linear, sceneCtx.quadratic, material.Shininess};
+    uniforms.specularColor = {material.specular_color_.r, material.specular_color_.g,
+                              material.specular_color_.b, 0.0f};
+    uniforms.params = {sceneCtx.constant, sceneCtx.linear, sceneCtx.quadratic, material.shininess_};
 
     // Update per-entity uniform buffer content
     wgpuQueueWriteBuffer(webgpuRes.queue, gpu.uniformBuffer, 0, &uniforms, sizeof(uniforms));
@@ -341,10 +341,10 @@ static void renderSceneToTarget(flecs::world& world, const RenderTarget& target,
 static void restoreViewportResources(ViewportComponent& viewport, WGPUTexture oldRender,
                                      WGPUTextureView oldRenderView, WGPUTexture oldDepth,
                                      WGPUTextureView oldDepthView) {
-  viewport.renderTexture = oldRender;
-  viewport.renderTextureView = oldRenderView;
-  viewport.depthTexture = oldDepth;
-  viewport.depthView = oldDepthView;
+  viewport.render_texture_ = oldRender;
+  viewport.render_texture_view_ = oldRenderView;
+  viewport.depth_texture_ = oldDepth;
+  viewport.depth_view_ = oldDepthView;
 }
 
 // Helper function to create or update offscreen render target for viewport
@@ -356,19 +356,19 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
   }
 
   // Check if we need to recreate resources
-  if (!viewport.initialized || viewport.configuredWidth != width
-      || viewport.configuredHeight != height) {
+  if (!viewport.initialized_ || viewport.configured_width_ != width
+      || viewport.configured_height_ != height) {
     // Save old resources for delayed release
-    WGPUTexture oldRenderTexture = viewport.renderTexture;
-    WGPUTextureView oldRenderTextureView = viewport.renderTextureView;
-    WGPUTexture oldDepthTexture = viewport.depthTexture;
-    WGPUTextureView oldDepthView = viewport.depthView;
+    WGPUTexture oldRenderTexture = viewport.render_texture_;
+    WGPUTextureView oldRenderTextureView = viewport.render_texture_view_;
+    WGPUTexture oldDepthTexture = viewport.depth_texture_;
+    WGPUTextureView oldDepthView = viewport.depth_view_;
 
     // Clear references before creating new resources
-    viewport.renderTexture = nullptr;
-    viewport.renderTextureView = nullptr;
-    viewport.depthTexture = nullptr;
-    viewport.depthView = nullptr;
+    viewport.render_texture_ = nullptr;
+    viewport.render_texture_view_ = nullptr;
+    viewport.depth_texture_ = nullptr;
+    viewport.depth_view_ = nullptr;
 
     // Create render texture
     WGPUTextureDescriptor renderTexDesc = {};
@@ -381,8 +381,8 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
     renderTexDesc.sampleCount = 1;
     renderTexDesc.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
 
-    viewport.renderTexture = wgpuDeviceCreateTexture(webgpuRes.device, &renderTexDesc);
-    if (!viewport.renderTexture) {
+    viewport.render_texture_ = wgpuDeviceCreateTexture(webgpuRes.device, &renderTexDesc);
+    if (!viewport.render_texture_) {
       VividLogger::app_error("Failed to create viewport render texture");
       restoreViewportResources(viewport, oldRenderTexture, oldRenderTextureView, oldDepthTexture,
                                oldDepthView);
@@ -400,10 +400,11 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
     renderViewDesc.baseArrayLayer = 0;
     renderViewDesc.arrayLayerCount = 1;
     renderViewDesc.aspect = WGPUTextureAspect_All;
-    viewport.renderTextureView = wgpuTextureCreateView(viewport.renderTexture, &renderViewDesc);
-    if (!viewport.renderTextureView) {
+    viewport.render_texture_view_
+        = wgpuTextureCreateView(viewport.render_texture_, &renderViewDesc);
+    if (!viewport.render_texture_view_) {
       VividLogger::app_error("Failed to create viewport render texture view");
-      wgpuTextureRelease(viewport.renderTexture);
+      wgpuTextureRelease(viewport.render_texture_);
       restoreViewportResources(viewport, oldRenderTexture, oldRenderTextureView, oldDepthTexture,
                                oldDepthView);
       return;
@@ -419,11 +420,11 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
     depthDesc.mipLevelCount = 1;
     depthDesc.sampleCount = 1;
     depthDesc.usage = WGPUTextureUsage_RenderAttachment;
-    viewport.depthTexture = wgpuDeviceCreateTexture(webgpuRes.device, &depthDesc);
-    if (!viewport.depthTexture) {
+    viewport.depth_texture_ = wgpuDeviceCreateTexture(webgpuRes.device, &depthDesc);
+    if (!viewport.depth_texture_) {
       VividLogger::app_error("Failed to create viewport depth texture");
-      wgpuTextureViewRelease(viewport.renderTextureView);
-      wgpuTextureRelease(viewport.renderTexture);
+      wgpuTextureViewRelease(viewport.render_texture_view_);
+      wgpuTextureRelease(viewport.render_texture_);
       restoreViewportResources(viewport, oldRenderTexture, oldRenderTextureView, oldDepthTexture,
                                oldDepthView);
       return;
@@ -440,28 +441,28 @@ static void ensureViewportResources(ViewportComponent& viewport, const WebGPUCon
     depthViewDesc.baseArrayLayer = 0;
     depthViewDesc.arrayLayerCount = 1;
     depthViewDesc.aspect = WGPUTextureAspect_DepthOnly;
-    viewport.depthView = wgpuTextureCreateView(viewport.depthTexture, &depthViewDesc);
-    if (!viewport.depthView) {
+    viewport.depth_view_ = wgpuTextureCreateView(viewport.depth_texture_, &depthViewDesc);
+    if (!viewport.depth_view_) {
       VividLogger::app_error("Failed to create viewport depth texture view");
-      wgpuTextureRelease(viewport.depthTexture);
-      wgpuTextureViewRelease(viewport.renderTextureView);
-      wgpuTextureRelease(viewport.renderTexture);
+      wgpuTextureRelease(viewport.depth_texture_);
+      wgpuTextureViewRelease(viewport.render_texture_view_);
+      wgpuTextureRelease(viewport.render_texture_);
       restoreViewportResources(viewport, oldRenderTexture, oldRenderTextureView, oldDepthTexture,
                                oldDepthView);
       return;
     }
 
-    viewport.TextureID = reinterpret_cast<uintptr_t>(viewport.renderTextureView);
-    viewport.configuredWidth = width;
-    viewport.configuredHeight = height;
-    viewport.initialized = true;
+    viewport.texture_id_ = reinterpret_cast<uintptr_t>(viewport.render_texture_view_);
+    viewport.configured_width_ = width;
+    viewport.configured_height_ = height;
+    viewport.initialized_ = true;
 
     // Queue old resources for delayed release (after 3 frames)
     queueDelayedRelease(oldRenderTexture, oldRenderTextureView);
     queueDelayedRelease(oldDepthTexture, oldDepthView);
-  } else if (!viewport.renderTextureView || !viewport.depthView) {
+  } else if (!viewport.render_texture_view_ || !viewport.depth_view_) {
     // Resources lost, mark for recreation
-    viewport.initialized = false;
+    viewport.initialized_ = false;
   }
 }
 
@@ -1059,24 +1060,24 @@ void RenderSystems::syncSceneImpl(flecs::entity entity, const MeshComponent& mes
   // but DO NOT have the GPU-side data (GpuMeshComponent) yet.
   // (filtered by .without<GpuMeshComponent>() in system registration)
 
-  if (mesh.m_Vertices.empty() || mesh.m_Indices.empty() || material.ShaderPath.empty()) return;
+  if (mesh.vertices_.empty() || mesh.indices_.empty() || material.shader_path_.empty()) return;
 
   // 创建和绑定VBO
   // Create vertex buffer
   WGPUBufferDescriptor bufferDesc = {};
   bufferDesc.nextInChain = nullptr;
   bufferDesc.label = toWgpuStringView("Vertex buffer");
-  bufferDesc.size = mesh.m_Vertices.size() * sizeof(float);
+  bufferDesc.size = mesh.vertices_.size() * sizeof(float);
   bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
   WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
 
   // Upload geometry data to the buffer
-  wgpuQueueWriteBuffer(webgpuRes.queue, vertexBuffer, 0, mesh.m_Vertices.data(), bufferDesc.size);
+  wgpuQueueWriteBuffer(webgpuRes.queue, vertexBuffer, 0, mesh.vertices_.data(), bufferDesc.size);
 
   // 创建IBO
   // Create index buffer (use 32-bit indices to match MeshComponent definition)
   // (we reuse the bufferDesc initialized for the vertexBuffer)
-  bufferDesc.size = mesh.m_Indices.size() * sizeof(uint32_t);
+  bufferDesc.size = mesh.indices_.size() * sizeof(uint32_t);
 
   // only need when using uint16_t, uint32_t is 4 bytes aligned
   // bufferDesc.size = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
@@ -1085,7 +1086,7 @@ void RenderSystems::syncSceneImpl(flecs::entity entity, const MeshComponent& mes
   bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
   WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(webgpuRes.device, &bufferDesc);
 
-  wgpuQueueWriteBuffer(webgpuRes.queue, indexBuffer, 0, mesh.m_Indices.data(), bufferDesc.size);
+  wgpuQueueWriteBuffer(webgpuRes.queue, indexBuffer, 0, mesh.indices_.data(), bufferDesc.size);
 
   // 创建和绑定VAO
   WGPUVertexBufferLayout vertexBufferLayout = {};
@@ -1249,7 +1250,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   GpuMeshComponent gpuMeshComponent;
   gpuMeshComponent.vertexBuffer = vertexBuffer;
   gpuMeshComponent.indexBuffer = indexBuffer;
-  gpuMeshComponent.indexCount = (unsigned int)mesh.m_Indices.size();
+  gpuMeshComponent.indexCount = (unsigned int)mesh.indices_.size();
   gpuMeshComponent.vertexBufferLayout = vertexBufferLayout;
   gpuMeshComponent.layout = layout;
   gpuMeshComponent.bindGroupLayout = bindGroupLayout;
@@ -1291,12 +1292,12 @@ void RenderSystems::prepareSurfaceImpl(const flecs::iter& it) {
     return;
   }
 
-  if (!world.has<VIVID::WINDOW::WindowContext>()) {
+  if (!world.has<vivid::window::WindowContext>()) {
     return;
   }
 
   auto& webgpuRes = world.get_mut<WebGPUContext>();
-  const auto& windowContext = world.get<VIVID::WINDOW::WindowContext>();
+  const auto& windowContext = world.get<vivid::window::WindowContext>();
 
   // Validate WebGPU state - must be initialized before preparing surface
   if (!webgpuRes.device || !webgpuRes.initialized || !webgpuRes.surface
@@ -1313,17 +1314,17 @@ void RenderSystems::prepareSurfaceImpl(const flecs::iter& it) {
   }
 
   // Check current window pixel size and reconfigure if changed or zero
-  if (windowContext.pixel_width <= 0 || windowContext.pixel_height <= 0) {
+  if (windowContext.pixel_width_ <= 0 || windowContext.pixel_height_ <= 0) {
     // Minimized or not ready; mark as invalid
     webgpuRes.targetView = nullptr;
     return;
   }
 
   // Reconfigure surface if dimensions changed
-  if (webgpuRes.configuredWidth != static_cast<uint32_t>(windowContext.pixel_width)
-      || webgpuRes.configuredHeight != static_cast<uint32_t>(windowContext.pixel_height)) {
-    reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width),
-                       static_cast<uint32_t>(windowContext.pixel_height));
+  if (webgpuRes.configuredWidth != static_cast<uint32_t>(windowContext.pixel_width_)
+      || webgpuRes.configuredHeight != static_cast<uint32_t>(windowContext.pixel_height_)) {
+    reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width_),
+                       static_cast<uint32_t>(windowContext.pixel_height_));
     // Skip this frame after reconfiguration
     webgpuRes.targetView = nullptr;
     return;
@@ -1342,8 +1343,8 @@ void RenderSystems::prepareSurfaceImpl(const flecs::iter& it) {
     if (webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated
         || webgpuRes.surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Lost) {
       // Reconfigure on outdated/lost
-      reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width),
-                         static_cast<uint32_t>(windowContext.pixel_height));
+      reconfigureSurface(webgpuRes, static_cast<uint32_t>(windowContext.pixel_width_),
+                         static_cast<uint32_t>(windowContext.pixel_height_));
     }
     // Skip this frame for any non-success status
     webgpuRes.targetView = nullptr;
@@ -1393,8 +1394,8 @@ void RenderSystems::prepareViewportResourcesImpl(const flecs::iter& it) {
   auto viewportQuery = world.query<ViewportComponent>();
 
   viewportQuery.each([&](flecs::entity entity, ViewportComponent& viewport) {
-    uint32_t width = static_cast<uint32_t>(viewport.Width);
-    uint32_t height = static_cast<uint32_t>(viewport.Height);
+    uint32_t width = static_cast<uint32_t>(viewport.width_);
+    uint32_t height = static_cast<uint32_t>(viewport.height_);
     if (width == 0 || height == 0) {
       return;
     }
@@ -1431,8 +1432,8 @@ void RenderSystems::beginMainRenderPassImpl(const flecs::iter& it) {
   auto viewportCheck = world.query<ViewportComponent>();
   bool hasReadyViewport = false;
   viewportCheck.each([&](flecs::entity, const ViewportComponent& viewport) {
-    if (viewport.Width > 0 && viewport.Height > 0 && viewport.renderTextureView != nullptr
-        && viewport.depthView != nullptr) {
+    if (viewport.width_ > 0 && viewport.height_ > 0 && viewport.render_texture_view_ != nullptr
+        && viewport.depth_view_ != nullptr) {
       hasReadyViewport = true;
     }
   });
@@ -1513,14 +1514,14 @@ void RenderSystems::beginViewportRenderPassImpl(const flecs::iter& it) {
 
   viewportQuery.each([&](flecs::entity entity, const CameraComponent& camera,
                          ViewportComponent& viewport, const TransformComponent& transform) {
-    uint32_t width = static_cast<uint32_t>(viewport.Width);
-    uint32_t height = static_cast<uint32_t>(viewport.Height);
+    uint32_t width = static_cast<uint32_t>(viewport.width_);
+    uint32_t height = static_cast<uint32_t>(viewport.height_);
     if (width == 0 || height == 0) {
       return;
     }
 
     // Ensure viewport resources are ready
-    if (!viewport.renderTextureView || !viewport.depthView) {
+    if (!viewport.render_texture_view_ || !viewport.depth_view_) {
       return;
     }
 
@@ -1539,7 +1540,7 @@ void RenderSystems::beginViewportRenderPassImpl(const flecs::iter& it) {
 
     // Create render pass for this viewport
     WGPURenderPassColorAttachment colorAttachment = {};
-    colorAttachment.view = viewport.renderTextureView;
+    colorAttachment.view = viewport.render_texture_view_;
     colorAttachment.resolveTarget = nullptr;
     colorAttachment.loadOp = WGPULoadOp_Clear;
     colorAttachment.storeOp = WGPUStoreOp_Store;
@@ -1547,7 +1548,7 @@ void RenderSystems::beginViewportRenderPassImpl(const flecs::iter& it) {
     colorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
 
     WGPURenderPassDepthStencilAttachment depthAttachment = {};
-    depthAttachment.view = viewport.depthView;
+    depthAttachment.view = viewport.depth_view_;
     depthAttachment.depthClearValue = 1.0f;
     depthAttachment.depthLoadOp = WGPULoadOp_Clear;
     depthAttachment.depthStoreOp = WGPUStoreOp_Store;
@@ -1574,22 +1575,22 @@ void RenderSystems::beginViewportRenderPassImpl(const flecs::iter& it) {
     SceneRenderContext sceneCtx = querySceneContext(world, width, height);
 
     // Override with viewport-specific camera (must recalculate view and projection)
-    sceneCtx.viewPos = transform.Position;
+    sceneCtx.viewPos = transform.position_;
 
     // Calculate view matrix from this viewport's camera
     if (entity.has<CameraControllerComponent>()) {
       const auto& controller = entity.get<CameraControllerComponent>();
-      glm::vec3 target = transform.Position + controller.Front;
-      sceneCtx.viewMatrix = glm::lookAt(transform.Position, target, controller.Up);
+      glm::vec3 target = transform.position_ + controller.front_;
+      sceneCtx.viewMatrix = glm::lookAt(transform.position_, target, controller.up_);
     } else {
       sceneCtx.viewMatrix = glm::lookAt(
-          transform.Position, transform.Position + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+          transform.position_, transform.position_ + glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
     }
 
     // Calculate projection matrix based on this viewport's dimensions
     // Each viewport must have its own projection matrix matching its aspect ratio
-    if (camera.ProjectionMatrix != glm::mat4(1.0f)) {
-      sceneCtx.projectionMatrix = camera.ProjectionMatrix;
+    if (camera.projection_matrix_ != glm::mat4(1.0f)) {
+      sceneCtx.projectionMatrix = camera.projection_matrix_;
     } else if (height > 0) {
       float aspect = static_cast<float>(width) / static_cast<float>(height);
       sceneCtx.projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
@@ -1643,8 +1644,8 @@ void RenderSystems::renderSceneImpl(const flecs::iter& it) {
   auto viewportCheck = world.query<ViewportComponent>();
   bool hasReadyViewport = false;
   viewportCheck.each([&](flecs::entity, const ViewportComponent& viewport) {
-    if (viewport.Width > 0 && viewport.Height > 0 && viewport.renderTextureView != nullptr
-        && viewport.depthView != nullptr) {
+    if (viewport.width_ > 0 && viewport.height_ > 0 && viewport.render_texture_view_ != nullptr
+        && viewport.depth_view_ != nullptr) {
       hasReadyViewport = true;
     }
   });
@@ -1862,21 +1863,21 @@ void RenderSystems::releaseWebGPUResourcesImpl(const flecs::iter& it) {
   {
     auto viewportQuery = world.query<ViewportComponent>();
     viewportQuery.each([&](flecs::entity entity, ViewportComponent& viewport) {
-      if (viewport.depthView) {
-        wgpuTextureViewRelease(viewport.depthView);
-        viewport.depthView = nullptr;
+      if (viewport.depth_view_) {
+        wgpuTextureViewRelease(viewport.depth_view_);
+        viewport.depth_view_ = nullptr;
       }
-      if (viewport.depthTexture) {
-        wgpuTextureRelease(viewport.depthTexture);
-        viewport.depthTexture = nullptr;
+      if (viewport.depth_texture_) {
+        wgpuTextureRelease(viewport.depth_texture_);
+        viewport.depth_texture_ = nullptr;
       }
-      if (viewport.renderTextureView) {
-        wgpuTextureViewRelease(viewport.renderTextureView);
-        viewport.renderTextureView = nullptr;
+      if (viewport.render_texture_view_) {
+        wgpuTextureViewRelease(viewport.render_texture_view_);
+        viewport.render_texture_view_ = nullptr;
       }
-      if (viewport.renderTexture) {
-        wgpuTextureRelease(viewport.renderTexture);
-        viewport.renderTexture = nullptr;
+      if (viewport.render_texture_) {
+        wgpuTextureRelease(viewport.render_texture_);
+        viewport.render_texture_ = nullptr;
       }
       viewport = ViewportComponent{};  // Reset to default state
     });
@@ -1948,11 +1949,11 @@ void RenderSystems::releaseWebGPUResourcesImpl(const flecs::iter& it) {
   }
 }
 
-void RenderSystems::initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowContext,
+void RenderSystems::initWebGPUImpl(const vivid::window::WindowContext& windowContext,
                                    WebGPUContext& webgpuRes) {
   VividLogger::app_info("=== InitWebGPU system called ===");
   // VividLogger::app_info("Entity: %s (ID: %llu)", entity.name(), entity.id());
-  VividLogger::app_info("Window handle: %p", windowContext.window_handle);
+  VividLogger::app_info("Window handle: %p", windowContext.window_handle_);
   VividLogger::app_info("WebGPU initialized flag: %d", webgpuRes.initialized);
 
   // Check if already initialized (due to .each(), this may run on multiple window entities)
@@ -2015,14 +2016,14 @@ void RenderSystems::initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowCon
   int pixel_width = 0;
   int pixel_height = 0;
 
-  if (windowContext.window_handle) {
+  if (windowContext.window_handle_) {
 #ifndef __EMSCRIPTEN__
     webgpuRes.surface
-        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, windowContext.window_handle);
+        = ImGui_ImplSDL3_CreateWGPUSurface(webgpuRes.instance, windowContext.window_handle_);
 #endif
 
     // TODO: move this to the window systems
-    SDL_GetWindowSizeInPixels(windowContext.window_handle, &pixel_width, &pixel_height);
+    SDL_GetWindowSizeInPixels(windowContext.window_handle_, &pixel_width, &pixel_height);
     // VividLogger::app_info("Using window: entity=%llu, handle=%p, size=%dx%d", entity.id(),
     //                       windowContext.window_handle, pixel_width, pixel_height);
   }
@@ -2077,4 +2078,4 @@ void RenderSystems::initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowCon
   webgpuRes.initialized = true;
   VividLogger::app_info("WebGPU initialized successfully");
 }
-}  // namespace VIVID::RENDER
+}  // namespace vivid::render

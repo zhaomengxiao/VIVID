@@ -4,15 +4,15 @@
 
 #include "input_component.h"
 
-namespace VIVID::INPUT {
+namespace vivid::input {
 
 // Input Visual Debug Systems Module - displays mouse input debug information
 struct InputVisualDebugSystems {
-  InputVisualDebugSystems(flecs::world& world);
+  explicit InputVisualDebugSystems(flecs::world& world);
 
 private:
   // Static member function for system implementation
-  static void displayMouseInputDebugImpl(MouseInputResource& mouseInput);
+  static void displayMouseInputDebugImpl(const MouseInputResource& mouse_input);
 };
 
-}  // namespace VIVID::INPUT
+}  // namespace vivid::input

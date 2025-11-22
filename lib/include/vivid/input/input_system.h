@@ -6,7 +6,7 @@
 #include "input_component.h"
 #include "vivid/render/render_component.h"
 
-namespace VIVID::INPUT {
+namespace vivid::input {
 
 // Input Systems Module - manages input processing and camera control
 struct InputSystems {
@@ -14,11 +14,11 @@ struct InputSystems {
 
 private:
   // Static member functions for system implementations
-  static void handleMouseInputImpl(MouseInputResource& mouseInput);
-  static void controlCameraImpl(CameraControllerComponent& cameraController,
-                                const VIVID::RENDER::ViewportComponent& viewport,
-                                VIVID::RENDER::TransformComponent& transform,
-                                MouseInputResource& mouseInput);
+  static void handleMouseInputImpl(MouseInputResource& mouse_input);
+  static void controlCameraImpl(CameraControllerComponent& camera_controller,
+                                const vivid::render::ViewportComponent& viewport,
+                                vivid::render::TransformComponent& transform,
+                                MouseInputResource& mouse_input);
 };
 
-}  // namespace VIVID::INPUT
+}  // namespace vivid::input

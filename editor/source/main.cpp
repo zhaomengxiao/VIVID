@@ -15,26 +15,26 @@ struct MyResource {
   int value;
 };
 
-VIVID::RENDER::MeshComponent CreateCubeMesh() {
+vivid::render::MeshComponent CreateCubeMesh() {
   std::vector<float> vertices
       = {// positions          // normals
-         -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.5f,  -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f,
-         0.5f,  0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, -0.5f, 0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f,
+         -0.5F, -0.5F, -0.5F, 0.0F,  0.0F,  -1.0F, 0.5F,  -0.5F, -0.5F, 0.0F,  0.0F,  -1.0F,
+         0.5F,  0.5F,  -0.5F, 0.0F,  0.0F,  -1.0F, -0.5F, 0.5F,  -0.5F, 0.0F,  0.0F,  -1.0F,
 
-         -0.5f, -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,  0.5f,  -0.5f, 0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+         -0.5F, -0.5F, 0.5F,  0.0F,  0.0F,  1.0F,  0.5F,  -0.5F, 0.5F,  0.0F,  0.0F,  1.0F,
+         0.5F,  0.5F,  0.5F,  0.0F,  0.0F,  1.0F,  -0.5F, 0.5F,  0.5F,  0.0F,  0.0F,  1.0F,
 
-         -0.5f, 0.5f,  0.5f,  -1.0f, 0.0f,  0.0f,  -0.5f, 0.5f,  -0.5f, -1.0f, 0.0f,  0.0f,
-         -0.5f, -0.5f, -0.5f, -1.0f, 0.0f,  0.0f,  -0.5f, -0.5f, 0.5f,  -1.0f, 0.0f,  0.0f,
+         -0.5F, 0.5F,  0.5F,  -1.0F, 0.0F,  0.0F,  -0.5F, 0.5F,  -0.5F, -1.0F, 0.0F,  0.0F,
+         -0.5F, -0.5F, -0.5F, -1.0F, 0.0F,  0.0F,  -0.5F, -0.5F, 0.5F,  -1.0F, 0.0F,  0.0F,
 
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 1.0f,  0.0f,  0.0f,
-         0.5f,  -0.5f, -0.5f, 1.0f,  0.0f,  0.0f,  0.5f,  -0.5f, 0.5f,  1.0f,  0.0f,  0.0f,
+         0.5F,  0.5F,  0.5F,  1.0F,  0.0F,  0.0F,  0.5F,  0.5F,  -0.5F, 1.0F,  0.0F,  0.0F,
+         0.5F,  -0.5F, -0.5F, 1.0F,  0.0F,  0.0F,  0.5F,  -0.5F, 0.5F,  1.0F,  0.0F,  0.0F,
 
-         -0.5f, -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,  0.5f,  -0.5f, -0.5f, 0.0f,  -1.0f, 0.0f,
-         0.5f,  -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,  -0.5f, -0.5f, 0.5f,  0.0f,  -1.0f, 0.0f,
+         -0.5F, -0.5F, -0.5F, 0.0F,  -1.0F, 0.0F,  0.5F,  -0.5F, -0.5F, 0.0F,  -1.0F, 0.0F,
+         0.5F,  -0.5F, 0.5F,  0.0F,  -1.0F, 0.0F,  -0.5F, -0.5F, 0.5F,  0.0F,  -1.0F, 0.0F,
 
-         -0.5f, 0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,  0.5f,  0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  -0.5f, 0.5f,  0.5f,  0.0f,  1.0f,  0.0f};
+         -0.5F, 0.5F,  -0.5F, 0.0F,  1.0F,  0.0F,  0.5F,  0.5F,  -0.5F, 0.0F,  1.0F,  0.0F,
+         0.5F,  0.5F,  0.5F,  0.0F,  1.0F,  0.0F,  -0.5F, 0.5F,  0.5F,  0.0F,  1.0F,  0.0F};
   std::vector<unsigned int> indices
       = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
          12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20};
@@ -45,7 +45,7 @@ VIVID::RENDER::MeshComponent CreateCubeMesh() {
 // Window setup module - creates custom window before WindowSystems
 struct WindowSetup {
   WindowSetup(flecs::world& world) {
-    using namespace VIVID::WINDOW;
+    using namespace vivid::window;
 
     // Register module
     world.module<WindowSetup>();
@@ -55,14 +55,14 @@ struct WindowSetup {
 
     // Create custom window entity with specific configuration
     WindowContext window_config;
-    window_config.title = "VIVID Hello SDL3 with WebGPU Rendering";
-    window_config.width = 1024;
-    window_config.height = 768;
-    window_config.x = SDL_WINDOWPOS_CENTERED;
-    window_config.y = SDL_WINDOWPOS_CENTERED;
-    window_config.flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-    window_config.visible = true;
-    window_config.should_close = false;
+    window_config.title_ = "VIVID Hello SDL3 with WebGPU Rendering";
+    window_config.width_ = 1024;
+    window_config.height_ = 768;
+    window_config.x_ = SDL_WINDOWPOS_CENTERED;
+    window_config.y_ = SDL_WINDOWPOS_CENTERED;
+    window_config.flags_ = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+    window_config.visible_ = true;
+    window_config.should_close_ = false;
 
     world.set<WindowContext>(window_config);
 
@@ -75,7 +75,7 @@ struct Setup {
   Setup(flecs::world& world) {
     VIVID_LOG_SYSTEM("Registering Setup module...");
 
-    using namespace VIVID::RENDER;
+    using namespace vivid::render;
 
     // Register module
     world.module<Setup>();
@@ -98,10 +98,10 @@ private:
 
     // --- Create Cube Entity ---
     auto cubeEntity = world.entity("MyCube");
-    cubeEntity.set<VIVID::RENDER::TagComponent>({"MyCube"})
-        .set<VIVID::RENDER::TransformComponent>({})
-        .set<VIVID::RENDER::MeshComponent>(CreateCubeMesh())
-        .set<VIVID::RENDER::MaterialComponent>({
+    cubeEntity.set<vivid::render::TagComponent>({"MyCube"})
+        .set<vivid::render::TransformComponent>({})
+        .set<vivid::render::MeshComponent>(CreateCubeMesh())
+        .set<vivid::render::MaterialComponent>({
             "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
             "BlinnPhong.shader",
             {1.0f, 0.5f, 0.2f}  // Orange color
@@ -111,24 +111,24 @@ private:
 
     // --- Create Light Entity ---
     auto lightEntity = world.entity("PointLight");
-    VIVID::RENDER::TransformComponent lightTransform;
-    lightTransform.Position = {1.2f, 1.0f, 2.0f};
+    vivid::render::TransformComponent lightTransform;
+    lightTransform.position_ = {1.2f, 1.0f, 2.0f};
 
-    lightEntity.set<VIVID::RENDER::TagComponent>({"PointLight"})
-        .set<VIVID::RENDER::TransformComponent>(lightTransform)
-        .set<VIVID::RENDER::LightComponent>({});
+    lightEntity.set<vivid::render::TagComponent>({"PointLight"})
+        .set<vivid::render::TransformComponent>(lightTransform)
+        .set<vivid::render::LightComponent>({});
 
     VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
 
     // --- Create Camera Entity ---
     auto cameraEntity = world.entity("MainCamera");
-    VIVID::RENDER::TransformComponent camTransform;
-    camTransform.Position = {0.0f, 0.0f, 5.0f};
+    vivid::render::TransformComponent camTransform;
+    camTransform.position_ = {0.0f, 0.0f, 5.0f};
 
-    cameraEntity.set<VIVID::RENDER::TagComponent>({"MainCamera"})
-        .set<VIVID::RENDER::TransformComponent>(camTransform)
-        .set<VIVID::RENDER::CameraComponent>({})
-        .set<VIVID::RENDER::ViewportComponent>({})
+    cameraEntity.set<vivid::render::TagComponent>({"MainCamera"})
+        .set<vivid::render::TransformComponent>(camTransform)
+        .set<vivid::render::CameraComponent>({})
+        .set<vivid::render::ViewportComponent>({})
         .set<CameraControllerComponent>({});
 
     VividLogger::app_info("Created camera entity at position (0.0, 0.0, 5.0)");
@@ -204,13 +204,16 @@ struct ModuleOverview {
   }
 };
 
-VIVID_SDL3_MAIN(
+namespace vivid::app {
+SDL3AppBuilder CreateAppInstance() {
+  return CreateAppInstance([](SDL3AppBuilder& builder) {
+    builder
         .set_app_info("VIVID Hello SDL3 with WebGPU Rendering", "1.0.0", "com.vivid.hello_sdl3")
         // 使用枚举设置其他元数据
-        .set_metadata(SDL3MetadataProperty::Creator, "VIVID Engine Team")
-        .set_metadata(SDL3MetadataProperty::Copyright, "Copyright (c) 2024 VIVID Engine")
-        .set_metadata(SDL3MetadataProperty::Url, "https://github.com/vivid-engine/vivid")
-        .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+        .set_metadata(SDL3MetadataProperty::kCreator, "VIVID Engine Team")
+        .set_metadata(SDL3MetadataProperty::kCopyright, "Copyright (c) 2024 VIVID Engine")
+        .set_metadata(SDL3MetadataProperty::kUrl, "https://github.com/vivid-engine/vivid")
+        .set_metadata(SDL3MetadataProperty::kType, sdl3_app_type::kApplication)
         // 自定义属性
         .set_custom_metadata("custom_property", "custom_value")
         // 配置日志系统 - 设置为Debug级别以显示详细日志
@@ -219,13 +222,14 @@ VIVID_SDL3_MAIN(
         // 应用配置
         .insert_resource<MyResource>(100)
         .import_module<ModuleOverview>()                // Display module registration overview
-        .import_module<VIVID::WINDOW::WindowSystems>()  // Window management (won't create default)
+        .import_module<vivid::window::WindowSystems>()  // Window management (won't create default)
         .import_module<Setup>()                         // Scene initialization (after window)
         // .import_module<WindowSetup>()                   // Create custom window entity first
-        .import_module<VIVID::RENDER::RenderSystems>()  // WebGPU rendering (deferred to PreUpdate)
-        .import_module<VIVID::UI::UISystems>()          // ImGui UI
-        .import_module<VIVID::INPUT::InputSystems>()    // Input processing and camera control
-        .import_module<editor::inspector::InspectorSystems>()
+        .import_module<vivid::render::RenderSystems>()  // WebGPU rendering (deferred to PreUpdate)
+        .import_module<vivid::ui::UISystems>()          // ImGui UI
+        .import_module<vivid::input::InputSystems>()    // Input processing and camera control
+        .import_module<editor::inspector::InspectorSystems>();
     // .import_module<VIVID::PHYSICS::PhysicsSystems>()  // Physics simulation
-
-)
+  });
+}
+}

@@ -6,54 +6,53 @@
 #include <string>
 #include <vector>
 
-namespace VIVID {
-namespace WINDOW {
+namespace vivid::window {
 
 // Pure data component - window configuration and state
 struct WindowContext {
-  std::string title = "VIVID Application";
-  int width = 800;
-  int height = 600;
-  int x = SDL_WINDOWPOS_CENTERED;
-  int y = SDL_WINDOWPOS_CENTERED;
-  SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-  bool visible = true;
-  bool should_close = false;
-  SDL_Window* window_handle = nullptr;
+  std::string title_ = "VIVID Application";
+  int width_ = 800;
+  int height_ = 600;
+  int x_ = SDL_WINDOWPOS_CENTERED;
+  int y_ = SDL_WINDOWPOS_CENTERED;
+  SDL_WindowFlags flags_ = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+  bool visible_ = true;
+  bool should_close_ = false;
+  SDL_Window* window_handle_ = nullptr;
 
-  int pixel_width = 0;
-  int pixel_height = 0;
+  int pixel_width_ = 0;
+  int pixel_height_ = 0;
 
   // Dirty flags
   enum class DirtyFlag : uint8_t {
-    Title = 1 << 0,
-    Size = 1 << 1,
-    Position = 1 << 2,
-    Visibility = 1 << 3
+    kTitle = 1 << 0,
+    kSize = 1 << 1,
+    kPosition = 1 << 2,
+    kVisibility = 1 << 3
   };
-  uint8_t dirty_flags = 0;
+  uint8_t dirty_flags_ = 0;
 
-  void markDirty(DirtyFlag flag) { dirty_flags |= static_cast<uint8_t>(flag); }
+  void MarkDirty(DirtyFlag flag) { dirty_flags_ |= static_cast<uint8_t>(flag); }
 
-  bool isDirty(DirtyFlag flag) const { return (dirty_flags & static_cast<uint8_t>(flag)) != 0; }
+  bool IsDirty(DirtyFlag flag) const { return (dirty_flags_ & static_cast<uint8_t>(flag)) != 0; }
 
-  void clearDirty(DirtyFlag flag) { dirty_flags &= ~static_cast<uint8_t>(flag); }
+  void ClearDirty(DirtyFlag flag) { dirty_flags_ &= ~static_cast<uint8_t>(flag); }
 
-  void clearAllDirty() { dirty_flags = 0; }
+  void ClearAllDirty() { dirty_flags_ = 0; }
 };
 
 // Window events component - stores events for processing
 struct WindowEventsComponent {
-  std::vector<SDL_Event> events;
-  bool quit_requested = false;
-  bool close_requested = false;
-  bool resized = false;
-  bool moved = false;
+  std::vector<SDL_Event> events_;
+  bool quit_requested_ = false;
+  bool close_requested_ = false;
+  bool resized_ = false;
+  bool moved_ = false;
 };
 
 // Window Components Module
 struct WindowComponents {
-  WindowComponents(flecs::world& world) {
+  explicit WindowComponents(flecs::world& world) {
     // Register module
     world.module<WindowComponents>();
 
@@ -63,5 +62,4 @@ struct WindowComponents {
   }
 };
 
-}  // namespace WINDOW
-}  // namespace VIVID
+}  // namespace vivid::window

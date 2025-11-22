@@ -23,8 +23,8 @@ extern "C" {
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   // Create application state and build app via builder
   auto* state = new SDL3AppState();
-  auto builder = create_app_instance();
-  auto bundle = builder.release_app_bundle();
+  auto builder = CreateAppInstance();
+  auto bundle = builder.ReleaseAppBundle();
   state->app = std::move(bundle.app);
   state->metadata = std::move(bundle.metadata);
   state->log_config = std::move(bundle.log_config);
@@ -72,7 +72,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 } // extern "C"
 ```
 
-同时提供 `apply_sdl3_metadata` 将应用名、版本、标识符、类型、URL、版权以及自定义键值对齐 SDL3 规范设置到系统。
+同时提供 `ApplySdl3Metadata` 将应用名、版本、标识符、类型、URL、版权以及自定义键值对齐 SDL3 规范设置到系统。
 
 ---
 
@@ -174,13 +174,13 @@ public:
   SDL3AppBuilder& set_app_info(const std::string& name, const std::string& version, const std::string& id) { metadata_.name=name; metadata_.version=version; metadata_.identifier=id; return *this; }
   SDL3AppBuilder& set_metadata(SDL3MetadataProperty prop, const std::string& value) { /* set fields */ return *this; }
   SDL3AppBuilder& set_default_log_level(SDL3LogLevel level) { log_config_.default_level = level; return *this; }
-  SDL3AppBundle release_app_bundle();
+  SDL3AppBundle ReleaseAppBundle();
 };
 
 #define VIVID_SDL3_MAIN(chain_calls)                         \
   namespace VIVID { namespace APP {                          \
-  SDL3AppBuilder create_app_instance() {                     \
-    auto builder = create_sdl3_app();                        \
+  SDL3AppBuilder CreateAppInstance() {                        \
+    auto builder = CreateSdl3App();                          \
     return std::move(builder chain_calls);                   \
   } }                                                        \
 
@@ -191,10 +191,10 @@ public:
 ```cpp
 VIVID_SDL3_MAIN(
   .set_app_info("VIVID Hello SDL3 with WebGPU Rendering", "1.0.0", "com.vivid.hello_sdl3")
-  .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::Application)
+  .set_metadata(SDL3MetadataProperty::Type, SDL3AppType::kApplication)
   .set_default_log_level(VividLogLevel::Debug)
   .insert_resource<MyResource>(100)
-  .import_module<VIVID::WINDOW::WindowSystems>()
+  .import_module<vivid::window::WindowSystems>()
   .import_module<Setup>()
   .import_module<VIVID::RENDER::RenderSystems>()
   .import_module<VIVID::UI::UISystems>()
@@ -202,7 +202,7 @@ VIVID_SDL3_MAIN(
 ```
 
 - **声明式与顺序化**：按依赖顺序声明模块与资源，清晰表达初始化意图。
-- **零样板入口**：SDL3 回调侧自动调用 `create_app_instance()`，无需手写 `main()`。
+- **零样板入口**：SDL3 回调侧自动调用 `CreateAppInstance()`，无需手写 `main()`。
 
 ---
 

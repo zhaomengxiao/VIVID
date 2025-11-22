@@ -1,48 +1,51 @@
 #pragma once
 
 #include <flecs.h>
+
 #include <glm/glm.hpp>
 
 #include "camera_controller.h"
 
-namespace VIVID::INPUT {
+namespace vivid::input {
 
 // Mouse input resource - stores global mouse input state (singleton)
 struct MouseInputResource {
-  glm::vec2 MousePos = glm::vec2(0.0f);    // Current mouse position (global coordinates)
-  glm::vec2 MouseDelta = glm::vec2(0.0f);  // Mouse movement delta (from ImGui)
+  glm::vec2 mouse_pos_ = glm::vec2(0.0F);    // Current mouse position (global coordinates)
+  glm::vec2 mouse_delta_ = glm::vec2(0.0F);  // Mouse movement delta (from ImGui)
 
   // Left mouse button
-  bool MousePressed = false;        // Left mouse button is pressed
-  bool MouseClicked = false;        // Left mouse button was clicked this frame
-  bool MouseReleased = false;       // Left mouse button was released this frame
-  bool MouseDoubleClicked = false;  // Left mouse button was double-clicked this frame
-  bool MouseDragging = false;       // Left mouse button is dragging (past threshold)
-  glm::vec2 LeftMouseDragDelta = glm::vec2(0.0f);  // Left mouse drag delta from click position
+  bool mouse_pressed_ = false;         // Left mouse button is pressed
+  bool mouse_clicked_ = false;         // Left mouse button was clicked this frame
+  bool mouse_released_ = false;        // Left mouse button was released this frame
+  bool mouse_double_clicked_ = false;  // Left mouse button was double-clicked this frame
+  bool mouse_dragging_ = false;        // Left mouse button is dragging (past threshold)
+  glm::vec2 left_mouse_drag_delta_ = glm::vec2(0.0F);  // Left mouse drag delta from click position
 
   // Middle mouse button
-  bool MiddleMousePressed = false;   // Middle mouse button is pressed
-  bool MiddleMouseClicked = false;   // Middle mouse button was clicked this frame
-  bool MiddleMouseReleased = false;  // Middle mouse button was released this frame
-  bool MiddleMouseDragging = false;  // Middle mouse button is dragging (past threshold)
-  glm::vec2 MiddleMouseDragDelta = glm::vec2(0.0f);  // Middle mouse drag delta from click position
+  bool middle_mouse_pressed_ = false;   // Middle mouse button is pressed
+  bool middle_mouse_clicked_ = false;   // Middle mouse button was clicked this frame
+  bool middle_mouse_released_ = false;  // Middle mouse button was released this frame
+  bool middle_mouse_dragging_ = false;  // Middle mouse button is dragging (past threshold)
+  glm::vec2 middle_mouse_drag_delta_
+      = glm::vec2(0.0F);  // Middle mouse drag delta from click position
 
   // Right mouse button
-  bool RightMousePressed = false;        // Right mouse button is pressed
-  bool RightMouseClicked = false;        // Right mouse button was clicked this frame
-  bool RightMouseReleased = false;       // Right mouse button was released this frame
-  bool RightMouseDoubleClicked = false;  // Right mouse button was double-clicked this frame
-  bool RightMouseDragging = false;       // Right mouse button is dragging (past threshold)
-  glm::vec2 RightMouseDragDelta = glm::vec2(0.0f);  // Right mouse drag delta from click position
+  bool right_mouse_pressed_ = false;         // Right mouse button is pressed
+  bool right_mouse_clicked_ = false;         // Right mouse button was clicked this frame
+  bool right_mouse_released_ = false;        // Right mouse button was released this frame
+  bool right_mouse_double_clicked_ = false;  // Right mouse button was double-clicked this frame
+  bool right_mouse_dragging_ = false;        // Right mouse button is dragging (past threshold)
+  glm::vec2 right_mouse_drag_delta_
+      = glm::vec2(0.0F);  // Right mouse drag delta from click position
 
   // Mouse wheel
-  float MouseWheelDelta = 0.0f;  // Mouse wheel scroll delta this frame (vertical)
-  float MouseWheelH = 0.0f;      // Mouse wheel scroll delta this frame (horizontal)
+  float mouse_wheel_delta_ = 0.0F;  // Mouse wheel scroll delta this frame (vertical)
+  float mouse_wheel_h_ = 0.0F;      // Mouse wheel scroll delta this frame (horizontal)
 };
 
 // Input Components Module - registers input-related components
 struct InputComponents {
-  InputComponents(flecs::world& world) {
+  explicit InputComponents(flecs::world& world) {
     // Register module
     world.module<InputComponents>();
 
@@ -52,5 +55,4 @@ struct InputComponents {
   }
 };
 
-}  // namespace VIVID::INPUT
-
+}  // namespace vivid::input

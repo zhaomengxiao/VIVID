@@ -46,7 +46,7 @@ inline InspectorSystems::InspectorSystems(flecs::world& world) {
   auto testEntity2 = world.entity("InspectorTest2");
   VividLogger::app_info("Created test entities in InspectorSystems constructor");
 
-  flecs::entity RenderUIPhase = world.lookup("VIVID::RENDER::RenderSystems::RenderUIPhase");
+  flecs::entity RenderUIPhase = world.lookup("vivid::render::RenderSystems::RenderUIPhase");
   if (RenderUIPhase.id() == 0) {
     VIVID_LOG_ERROR(
         "RenderUIPhase not found! Make sure RenderSystems is imported before UISystems.");

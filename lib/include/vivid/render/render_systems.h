@@ -32,7 +32,7 @@
 #define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, ##__VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
-namespace VIVID::RENDER {
+namespace vivid::render {
 
 // WebGPU Resources (singleton/resource)
 struct WebGPUContext {
@@ -82,7 +82,7 @@ struct RenderSystems {
 
 private:
   // Multiple singletons: NO entity parameter!
-  static void initWebGPUImpl(const VIVID::WINDOW::WindowContext& windowContext,
+  static void initWebGPUImpl(const vivid::window::WindowContext& windowContext,
                              WebGPUContext& webgpuRes);
   static void syncSceneImpl(flecs::entity e, const MeshComponent& mesh,
                             const MaterialComponent& material, WebGPUContext& webgpuRes);
@@ -198,7 +198,7 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // Debug: Check if singletons exist (only in debug builds)
 #ifndef NDEBUG
-  if (world.has<WINDOW::WindowContext>()) {
+  if (world.has<vivid::window::WindowContext>()) {
     VividLogger::app_info("✅ WindowContext singleton exists for InitWebGPU");
   } else {
     VividLogger::app_error("❌ WindowContext singleton NOT found for InitWebGPU!");
@@ -212,9 +212,9 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 #endif
 
   // Multiple singletons: must use .term_at().src<>() for each AND no entity param
-  world.system<const WINDOW::WindowContext, WebGPUContext>("InitWebGPU")
+  world.system<const vivid::window::WindowContext, WebGPUContext>("InitWebGPU")
       .term_at(0)
-      .src<WINDOW::WindowContext>()
+      .src<vivid::window::WindowContext>()
       .term_at(1)
       .src<WebGPUContext>()
       .kind(flecs::OnStart)
@@ -248,4 +248,4 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
   VIVID_LOG_SUCCESS("RenderSystems module registration completed!");
 }
 
-}  // namespace VIVID::RENDER
+}  // namespace vivid::render

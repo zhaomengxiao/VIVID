@@ -27,15 +27,14 @@
 #define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, ##__VA_ARGS__);
 #define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
-namespace VIVID {
-namespace WINDOW {
+namespace vivid::window {
 
 struct ShutdownPhase {};  // Custom phase for cleanup systems
 
 // Window Systems Module - manages window lifecycle, events, and updates
 struct WindowSystems {
   // Constructor - Register module and systems
-  WindowSystems(flecs::world& world) {
+  explicit WindowSystems(flecs::world& world) {
     // Display module overview only in Debug mode to reduce verbosity
     VIVID_LOG_MODULE_HEADER("WINDOW SYSTEMS", "🔧", {
       VIVID_LOG_MODULE_INFO("📦 Module: WindowSystems");
@@ -88,9 +87,9 @@ struct WindowSystems {
     VIVID_LOG_SUCCESS("WindowInitialization system registered");
 
     VIVID_LOG_SYSTEM("Registering WindowEvents system...");
-    world.system<APP::EventQueues, WindowContext>("WindowEvents")
+    world.system<vivid::app::EventQueues, WindowContext>("WindowEvents")
         .term_at(0)
-        .src<APP::EventQueues>()
+        .src<vivid::app::EventQueues>()
         .term_at(1)
         .src<WindowContext>()
         .kind(flecs::PreUpdate)
@@ -101,7 +100,7 @@ struct WindowSystems {
     world.system<WindowContext>("WindowUpdate").kind(flecs::OnUpdate).each(windowUpdateImpl);
     VIVID_LOG_SUCCESS("WindowUpdate system registered");
 
-    world.system<APP::EventQueues>("ProcessWindowEvents")
+    world.system<vivid::app::EventQueues>("ProcessWindowEvents")
         .kind(flecs::PostUpdate)
         .each(cleanEventsImpl);
 
@@ -115,11 +114,11 @@ struct WindowSystems {
 private:
   // Static member functions for system implementations
   static void windowInitImpl(flecs::entity e, WindowContext& windowContext);
-  static void processWindowEventsImpl(APP::EventQueues& eventQueues, WindowContext& windowContext);
+  static void processWindowEventsImpl(vivid::app::EventQueues& eventQueues,
+                                      WindowContext& windowContext);
   static void windowUpdateImpl(const flecs::entity e, WindowContext& windowContext);
-  static void cleanEventsImpl(APP::EventQueues& eventQueues);
+  static void cleanEventsImpl(vivid::app::EventQueues& eventQueues);
   static void windowCleanupImpl(const flecs::entity e, WindowContext& windowContext);
 };
 
-}  // namespace WINDOW
-}  // namespace VIVID
+}  // namespace vivid::window
