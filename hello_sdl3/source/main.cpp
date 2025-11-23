@@ -20,65 +20,7 @@ struct MyResource {
   int value_;
 };
 
-namespace {
-vivid::render::MeshComponent CreateCubeMesh() {
-  // Cube vertices with correct winding order (CCW when viewed from outside)
-  // Each vertex: position (3 floats) + normal (3 floats) = 6 floats
-  std::vector<float> const kVertices = {
-      // Back face (z = -0.5) - viewed from +z direction, CCW order
-      -0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,  // 0: bottom-left
-      0.5F, -0.5F, -0.5F, 0.0F, 0.0F, -1.0F,   // 1: bottom-right
-      0.5F, 0.5F, -0.5F, 0.0F, 0.0F, -1.0F,    // 2: top-right
-      -0.5F, 0.5F, -0.5F, 0.0F, 0.0F, -1.0F,   // 3: top-left
-
-      // Front face (z = 0.5) - viewed from +z direction (camera side), CCW order
-      -0.5F, -0.5F, 0.5F, 0.0F, 0.0F, 1.0F,  // 4: bottom-left
-      0.5F, -0.5F, 0.5F, 0.0F, 0.0F, 1.0F,   // 5: bottom-right
-      0.5F, 0.5F, 0.5F, 0.0F, 0.0F, 1.0F,    // 6: top-right
-      -0.5F, 0.5F, 0.5F, 0.0F, 0.0F, 1.0F,   // 7: top-left
-
-      // Left face (x = -0.5) - viewed from +x direction, CCW order
-      -0.5F, -0.5F, -0.5F, -1.0F, 0.0F, 0.0F,  // 8: bottom-back
-      -0.5F, 0.5F, -0.5F, -1.0F, 0.0F, 0.0F,   // 9: top-back
-      -0.5F, 0.5F, 0.5F, -1.0F, 0.0F, 0.0F,    // 10: top-front
-      -0.5F, -0.5F, 0.5F, -1.0F, 0.0F, 0.0F,   // 11: bottom-front
-
-      // Right face (x = 0.5) - viewed from -x direction, CCW order
-      0.5F, -0.5F, -0.5F, 1.0F, 0.0F, 0.0F,  // 12: bottom-back
-      0.5F, -0.5F, 0.5F, 1.0F, 0.0F, 0.0F,   // 13: bottom-front
-      0.5F, 0.5F, 0.5F, 1.0F, 0.0F, 0.0F,    // 14: top-front
-      0.5F, 0.5F, -0.5F, 1.0F, 0.0F, 0.0F,   // 15: top-back
-
-      // Bottom face (y = -0.5) - viewed from +y direction, CCW order
-      -0.5F, -0.5F, -0.5F, 0.0F, -1.0F, 0.0F,  // 16: back-left
-      -0.5F, -0.5F, 0.5F, 0.0F, -1.0F, 0.0F,   // 17: front-left
-      0.5F, -0.5F, 0.5F, 0.0F, -1.0F, 0.0F,    // 18: front-right
-      0.5F, -0.5F, -0.5F, 0.0F, -1.0F, 0.0F,   // 19: back-right
-
-      // Top face (y = 0.5) - viewed from -y direction, CCW order
-      -0.5F, 0.5F, -0.5F, 0.0F, 1.0F, 0.0F,  // 20: back-left
-      0.5F, 0.5F, -0.5F, 0.0F, 1.0F, 0.0F,   // 21: back-right
-      0.5F, 0.5F, 0.5F, 0.0F, 1.0F, 0.0F,    // 22: front-right
-      -0.5F, 0.5F, 0.5F, 0.0F, 1.0F, 0.0F    // 23: front-left
-  };
-
-  // Indices for each face (2 triangles per face, CCW winding)
-  std::vector<unsigned int> const kIndices = {// Back face
-                                              0, 2, 1, 2, 0, 3,
-                                              // Front face
-                                              4, 5, 6, 6, 7, 4,  // CCW from camera (+z direction)
-                                                                 // Left face
-                                              8, 10, 9, 10, 8, 11,
-                                              // Right face
-                                              12, 14, 13, 14, 12, 15,
-                                              // Bottom face
-                                              16, 18, 17, 18, 16, 19,
-                                              // Top face
-                                              20, 22, 21, 22, 20, 23};
-
-  return {kVertices, kIndices, kIndices.size()};
-}
-}  // namespace
+#include "vivid/mesh/mesh_generator.h"
 
 // Window setup module - creates custom window before WindowSystems
 struct WindowSetup {
@@ -206,7 +148,8 @@ private:
 
         kCubeEntity.set<vivid::render::TagComponent>({kName})
             .set<vivid::render::TransformComponent>(transform)
-            .set<vivid::render::MeshComponent>(CreateCubeMesh())
+            .set<vivid::render::MeshComponent>(
+                vivid::mesh::MeshGenerator::CreateCube(1.0F, 1.0F, 1.0F))
             .set<vivid::render::MaterialComponent>({
                 "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
                 "BlinnPhong.shader",
@@ -218,6 +161,36 @@ private:
     }
 
     VividLogger::app_info("Created 9 cube entities");
+
+    // --- Create Plane Entity ---
+    auto plane_entity = world.entity("TestPlane");
+    vivid::render::TransformComponent plane_transform;
+    plane_transform.position_ = {0.0F, -2.0F, 0.0F};
+
+    plane_entity.set<vivid::render::TagComponent>({"TestPlane"})
+        .set<vivid::render::TransformComponent>(plane_transform)
+        .set<vivid::render::MeshComponent>(vivid::mesh::MeshGenerator::CreatePlane(10.0F, 10.0F))
+        .set<vivid::render::MaterialComponent>({
+            "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
+            "BlinnPhong.shader",
+            {0.5F, 0.5F, 0.5F}  // Gray color
+        });
+    VividLogger::app_info("Created plane entity");
+
+    // --- Create Sphere Entity ---
+    auto sphere_entity = world.entity("TestSphere");
+    vivid::render::TransformComponent sphere_transform;
+    sphere_transform.position_ = {3.0F, 0.0F, 0.0F};
+
+    sphere_entity.set<vivid::render::TagComponent>({"TestSphere"})
+        .set<vivid::render::TransformComponent>(sphere_transform)
+        .set<vivid::render::MeshComponent>(vivid::mesh::MeshGenerator::CreateSphere(0.8F, 32, 32))
+        .set<vivid::render::MaterialComponent>({
+            "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
+            "BlinnPhong.shader",
+            {0.2F, 0.8F, 0.2F}  // Green color
+        });
+    VividLogger::app_info("Created sphere entity");
 
     // --- Create Light Entity ---
     const auto kLightEntity = world.entity("PointLight");

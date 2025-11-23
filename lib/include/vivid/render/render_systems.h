@@ -4,7 +4,6 @@
 #include <webgpu/webgpu.h>
 
 #include <glm/glm.hpp>
-#include <string>
 
 #include "render_component.h"
 #include "vivid/log/log.h"
@@ -36,41 +35,41 @@ namespace vivid::render {
 
 // WebGPU Resources (singleton/resource)
 struct WebGPUContext {
-  bool initialized = false;  // Flag to ensure one-time initialization
-  WGPUInstance instance = nullptr;
-  WGPUAdapter adapter = nullptr;
-  bool adapterRequestEnded = false;
-  WGPUDevice device = nullptr;
-  bool deviceRequestEnded = false;
-  WGPUQueue queue = nullptr;
-  WGPURenderPipeline pipeline = nullptr;
-  WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-  WGPUSurfaceConfiguration surfaceConfiguration = WGPU_SURFACE_CONFIGURATION_INIT;
-  WGPUSurface surface = nullptr;
-  uint32_t configuredWidth = 0;
-  uint32_t configuredHeight = 0;
+  bool initialized_ = false;  // Flag to ensure one-time initialization
+  WGPUInstance instance_ = nullptr;
+  WGPUAdapter adapter_ = nullptr;
+  bool adapter_request_ended_ = false;
+  WGPUDevice device_ = nullptr;
+  bool device_request_ended_ = false;
+  WGPUQueue queue_ = nullptr;
+  WGPURenderPipeline pipeline_ = nullptr;
+  WGPUTextureFormat surface_format_ = WGPUTextureFormat_Undefined;
+  WGPUSurfaceConfiguration surface_configuration_ = WGPU_SURFACE_CONFIGURATION_INIT;
+  WGPUSurface surface_ = nullptr;
+  uint32_t configured_width_ = 0;
+  uint32_t configured_height_ = 0;
   // Depth resources
-  WGPUTexture depthTexture = nullptr;
-  WGPUTextureView depthView = nullptr;
-  WGPUTextureFormat depthFormat = WGPUTextureFormat_Depth24Plus;
+  WGPUTexture depth_texture_ = nullptr;
+  WGPUTextureView depth_view_ = nullptr;
+  WGPUTextureFormat depth_format_ = WGPUTextureFormat_Depth24Plus;
   // Render context
-  WGPURenderPassEncoder renderPass = nullptr;
-  WGPUCommandEncoder encoder = nullptr;
-  WGPUTextureView targetView = nullptr;
-  WGPUSurfaceTexture surfaceTexture = WGPU_SURFACE_TEXTURE_INIT;
+  WGPURenderPassEncoder render_pass_ = nullptr;
+  WGPUCommandEncoder encoder_ = nullptr;
+  WGPUTextureView target_view_ = nullptr;
+  WGPUSurfaceTexture surface_texture_ = WGPU_SURFACE_TEXTURE_INIT;
 };
 
 // GPU资源组件 - WebGPU version
 struct GpuMeshComponent {
-  WGPUBuffer vertexBuffer = nullptr;
-  WGPUBuffer indexBuffer = nullptr;
-  uint32_t indexCount = 0;
-  WGPUBuffer uniformBuffer = nullptr;
-  WGPUBindGroup bindGroup = nullptr;
-  WGPUVertexBufferLayout vertexBufferLayout = {};
-  WGPUPipelineLayout layout = nullptr;
-  WGPUBindGroupLayout bindGroupLayout = nullptr;
-  WGPURenderPipeline pipeline = nullptr;
+  WGPUBuffer vertex_buffer_ = nullptr;
+  WGPUBuffer index_buffer_ = nullptr;
+  uint32_t index_count_ = 0;
+  WGPUBuffer uniform_buffer_ = nullptr;
+  WGPUBindGroup bind_group_ = nullptr;
+  WGPUVertexBufferLayout vertex_buffer_layout_ = {};
+  WGPUPipelineLayout layout_ = nullptr;
+  WGPUBindGroupLayout bind_group_layout_ = nullptr;
+  WGPURenderPipeline pipeline_ = nullptr;
 };
 
 // Forward declarations
@@ -78,34 +77,34 @@ struct ShutdownPhase {};  // Custom phase for cleanup systems
 
 // Render Systems Module - manages WebGPU initialization, scene sync, and drawing
 struct RenderSystems {
-  RenderSystems(flecs::world& world);
+  explicit RenderSystems(flecs::world& world);
 
 private:
   // Multiple singletons: NO entity parameter!
-  static void initWebGPUImpl(const vivid::window::WindowContext& windowContext,
-                             WebGPUContext& webgpuRes);
-  static void syncSceneImpl(flecs::entity e, const MeshComponent& mesh,
-                            const MaterialComponent& material, WebGPUContext& webgpuRes);
+  static void InitWebGPUImpl(const vivid::window::WindowContext& window_context,
+                             WebGPUContext& webgpu_res);
+  static void SyncSceneImpl(flecs::entity e, const MeshComponent& mesh,
+                            const MaterialComponent& material, WebGPUContext& webgpu_res);
   // PreparePhase systems
-  static void prepareSurfaceImpl(const flecs::iter& it);
-  static void prepareViewportResourcesImpl(const flecs::iter& it);
+  static void PrepareSurfaceImpl(const flecs::iter& it);
+  static void PrepareViewportResourcesImpl(const flecs::iter& it);
   // RenderPhase systems
-  static void beginMainRenderPassImpl(const flecs::iter& it);
-  static void beginViewportRenderPassImpl(const flecs::iter& it);
-  static void renderSceneImpl(const flecs::iter& it);
-  static void endViewportRenderPassImpl(const flecs::iter& it);
+  static void BeginMainRenderPassImpl(const flecs::iter& it);
+  static void BeginViewportRenderPassImpl(const flecs::iter& it);
+  static void RenderSceneImpl(const flecs::iter& it);
+  static void EndViewportRenderPassImpl(const flecs::iter& it);
   // SubmitPhase systems
-  static void submitMainRenderPassImpl(const flecs::iter& it);
-  static void releaseWebGPUResourcesImpl(const flecs::iter& it);
+  static void SubmitMainRenderPassImpl(const flecs::iter& it);
+  static void ReleaseWebGPUResourcesImpl(const flecs::iter& it);
 
   // Additional system implementations (not registered, but converted to Flecs format)
-  static void createWebGPUInstanceImpl(const flecs::iter& it);
-  static void requestWebGPUAdapterSyncImpl(const flecs::iter& it);
-  static void inspectWebGPUAdapterImpl(const flecs::iter& it);
-  static void requestWebGPUDeviceSyncImpl(const flecs::iter& it);
-  static void inspectWebGPUDeviceImpl(const flecs::iter& it);
-  static void testCommandQueueImpl(const flecs::iter& it);
-  static void createPipelineImpl(const flecs::iter& it);
+  static void CreateWebGPUInstanceImpl(const flecs::iter& it);
+  static void RequestWebGPUAdapterSyncImpl(const flecs::iter& it);
+  static void InspectWebGPUAdapterImpl(const flecs::iter& it);
+  static void RequestWebGPUDeviceSyncImpl(const flecs::iter& it);
+  static void InspectWebGPUDeviceImpl(const flecs::iter& it);
+  static void TestCommandQueueImpl(const flecs::iter& it);
+  static void CreatePipelineImpl(const flecs::iter& it);
 };
 
 inline RenderSystems::RenderSystems(flecs::world& world) {
@@ -131,37 +130,38 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
     VIVID_LOG_MODULE_INFO("📍 PHASE: OnStart");
     VIVID_LOG_MODULE_INFO("├── 🔄 InitWebGPU");
     VIVID_LOG_MODULE_INFO("│   ├── Requires: WindowContext, WebGPUContext");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: initWebGPUImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: InitWebGPUImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: PreUpdate");
     VIVID_LOG_MODULE_INFO("├── 🔄 SyncScene");
     VIVID_LOG_MODULE_INFO("│   ├── Requires: MeshComponent, MaterialComponent, WebGPUContext");
     VIVID_LOG_MODULE_INFO("│   ├── Filters: without<GpuMeshComponent>");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: syncSceneImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: SyncSceneImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: PreparePhase");
     VIVID_LOG_MODULE_INFO("├── 🔄 PrepareSurface");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: prepareSurfaceImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: PrepareSurfaceImpl()");
     VIVID_LOG_MODULE_INFO("└── 🔄 PrepareViewportResources");
-    VIVID_LOG_MODULE_INFO("    └── Executes: prepareViewportResourcesImpl()");
+    VIVID_LOG_MODULE_INFO("    └── Executes: PrepareViewportResourcesImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: RenderPhase");
     VIVID_LOG_MODULE_INFO("├── 🔄 BeginMainRenderPass (conditional: no viewport)");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: beginMainRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("├── 🔄 BeginMainRenderPass (conditional: no viewport)");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: BeginMainRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("├── 🔄 BeginViewportRenderPass");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: beginViewportRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: BeginViewportRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("├── 🔄 RenderScene");
-    VIVID_LOG_MODULE_INFO("│   └── Executes: renderSceneImpl()");
+    VIVID_LOG_MODULE_INFO("│   └── Executes: RenderSceneImpl()");
     VIVID_LOG_MODULE_INFO("└── 🔄 EndViewportRenderPass");
-    VIVID_LOG_MODULE_INFO("    └── Executes: endViewportRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("    └── Executes: EndViewportRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: SubmitPhase");
     VIVID_LOG_MODULE_INFO("└── 🔄 SubmitMainRenderPass (conditional: has main render pass)");
-    VIVID_LOG_MODULE_INFO("    └── Executes: submitMainRenderPassImpl()");
+    VIVID_LOG_MODULE_INFO("    └── Executes: SubmitMainRenderPassImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("📍 PHASE: Shutdown");
     VIVID_LOG_MODULE_INFO("└── 🔄 ReleaseWebGPUResources");
-    VIVID_LOG_MODULE_INFO("    └── Executes: releaseWebGPUResourcesImpl()");
+    VIVID_LOG_MODULE_INFO("    └── Executes: ReleaseWebGPUResourcesImpl()");
     VIVID_LOG_MODULE_INFO("");
     VIVID_LOG_MODULE_INFO("💾 RESOURCES & COMPONENTS:");
     VIVID_LOG_MODULE_INFO("├── 🔹 WebGPUContext (singleton)");
@@ -179,17 +179,20 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
 
   // add custom phases
   VividLogger::app_info("📍 Creating custom pipeline phases...");
-  flecs::entity ExtractPhase
+  flecs::entity const kExtractPhase
       = world.entity("ExtractPhase").add(flecs::Phase).depends_on(flecs::OnStore);
-  flecs::entity PreparePhase
-      = world.entity("PreparePhase").add(flecs::Phase).depends_on(ExtractPhase);
-  flecs::entity QueuePhase = world.entity("QueuePhase").add(flecs::Phase).depends_on(PreparePhase);
-  flecs::entity SortPhase = world.entity("SortPhase").add(flecs::Phase).depends_on(QueuePhase);
-  flecs::entity RenderPhase = world.entity("RenderPhase").add(flecs::Phase).depends_on(SortPhase);
-  flecs::entity RenderUIPhase
-      = world.entity("RenderUIPhase").add(flecs::Phase).depends_on(RenderPhase);
-  flecs::entity SubmitPhase
-      = world.entity("SubmitPhase").add(flecs::Phase).depends_on(RenderUIPhase);
+  flecs::entity const kPreparePhase
+      = world.entity("PreparePhase").add(flecs::Phase).depends_on(kExtractPhase);
+  flecs::entity const kQueuePhase
+      = world.entity("QueuePhase").add(flecs::Phase).depends_on(kPreparePhase);
+  flecs::entity const kSortPhase
+      = world.entity("SortPhase").add(flecs::Phase).depends_on(kQueuePhase);
+  flecs::entity const kRenderPhase
+      = world.entity("RenderPhase").add(flecs::Phase).depends_on(kSortPhase);
+  flecs::entity const kRenderUiPhase
+      = world.entity("RenderUIPhase").add(flecs::Phase).depends_on(kRenderPhase);
+  flecs::entity const kSubmitPhase
+      = world.entity("SubmitPhase").add(flecs::Phase).depends_on(kRenderUiPhase);
   VIVID_LOG_SUCCESS("Custom pipeline phases created");
 
   // Initialization - deferred to PreUpdate to see OnStart changes (defer mechanism)
@@ -216,9 +219,10 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .term_at(0)
       .src<vivid::window::WindowContext>()
       .term_at(1)
+      .term_at(1)
       .src<WebGPUContext>()
       .kind(flecs::OnStart)
-      .each(initWebGPUImpl);
+      .each(InitWebGPUImpl);
   VIVID_LOG_SUCCESS("InitWebGPU system registered successfully");
 
   // Scene sync - runs every frame before update
@@ -227,23 +231,23 @@ inline RenderSystems::RenderSystems(flecs::world& world) {
       .term_at(2)
       .src<WebGPUContext>()
       .kind(flecs::PreUpdate)
-      .each(syncSceneImpl);
+      .each(SyncSceneImpl);
 
   // PreparePhase systems
-  world.system("PrepareSurface").kind(PreparePhase).run(prepareSurfaceImpl);
-  world.system("PrepareViewportResources").kind(PreparePhase).run(prepareViewportResourcesImpl);
+  world.system("PrepareSurface").kind(kPreparePhase).run(PrepareSurfaceImpl);
+  world.system("PrepareViewportResources").kind(kPreparePhase).run(PrepareViewportResourcesImpl);
 
   // RenderPhase systems
-  world.system("BeginMainRenderPass").kind(RenderPhase).run(beginMainRenderPassImpl);
-  world.system("BeginViewportRenderPass").kind(RenderPhase).run(beginViewportRenderPassImpl);
-  world.system("RenderScene").kind(RenderPhase).run(renderSceneImpl);
-  world.system("EndViewportRenderPass").kind(RenderPhase).run(endViewportRenderPassImpl);
+  world.system("BeginMainRenderPass").kind(kRenderPhase).run(BeginMainRenderPassImpl);
+  world.system("BeginViewportRenderPass").kind(kRenderPhase).run(BeginViewportRenderPassImpl);
+  world.system("RenderScene").kind(kRenderPhase).run(RenderSceneImpl);
+  world.system("EndViewportRenderPass").kind(kRenderPhase).run(EndViewportRenderPassImpl);
 
   // SubmitPhase systems
-  world.system("SubmitMainRenderPass").kind(SubmitPhase).run(submitMainRenderPassImpl);
+  world.system("SubmitMainRenderPass").kind(kSubmitPhase).run(SubmitMainRenderPassImpl);
 
   // Cleanup - runs once at shutdown
-  world.system("ReleaseWebGPUResources").kind<ShutdownPhase>().run(releaseWebGPUResourcesImpl);
+  world.system("ReleaseWebGPUResources").kind<ShutdownPhase>().run(ReleaseWebGPUResourcesImpl);
 
   VIVID_LOG_SUCCESS("RenderSystems module registration completed!");
 }

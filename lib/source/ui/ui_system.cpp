@@ -43,7 +43,7 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& window_context
   }
 
   // Check if WebGPU is initialized
-  if (webgpu_res.device == nullptr) {
+  if (webgpu_res.device_ == nullptr) {
     VividLogger::app_error("WebGPU not yet initialized, import RenderSystems first!");
     return;
   }
@@ -74,10 +74,10 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& window_context
   // Setup Platform/Renderer backends
   ImGui_ImplSDL3_InitForOther(window_context.window_handle_);
   ImGui_ImplWGPU_InitInfo init_info;
-  init_info.Device = webgpu_res.device;
+  init_info.Device = webgpu_res.device_;
   init_info.NumFramesInFlight = 3;
-  init_info.RenderTargetFormat = webgpu_res.surfaceFormat;
-  init_info.DepthStencilFormat = webgpu_res.depthFormat;
+  init_info.RenderTargetFormat = webgpu_res.surface_format_;
+  init_info.DepthStencilFormat = webgpu_res.depth_format_;
   ImGui_ImplWGPU_Init(&init_info);
   VividLogger::app_info("ImGui initialized successfully");
 
@@ -150,8 +150,8 @@ void UISystems::newFrameImpl([[maybe_unused]] const flecs::iter& it) {
 
 // Render ImGui draw data inside active render pass
 void UISystems::renderUIImpl(vivid::render::WebGPUContext& webgpu_res) {
-  if (webgpu_res.renderPass != nullptr) {
-    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpu_res.renderPass);
+  if (webgpu_res.render_pass_ != nullptr) {
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpu_res.render_pass_);
   }
 }
 

@@ -15,15 +15,15 @@ namespace vivid::render {
 typedef glm::vec3 Vector3f;
 
 struct Color3f {
-  float r;
-  float g;
-  float b;
+  float r_;
+  float g_;
+  float b_;
 
   // Default constructor with default values
-  Color3f() : r(1.0f), g(1.0f), b(1.0f) {}
+  Color3f() : r_(1.0F), g_(1.0F), b_(1.0F) {}
 
   // Constructor with three float parameters
-  Color3f(float r_val, float g_val, float b_val) : r(r_val), g(g_val), b(b_val) {}
+  Color3f(float r_val, float g_val, float b_val) : r_(r_val), g_(g_val), b_(b_val) {}
 };
 
 //
@@ -38,7 +38,7 @@ struct TransformComponent {
 
   // 辅助函数，用于计算模型矩阵
   glm::mat4 GetTransform() const {
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), position_);
+    glm::mat4 transform = glm::translate(glm::mat4(1.0F), position_);
     transform = glm::rotate(transform, rotation_.x, {1, 0, 0});
     transform = glm::rotate(transform, rotation_.y, {0, 1, 0});
     transform = glm::rotate(transform, rotation_.z, {0, 0, 1});
@@ -66,38 +66,38 @@ struct MeshComponent {
 // 材质组件，定义物体的外观和着色器
 struct MaterialComponent {
   std::string shader_path_ = "res/shaders/BlinnPhong.shader";  // 默认着色器
-  Color3f object_color_{0.8f, 0.8f, 0.8f};                     // 默认颜色为灰色
-  Color3f specular_color_{0.5f, 0.5f, 0.5f};
-  float shininess_ = 32.0f;
+  Color3f object_color_{0.8F, 0.8F, 0.8F};                     // 默认颜色为灰色
+  Color3f specular_color_{0.5F, 0.5F, 0.5F};
+  float shininess_ = 32.0F;
 };
 
 // 光源组件
 struct LightComponent {
-  Color3f light_color_{1.0f, 1.0f, 1.0f};
-  Color3f ambient_color_{0.2f, 0.2f, 0.2f};
+  Color3f light_color_{1.0F, 1.0F, 1.0F};
+  Color3f ambient_color_{0.2F, 0.2F, 0.2F};
   // 衰减系数
-  float constant_ = 1.0f;
-  float linear_ = 0.09f;
-  float quadratic_ = 0.032f;
+  float constant_ = 1.0F;
+  float linear_ = 0.09F;
+  float quadratic_ = 0.032F;
 };
 
 // 相机组件
 struct CameraComponent {
-  glm::mat4 projection_matrix_{1.0f};
+  glm::mat4 projection_matrix_{1.0F};
   bool is_primary_ = true;  // 标记为主相机
                             // 视图矩阵由相机位置（TransformComponent）计算而来
 };
 
 struct ViewportComponent {
-  float width_ = 1280.0f;
-  float height_ = 720.0f;
+  float width_ = 1280.0F;
+  float height_ = 720.0F;
   uintptr_t texture_id_ = 0;
 
   bool is_focused_ = false;
   bool is_hovered_ = false;
 
-  float content_start_pos_x_ = 0.0f;
-  float content_start_pos_y_ = 0.0f;
+  float content_start_pos_x_ = 0.0F;
+  float content_start_pos_y_ = 0.0F;
 
   // Offscreen rendering resources for ImGui viewport windows
   WGPUTexture render_texture_ = nullptr;           // Offscreen render target texture
@@ -110,7 +110,7 @@ struct ViewportComponent {
 };
 
 template <typename Elem, typename Vector = std::vector<Elem>>
-flecs::opaque<Vector, Elem> std_vector_support(flecs::world& world) {
+flecs::opaque<Vector, Elem> StdVectorSupport(flecs::world& world) {
   return flecs::opaque<Vector, Elem>()
       .as_type(world.vector<Elem>())
 
@@ -140,7 +140,7 @@ flecs::opaque<Vector, Elem> std_vector_support(flecs::world& world) {
 
 // Render Components Module
 struct RenderComponents {
-  RenderComponents(flecs::world& world) {
+  explicit RenderComponents(flecs::world& world) {
     // Register module
     world.module<RenderComponents>();
 
@@ -156,12 +156,12 @@ struct RenderComponents {
     //     .range(0.0, 1.0f);
 
     world.component<Color3f>()
-        .member<float, flecs::units::color::Rgb>("r")
-        .range(0.0f, 1.0f)
-        .member<float, flecs::units::color::Rgb>("g")
-        .range(0.0f, 1.0f)
-        .member<float, flecs::units::color::Rgb>("b")
-        .range(0.0f, 1.0f);
+        .member<float, flecs::units::color::Rgb>("r_")
+        .range(0.0F, 1.0F)
+        .member<float, flecs::units::color::Rgb>("g_")
+        .range(0.0F, 1.0F)
+        .member<float, flecs::units::color::Rgb>("b_")
+        .range(0.0F, 1.0F);
 
     // world.component<Vector3f>()
     //     .member<float>("x")
@@ -175,17 +175,17 @@ struct RenderComponents {
         .opaque(flecs::String)  // Opaque type that maps to string
         .serialize([](const flecs::serializer* s, const std::string* data) {
           const char* str = data->c_str();
-          return s->value(flecs::String, &str);  // Forward to serializer
+          return s->value(flecs::String, static_cast<const void*>(&str));  // Forward to serializer
         })
         .assign_string([](std::string* data, const char* value) {
           *data = value;  // Assign new value to std::string
         });
 
     // Register reflection for std::vector<int>
-    world.component<std::vector<int>>().opaque(std_vector_support<int>);
+    world.component<std::vector<int>>().opaque(StdVectorSupport<int>);
 
     // Register reflection for std::vector<std::string>
-    world.component<std::vector<std::string>>().opaque(std_vector_support<std::string>);
+    world.component<std::vector<std::string>>().opaque(StdVectorSupport<std::string>);
 
     // Register components
     world.component<TransformComponent>();

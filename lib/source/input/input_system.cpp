@@ -113,14 +113,14 @@ void InputSystems::handleKeyboardInputImpl(KeyboardInputResource& keyboard_input
     const bool kCurrentlyPressed = ImGui::IsKeyDown(kKey);
 
     // Store previous frame state (for detecting press/release events)
-    const bool kWasPressed = keyboard_input.key_pressed_[key_idx];
+    const bool kWasPressed = keyboard_input.key_pressed_.at(key_idx);
 
     // Update current state
-    keyboard_input.key_pressed_[key_idx] = kCurrentlyPressed;
+    keyboard_input.key_pressed_.at(key_idx) = kCurrentlyPressed;
 
     // Detect events
-    keyboard_input.key_down_[key_idx] = kCurrentlyPressed && !kWasPressed;
-    keyboard_input.key_released_[key_idx] = !kCurrentlyPressed && kWasPressed;
+    keyboard_input.key_down_.at(key_idx) = kCurrentlyPressed && !kWasPressed;
+    keyboard_input.key_released_.at(key_idx) = !kCurrentlyPressed && kWasPressed;
   }
 }
 

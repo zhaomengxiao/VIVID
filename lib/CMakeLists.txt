@@ -285,6 +285,9 @@ set(headers
   # Physics headers
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/physics/physics_component.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/physics/physics_system.h
+
+  # Mesh headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/mesh/mesh_generator.h
 )
 
 # Source files
@@ -304,6 +307,9 @@ set(sources
   
   # Render sources
   ${CMAKE_CURRENT_SOURCE_DIR}/source/render/render_systems.cpp
+  
+  # Mesh sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/mesh_generator.cpp
   
   # UI sources
   ${CMAKE_CURRENT_SOURCE_DIR}/source/ui/ui_system.cpp

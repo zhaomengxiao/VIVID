@@ -6,6 +6,7 @@
 #include "vivid/input/camera_controller.h"
 #include "vivid/input/input_system.h"
 #include "vivid/log/log.h"
+#include "vivid/mesh/mesh_generator.h"
 #include "vivid/render/render_systems.h"
 #include "vivid/ui/ui_system.h"
 #include "vivid/window/window_component.h"
@@ -16,32 +17,7 @@ struct MyResource {
 };
 
 namespace {
-vivid::render::MeshComponent CreateCubeMesh() {
-  std::vector<float> const kVertices
-      = {// positions          // normals
-         -0.5F, -0.5F, -0.5F, 0.0F,  0.0F,  -1.0F, 0.5F,  -0.5F, -0.5F, 0.0F,  0.0F,  -1.0F,
-         0.5F,  0.5F,  -0.5F, 0.0F,  0.0F,  -1.0F, -0.5F, 0.5F,  -0.5F, 0.0F,  0.0F,  -1.0F,
-
-         -0.5F, -0.5F, 0.5F,  0.0F,  0.0F,  1.0F,  0.5F,  -0.5F, 0.5F,  0.0F,  0.0F,  1.0F,
-         0.5F,  0.5F,  0.5F,  0.0F,  0.0F,  1.0F,  -0.5F, 0.5F,  0.5F,  0.0F,  0.0F,  1.0F,
-
-         -0.5F, 0.5F,  0.5F,  -1.0F, 0.0F,  0.0F,  -0.5F, 0.5F,  -0.5F, -1.0F, 0.0F,  0.0F,
-         -0.5F, -0.5F, -0.5F, -1.0F, 0.0F,  0.0F,  -0.5F, -0.5F, 0.5F,  -1.0F, 0.0F,  0.0F,
-
-         0.5F,  0.5F,  0.5F,  1.0F,  0.0F,  0.0F,  0.5F,  0.5F,  -0.5F, 1.0F,  0.0F,  0.0F,
-         0.5F,  -0.5F, -0.5F, 1.0F,  0.0F,  0.0F,  0.5F,  -0.5F, 0.5F,  1.0F,  0.0F,  0.0F,
-
-         -0.5F, -0.5F, -0.5F, 0.0F,  -1.0F, 0.0F,  0.5F,  -0.5F, -0.5F, 0.0F,  -1.0F, 0.0F,
-         0.5F,  -0.5F, 0.5F,  0.0F,  -1.0F, 0.0F,  -0.5F, -0.5F, 0.5F,  0.0F,  -1.0F, 0.0F,
-
-         -0.5F, 0.5F,  -0.5F, 0.0F,  1.0F,  0.0F,  0.5F,  0.5F,  -0.5F, 0.0F,  1.0F,  0.0F,
-         0.5F,  0.5F,  0.5F,  0.0F,  1.0F,  0.0F,  -0.5F, 0.5F,  0.5F,  0.0F,  1.0F,  0.0F};
-  std::vector<unsigned int> const kIndices
-      = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
-         12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20};
-
-  return {kVertices, kIndices, kIndices.size()};
-}
+// Local CreateCubeMesh removed
 }  // namespace
 
 // Window setup module - creates custom window before WindowSystems
@@ -103,7 +79,7 @@ private:
     auto cube_entity = world.entity("MyCube");
     cube_entity.set<vivid::render::TagComponent>({"MyCube"})
         .set<vivid::render::TransformComponent>({})
-        .set<vivid::render::MeshComponent>(CreateCubeMesh())
+        .set<vivid::render::MeshComponent>(vivid::mesh::MeshGenerator::CreateCube(1.0F, 1.0F, 1.0F))
         .set<vivid::render::MaterialComponent>({
             "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
             "BlinnPhong.shader",
