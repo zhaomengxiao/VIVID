@@ -6,7 +6,6 @@
 #include <flecs/addons/cpp/mixins/units/decl.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -33,9 +32,9 @@ struct Color3f {
 
 // 变换组件，存储物体的位置、旋转、缩放
 struct TransformComponent {
-  glm::vec3 position_{0.0f, 0.0f, 0.0f};
-  glm::vec3 rotation_{0.0f, 0.0f, 0.0f};  // 欧拉角
-  glm::vec3 scale_{1.0f, 1.0f, 1.0f};
+  glm::vec3 position_{0.0F, 0.0F, 0.0F};
+  glm::vec3 rotation_{0.0F, 0.0F, 0.0F};  // 欧拉角
+  glm::vec3 scale_{1.0F, 1.0F, 1.0F};
 
   // 辅助函数，用于计算模型矩阵
   glm::mat4 GetTransform() const {
@@ -101,13 +100,13 @@ struct ViewportComponent {
   float content_start_pos_y_ = 0.0f;
 
   // Offscreen rendering resources for ImGui viewport windows
-  WGPUTexture render_texture_ = nullptr;          // Offscreen render target texture
+  WGPUTexture render_texture_ = nullptr;           // Offscreen render target texture
   WGPUTextureView render_texture_view_ = nullptr;  // Texture view for ImGui
-  WGPUTexture depth_texture_ = nullptr;           // Depth texture for offscreen rendering
-  WGPUTextureView depth_view_ = nullptr;          // Depth texture view
-  uint32_t configured_width_ = 0;                 // Track configured texture width
-  uint32_t configured_height_ = 0;                // Track configured texture height
-  bool initialized_ = false;                      // Flag to ensure one-time initialization
+  WGPUTexture depth_texture_ = nullptr;            // Depth texture for offscreen rendering
+  WGPUTextureView depth_view_ = nullptr;           // Depth texture view
+  uint32_t configured_width_ = 0;                  // Track configured texture width
+  uint32_t configured_height_ = 0;                 // Track configured texture height
+  bool initialized_ = false;                       // Flag to ensure one-time initialization
 };
 
 template <typename Elem, typename Vector = std::vector<Elem>>

@@ -21,7 +21,8 @@ private:
   static void controlCameraImpl(CameraControllerComponent& camera_controller,
                                 const vivid::render::ViewportComponent& viewport,
                                 vivid::render::TransformComponent& transform,
-                                MouseInputResource& mouse_input);
+                                MouseInputResource& mouse_input,
+                                KeyboardInputResource& keyboard_input);
 };
 
 }  // namespace vivid::input

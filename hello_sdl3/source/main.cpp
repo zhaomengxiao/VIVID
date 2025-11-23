@@ -64,17 +64,17 @@ vivid::render::MeshComponent CreateCubeMesh() {
 
   // Indices for each face (2 triangles per face, CCW winding)
   std::vector<unsigned int> const kIndices = {// Back face
-                                              0, 1, 2, 2, 3, 0,
+                                              0, 2, 1, 2, 0, 3,
                                               // Front face
                                               4, 5, 6, 6, 7, 4,  // CCW from camera (+z direction)
                                                                  // Left face
-                                              8, 9, 10, 10, 11, 8,
+                                              8, 10, 9, 10, 8, 11,
                                               // Right face
-                                              12, 13, 14, 14, 15, 12,
+                                              12, 14, 13, 14, 12, 15,
                                               // Bottom face
-                                              16, 17, 18, 18, 19, 16,
+                                              16, 18, 17, 18, 16, 19,
                                               // Top face
-                                              20, 21, 22, 22, 23, 20};
+                                              20, 22, 21, 22, 20, 23};
 
   return {kVertices, kIndices, kIndices.size()};
 }
@@ -148,6 +148,11 @@ void print_value(const flecs::world& world, const flecs::cursor& cur) {
 }
 }  // namespace
 // Scene initialization module - creates cube, light, and camera entities
+struct RotateComponent {
+  float speed_ = 1.0F;
+};
+
+// Scene initialization module - creates cube, light, and camera entities
 struct Setup {
   explicit Setup(flecs::world& world) {
     VividLogger::app_info("Registering Setup module...");
@@ -159,8 +164,18 @@ struct Setup {
     world.import <vivid::render::RenderComponents>();
     world.import <vivid::input::InputComponents>();
 
+    // Register component
+    world.component<RotateComponent>();
+
     // Register scene initialization system (runs at startup)
     world.system("SceneInitialization").kind(flecs::OnStart).run(sceneInitializationImpl);
+
+    // Register rotation system
+    world.system<vivid::render::TransformComponent, const RotateComponent>("RotateSystem")
+        .each([](vivid::render::TransformComponent& t, const RotateComponent& r) {
+          t.rotation_.z += 0.016F * r.speed_;  // Simple rotation, assuming ~60fps or use delta_time
+                                               // if available in iter
+        });
 
     VividLogger::app_info("Setup module registration completed!");
 
@@ -177,38 +192,51 @@ private:
     VividLogger::app_info("=== SceneInitialization system executing ===");
     VividLogger::app_info("Initializing scene entities...");
 
-    // --- Create Cube Entity ---
-    const auto kCubeEntity = world.entity("MyCube");
-    kCubeEntity.set<vivid::render::TagComponent>({"MyCube"})
-        .set<vivid::render::TransformComponent>({})
-        .set<vivid::render::MeshComponent>(CreateCubeMesh())
-        .set<vivid::render::MaterialComponent>({
-            "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
-            "BlinnPhong.shader",
-            {1.0F, 0.5F, 0.2F}  // Orange color
-        });
+    // --- Create 9 Cubes in 3x3 Grid ---
+    const float kSpacing = 1.5F;
+    for (int x = 0; x < 3; ++x) {
+      for (int y = 0; y < 3; ++y) {
+        std::string const kName = "Cube_" + std::to_string(x) + "_" + std::to_string(y);
+        const auto kCubeEntity = world.entity(kName.c_str());
 
-    VividLogger::app_info("Created cube entity");
+        vivid::render::TransformComponent transform;
+        transform.position_ = {kSpacing * static_cast<float>(x - 1),  // -1.5, 0, 1.5
+                               kSpacing * static_cast<float>(y - 1),  // -1.5, 0, 1.5
+                               0.0F};
+
+        kCubeEntity.set<vivid::render::TagComponent>({kName})
+            .set<vivid::render::TransformComponent>(transform)
+            .set<vivid::render::MeshComponent>(CreateCubeMesh())
+            .set<vivid::render::MaterialComponent>({
+                "D:/ClineWorkSpace/VIVID/build/release/standalone/Release/res/shaders/"
+                "BlinnPhong.shader",
+                {1.0F, 0.5F + (static_cast<float>(x) * 0.2F),
+                 0.2F + (static_cast<float>(y) * 0.2F)}  // Varying colors
+            })
+            .set<RotateComponent>({1.0F + static_cast<float>(x + y)});  // Varying speeds
+      }
+    }
+
+    VividLogger::app_info("Created 9 cube entities");
 
     // --- Create Light Entity ---
     const auto kLightEntity = world.entity("PointLight");
     vivid::render::TransformComponent light_transform;
-    light_transform.position_ = {1.2F, 1.0F, 2.0F};
+    light_transform.position_ = {1.2F, 1.0F, 5.0F};  // Moved light back a bit
 
     kLightEntity.set<vivid::render::TagComponent>({"PointLight"})
         .set<vivid::render::TransformComponent>(light_transform)
         .set<vivid::render::LightComponent>({});
 
-    VividLogger::app_info("Created light entity at position (1.2, 1.0, 2.0)");
+    VividLogger::app_info("Created light entity at position (1.2, 1.0, 5.0)");
 
     // --- Create Camera Entity for Render Window ---
     // Entities with both CameraComponent and ViewportComponent will automatically
     // render to an ImGui window. The window title will be from TagComponent.Tag.
     const auto kCameraEntity = world.entity("MainCamera");
     vivid::render::TransformComponent cam_transform;
-    // Move camera closer to cube for better perspective effect
-    // Position at (0, 0, 3) instead of (0, 0, 5) to make perspective more visible
-    cam_transform.position_ = {0.0F, 0.0F, 3.0F};
+    // Move camera back to see all cubes
+    cam_transform.position_ = {0.0F, 0.0F, 8.0F};
 
     // Setup ViewportComponent with initial size for ImGui window
     // The size will automatically adjust based on ImGui window size
@@ -222,14 +250,14 @@ private:
         .set<vivid::render::ViewportComponent>(viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>({});
 
-    VividLogger::app_info("Created camera entity at position (0.0, 0.0, 3.0)");
+    VividLogger::app_info("Created camera entity at position (0.0, 0.0, 8.0)");
     VividLogger::app_info("Render window will appear in ImGui with title 'MainCamera'");
 
     // --- Create Second Camera Entity with 45-degree angle view ---
     // This camera will render from a diagonal angle (3, 3, 3) looking at the origin
     const auto kSideCameraEntity = world.entity("SideCamera");
     vivid::render::TransformComponent side_cam_transform;
-    side_cam_transform.position_ = {3.0F, 3.0F, 3.0F};  // Position at diagonal angle
+    side_cam_transform.position_ = {5.0F, 5.0F, 5.0F};  // Position at diagonal angle, further out
 
     // Setup ViewportComponent for the side camera
     vivid::render::ViewportComponent side_viewport;
@@ -237,7 +265,7 @@ private:
     side_viewport.height_ = 600.0F;
 
     // Setup CameraControllerComponent to look at origin (0, 0, 0)
-    // Front vector points from (3, 3, 3) to (0, 0, 0) = (-1, -1, -1), normalized
+    // Front vector points from (5, 5, 5) to (0, 0, 0) = (-1, -1, -1), normalized
     CameraControllerComponent side_camera_controller;
     side_camera_controller.front_ = glm::normalize(glm::vec3(-1.0F, -1.0F, -1.0F));
     side_camera_controller.world_up_ = glm::vec3(0.0F, 1.0F, 0.0F);
@@ -259,7 +287,7 @@ private:
         .set<vivid::render::ViewportComponent>(side_viewport)  // Enables render window in ImGui
         .set<CameraControllerComponent>(side_camera_controller);
 
-    VividLogger::app_info("Created side camera entity at position (3.0, 3.0, 3.0)");
+    VividLogger::app_info("Created side camera entity at position (5.0, 5.0, 5.0)");
     VividLogger::app_info("Render window will appear in ImGui with title 'SideCamera'");
     VividLogger::app_info("Scene initialization completed!");
     VividLogger::debug("=== SceneInitialization system finished ===");

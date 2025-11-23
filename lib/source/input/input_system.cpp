@@ -36,9 +36,12 @@ InputSystems::InputSystems(flecs::world& world) {
       .each(handleKeyboardInputImpl);
   world
       .system<CameraControllerComponent, vivid::render::ViewportComponent,
-              vivid::render::TransformComponent, MouseInputResource>("ControlCamera")
+              vivid::render::TransformComponent, MouseInputResource, KeyboardInputResource>(
+          "ControlCamera")
       .term_at(3)
       .src<MouseInputResource>()
+      .term_at(4)
+      .src<KeyboardInputResource>()
       .kind(flecs::OnUpdate)
       .each(controlCameraImpl);
 
@@ -125,10 +128,29 @@ void InputSystems::handleKeyboardInputImpl(KeyboardInputResource& keyboard_input
 void InputSystems::controlCameraImpl(CameraControllerComponent& camera_controller,
                                      const vivid::render::ViewportComponent& viewport,
                                      vivid::render::TransformComponent& transform,
-                                     MouseInputResource& mouse_input) {
+                                     MouseInputResource& mouse_input,
+                                     KeyboardInputResource& keyboard_input) {
   // Only handle mouse input when viewport is focused and hovered
   if (!viewport.is_focused_ || !viewport.is_hovered_) {
     return;
+  }
+
+  // Handle WASD Movement
+  const float kDeltaTime
+      = 0.016F;  // Fixed delta time for now, ideally should come from flecs::iter
+  const float kVelocity = camera_controller.movement_speed_ * kDeltaTime;
+
+  if (keyboard_input.IsKeyPressed(ImGuiKey_W)) {
+    transform.position_ += camera_controller.front_ * kVelocity;
+  }
+  if (keyboard_input.IsKeyPressed(ImGuiKey_S)) {
+    transform.position_ -= camera_controller.front_ * kVelocity;
+  }
+  if (keyboard_input.IsKeyPressed(ImGuiKey_A)) {
+    transform.position_ -= camera_controller.right_ * kVelocity;
+  }
+  if (keyboard_input.IsKeyPressed(ImGuiKey_D)) {
+    transform.position_ += camera_controller.right_ * kVelocity;
   }
 
   // Convert to local viewport coordinates (relative to content area)
