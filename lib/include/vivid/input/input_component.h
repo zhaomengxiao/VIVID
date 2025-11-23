@@ -2,7 +2,9 @@
 
 #include <flecs.h>
 
+#include <array>
 #include <glm/glm.hpp>
+#include <imgui.h>
 
 #include "camera_controller.h"
 
@@ -43,6 +45,45 @@ struct MouseInputResource {
   float mouse_wheel_h_ = 0.0F;      // Mouse wheel scroll delta this frame (horizontal)
 };
 
+// Keyboard input resource - stores global keyboard input state (singleton)
+struct KeyboardInputResource {
+  // Key state arrays - indexed by (ImGuiKey - ImGuiKey_NamedKey_BEGIN)
+  // Only keys from ImGuiKey_NamedKey_BEGIN to ImGuiKey_NamedKey_END are stored
+  static constexpr int kKeyStateArraySize = ImGuiKey_NamedKey_COUNT;
+
+  std::array<bool, kKeyStateArraySize> key_pressed_ = {};     // Key is currently pressed down
+  std::array<bool, kKeyStateArraySize> key_down_ = {};        // Key was pressed this frame
+  std::array<bool, kKeyStateArraySize> key_released_ = {};    // Key was released this frame
+
+  // Helper functions to access key states safely
+  bool IsKeyPressed(ImGuiKey key) const {
+    if (key >= ImGuiKey_NamedKey_BEGIN && key < ImGuiKey_NamedKey_END) {
+      return key_pressed_[key - ImGuiKey_NamedKey_BEGIN];
+    }
+    return false;
+  }
+
+  bool IsKeyDown(ImGuiKey key) const {
+    if (key >= ImGuiKey_NamedKey_BEGIN && key < ImGuiKey_NamedKey_END) {
+      return key_down_[key - ImGuiKey_NamedKey_BEGIN];
+    }
+    return false;
+  }
+
+  bool IsKeyReleased(ImGuiKey key) const {
+    if (key >= ImGuiKey_NamedKey_BEGIN && key < ImGuiKey_NamedKey_END) {
+      return key_released_[key - ImGuiKey_NamedKey_BEGIN];
+    }
+    return false;
+  }
+
+  // Common modifier key helpers
+  bool ctrl_pressed() const { return IsKeyPressed(ImGuiKey_LeftCtrl) || IsKeyPressed(ImGuiKey_RightCtrl); }
+  bool shift_pressed() const { return IsKeyPressed(ImGuiKey_LeftShift) || IsKeyPressed(ImGuiKey_RightShift); }
+  bool alt_pressed() const { return IsKeyPressed(ImGuiKey_LeftAlt) || IsKeyPressed(ImGuiKey_RightAlt); }
+  bool super_pressed() const { return IsKeyPressed(ImGuiKey_LeftSuper) || IsKeyPressed(ImGuiKey_RightSuper); }
+};
+
 // Input Components Module - registers input-related components
 struct InputComponents {
   explicit InputComponents(flecs::world& world) {
@@ -52,6 +93,7 @@ struct InputComponents {
     // Register components
     world.component<CameraControllerComponent>();
     world.component<MouseInputResource>();
+    world.component<KeyboardInputResource>();
   }
 };
 

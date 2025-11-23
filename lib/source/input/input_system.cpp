@@ -9,6 +9,8 @@
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "vivid/input/input_component.h"
+
 namespace vivid::input {
 
 // Constructor - Register module and systems
@@ -21,13 +23,17 @@ InputSystems::InputSystems(flecs::world& world) {
   // Import components module
   world.import <InputComponents>();
 
-  // Initialize MouseInputResource singleton
+  // Initialize input resource singletons
   world.set<MouseInputResource>({});
+  world.set<KeyboardInputResource>({});
 
   // MouseWheel must be handled after NewFrame to get the correct mouse wheel delta
   world.system<MouseInputResource>("HandleMouseInput")
       .kind(flecs::OnUpdate)
       .each(handleMouseInputImpl);
+  world.system<KeyboardInputResource>("HandleKeyboardInput")
+      .kind(flecs::OnUpdate)
+      .each(handleKeyboardInputImpl);
   world
       .system<CameraControllerComponent, vivid::render::ViewportComponent,
               vivid::render::TransformComponent, MouseInputResource>("ControlCamera")
@@ -92,6 +98,27 @@ void InputSystems::handleMouseInputImpl(MouseInputResource& mouse_input) {
   // Mouse wheel events
   mouse_input.mouse_wheel_delta_ = io.MouseWheel;
   mouse_input.mouse_wheel_h_ = io.MouseWheelH;
+}
+
+// Handle keyboard input system - updates KeyboardInputResource singleton
+void InputSystems::handleKeyboardInputImpl(KeyboardInputResource& keyboard_input) {
+  // Update key states for all named keys
+  for (int key_idx = 0; key_idx < KeyboardInputResource::kKeyStateArraySize; ++key_idx) {
+    const ImGuiKey kKey = static_cast<ImGuiKey>(ImGuiKey_NamedKey_BEGIN + key_idx);
+
+    // Check current press state
+    const bool kCurrentlyPressed = ImGui::IsKeyDown(kKey);
+
+    // Store previous frame state (for detecting press/release events)
+    const bool kWasPressed = keyboard_input.key_pressed_[key_idx];
+
+    // Update current state
+    keyboard_input.key_pressed_[key_idx] = kCurrentlyPressed;
+
+    // Detect events
+    keyboard_input.key_down_[key_idx] = kCurrentlyPressed && !kWasPressed;
+    keyboard_input.key_released_[key_idx] = !kCurrentlyPressed && kWasPressed;
+  }
 }
 
 // Control camera system - updates CameraControllerComponent based on mouse input and viewport state

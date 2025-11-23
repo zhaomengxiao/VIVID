@@ -118,7 +118,7 @@ void print_value(const flecs::world& world, const flecs::cursor& cur) {
   const flecs::entity kMember = world.entity(ecs_meta_get_member_id(&cur.cursor_));
   if (kMember.is_valid()) {
     if (kMember.has<flecs::MemberRanges>()) {
-      const flecs::MemberRanges& range = kMember.get<flecs::MemberRanges>();
+      const auto& range = kMember.get<flecs::MemberRanges>();
       ImGui::Text("Range: %f - %f", range.value.min, range.value.max);
     } else {
       ImGui::Text("No Range");
