@@ -513,4 +513,44 @@ else()
     
   )
   add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
+  # ---- Define helper function for copying VIVID resources to executable targets ----
+  # For Emscripten, we use --preload-file to package resources into the virtual file system
+  # This creates a .data file that is automatically loaded at runtime
+  
+  set(VIVID_RES_DIR "${PROJECT_SOURCE_DIR}/res" CACHE INTERNAL "VIVID resources directory")
+  
+  function(vivid_copy_resources_to_target TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+      message(WARNING "VIVID: Target '${TARGET_NAME}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    get_target_property(_TARGET_TYPE ${TARGET_NAME} TYPE)
+    if(NOT _TARGET_TYPE STREQUAL "EXECUTABLE")
+      message(WARNING "VIVID: Target '${TARGET_NAME}' is not an executable. Resources are only needed for executables.")
+      return()
+    endif()
+    
+    if(NOT EXISTS "${VIVID_RES_DIR}")
+      message(WARNING "VIVID: Resources directory '${VIVID_RES_DIR}' does not exist. Cannot preload resources.")
+      return()
+    endif()
+    
+    message(STATUS "VIVID: Setting up resource preload for Emscripten target '${TARGET_NAME}'")
+    message(STATUS "VIVID: Resources directory: ${VIVID_RES_DIR}")
+    
+    # Convert Windows backslashes to forward slashes for Emscripten
+    # Emscripten requires forward slashes even on Windows
+    file(TO_CMAKE_PATH "${VIVID_RES_DIR}" _VIVID_RES_DIR_NORMALIZED)
+    
+    # Use --preload-file to package resources into virtual file system
+    # Syntax: --preload-file=<source_path>@<virtual_path>
+    # IMPORTANT: Must be a single argument (--preload-file=path), not two separate arguments
+    # The resources will be packaged into a .data file and loaded into VFS at /res
+    message(STATUS "VIVID: Normalized path for Emscripten: ${_VIVID_RES_DIR_NORMALIZED}")
+    target_link_options(${TARGET_NAME} PRIVATE
+      "--preload-file=${_VIVID_RES_DIR_NORMALIZED}@/res"
+    )
+  endfunction()
 endif()

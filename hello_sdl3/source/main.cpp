@@ -271,15 +271,7 @@ struct ImGuiDemo {
   explicit ImGuiDemo(flecs::world& world) {
     world.module<ImGuiDemo>();
 
-    // get draw frame phase
-    const flecs::entity kDrawFramePhase = world.lookup("VIVID::UI::UISystems::DrawFramePhase");
-    if (kDrawFramePhase.id() == 0) {
-      VividLogger::error(
-          "DrawFramePhase not found! Make sure UISystems is imported before ImGuiDemo.");
-      return;
-    }
-
-    world.system("ImGuiDemo").kind(kDrawFramePhase).run(ImGuiDemoImpl);
+    world.system("ImGuiDemo").kind(flecs::OnUpdate).run(ImGuiDemoImpl);
   }
 
 private:

@@ -2016,7 +2016,7 @@ void RenderSystems::InitWebGPUImpl(const vivid::window::WindowContext& window_co
     VividLogger::app_error("Could not create WebGPU surface!");
     return;
   }
-  webgpuRes.surface_ = surface.MoveToCHandle();
+  webgpu_res.surface_ = surface.MoveToCHandle();
 #endif
 
   // Set instance BEFORE accessing window (needed for surface creation on non-Emscripten)

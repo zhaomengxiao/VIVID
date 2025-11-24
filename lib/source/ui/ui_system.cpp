@@ -106,6 +106,8 @@ void UISystems::initImGuiImpl(const vivid::window::WindowContext& window_context
       }
       VividLogger::app_warn("Failed to load font from: %s (file exists but loading failed)",
                             font_path);
+    } else {
+      VividLogger::app_warn("Font file not found: %s", font_path);
     }
   }
 }
