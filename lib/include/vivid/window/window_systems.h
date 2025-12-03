@@ -1,62 +1,126 @@
 #pragma once
 
-#include <SDL3/SDL.h>
-
-#include <string>
-#include <vector>
+#include <flecs.h>
+#include <vivid/log/log.h>
 
 #include "vivid/app/App.h"
-#include "vivid/app/Plugin.h"
+#include "window_component.h"
+// Simplified logging macros for modules
+#ifdef NDEBUG
+#  define VIVID_LOG_MODULE_HEADER(name, icon, content) \
+    VividLogger::app_info("🔧 " name " module registration...");
+#  define VIVID_LOG_MODULE_INFO(msg) VividLogger::app_info("  " msg);
+#else
+#  define VIVID_LOG_MODULE_HEADER(name, icon, content)                                       \
+    VividLogger::app_info(                                                                   \
+        "╔══════════════════════════════════════════════════════════════════════════════╗"); \
+    VividLogger::app_info("║                          " icon " " name                        \
+                          " MODULE                           ║");                            \
+    VividLogger::app_info(                                                                   \
+        "║                                                                              ║"); \
+    content VividLogger::app_info(                                                           \
+        "╚══════════════════════════════════════════════════════════════════════════════╝");
+#  define VIVID_LOG_MODULE_INFO(msg) VividLogger::app_info("║  " msg);
+#endif
 
-namespace VIVID::Window {
+#define VIVID_LOG_SYSTEM(msg) VividLogger::app_info("🔧 " msg);
+#define VIVID_LOG_SUCCESS(msg, ...) VividLogger::app_info("✅ " msg, ##__VA_ARGS__);
+#define VIVID_LOG_ERROR(msg) VividLogger::app_error("❌ " msg);
 
-  // Pure data component - window configuration and state
-  struct WindowComponent {
-    std::string title = "VIVID Application";
-    int width = 800;
-    int height = 600;
-    int x = SDL_WINDOWPOS_CENTERED;
-    int y = SDL_WINDOWPOS_CENTERED;
-    SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-    bool visible = true;
-    bool should_close = false;
-  };
+namespace vivid::window {
 
-  // GPU resource component - holds SDL window handle (similar to GpuMeshComponent design)
-  struct WindowGpuComponent {
-    SDL_Window* window_handle = nullptr;
-    SDL_GLContext gl_context = nullptr;
+struct ShutdownPhase {};  // Custom phase for cleanup systems
 
-    // Cache previous values to detect changes
-    std::string cached_title;
-    int cached_width = 0;
-    int cached_height = 0;
-    int cached_x = 0;
-    int cached_y = 0;
-    bool cached_visible = true;
+// Window Systems Module - manages window lifecycle, events, and updates
+struct WindowSystems {
+  // Constructor - Register module and systems
+  explicit WindowSystems(flecs::world& world) {
+    // Display module overview only in Debug mode to reduce verbosity
+    VIVID_LOG_MODULE_HEADER("WINDOW SYSTEMS", "🔧", {
+      VIVID_LOG_MODULE_INFO("📦 Module: WindowSystems");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("📋 DEPENDENCIES:");
+      VIVID_LOG_MODULE_INFO("└── 📦 WindowComponents (imported)");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("🏗️  SYSTEMS REGISTRATION:");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("📍 PHASE: OnStart");
+      VIVID_LOG_MODULE_INFO("├── 🔄 WindowInitialization");
+      VIVID_LOG_MODULE_INFO("│   ├── Queries: WindowContext");
+      VIVID_LOG_MODULE_INFO("│   └── Executes: windowInitImpl()");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("📍 PHASE: OnUpdate");
+      VIVID_LOG_MODULE_INFO("├── 🔄 WindowUpdate");
+      VIVID_LOG_MODULE_INFO("│   ├── Queries: WindowContext");
+      VIVID_LOG_MODULE_INFO("│   └── Executes: windowUpdateImpl()");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("📍 PHASE: Shutdown");
+      VIVID_LOG_MODULE_INFO("└── 🔄 WindowCleanup");
+      VIVID_LOG_MODULE_INFO("    ├── Queries: WindowContext");
+      VIVID_LOG_MODULE_INFO("    └── Executes: windowCleanupImpl()");
+      VIVID_LOG_MODULE_INFO("");
+      VIVID_LOG_MODULE_INFO("💾 RESOURCES:");
+      VIVID_LOG_MODULE_INFO("└── 🔹 WindowContext (singleton)");
+    });
 
-    bool initialized = false;
-  };
+    // Register module
+    world.module<WindowSystems>();
 
-  // Window events component - stores events for processing
-  struct WindowEventsComponent {
-    std::vector<SDL_Event> events;
-    bool quit_requested = false;
-    bool close_requested = false;
-    bool resized = false;
-    bool moved = false;
-  };
+    // Import components module
+    world.import <WindowComponents>();
 
-  // System functions - all behavior logic is here
-  void window_initialization_system(Resources& resources, entt::registry& registry);
-  void window_event_processing_system(Resources& resources, entt::registry& registry);
-  void window_update_system(Resources& resources, entt::registry& registry);
-  void window_cleanup_system(Resources& resources, entt::registry& registry);
+    // Simplified logging to reduce verbosity
+    VIVID_LOG_SYSTEM("Setting WindowContext singleton...");
+    world.set<WindowContext>({});
+    VIVID_LOG_SUCCESS("WindowContext singleton created");
 
-  class WindowPlugin : public Plugin {
-  public:
-    void build(App& app) override;
-    std::string name() const override;
-  };
+    // Verify the singleton was set
+    if (world.has<WindowContext>()) {
+      VIVID_LOG_SUCCESS("WindowContext singleton verified");
+    } else {
+      VIVID_LOG_ERROR("WindowContext singleton NOT found!");
+    }
 
-}  // namespace VIVID::Window
+    // Register systems
+    VIVID_LOG_SYSTEM("Registering WindowInitialization system...");
+    world.system<WindowContext>("WindowInitialization").kind(flecs::OnStart).each(windowInitImpl);
+    VIVID_LOG_SUCCESS("WindowInitialization system registered");
+
+    VIVID_LOG_SYSTEM("Registering WindowEvents system...");
+    world.system<vivid::app::EventQueues, WindowContext>("WindowEvents")
+        .term_at(0)
+        .src<vivid::app::EventQueues>()
+        .term_at(1)
+        .src<WindowContext>()
+        .kind(flecs::PreUpdate)
+        .each(processWindowEventsImpl);
+    VIVID_LOG_SUCCESS("WindowEvents system registered");
+
+    VIVID_LOG_SYSTEM("Registering WindowUpdate system...");
+    world.system<WindowContext>("WindowUpdate").kind(flecs::OnUpdate).each(windowUpdateImpl);
+    VIVID_LOG_SUCCESS("WindowUpdate system registered");
+
+    world.system<vivid::app::EventQueues>("ProcessWindowEvents")
+        .kind(flecs::PostUpdate)
+        .each(cleanEventsImpl);
+
+    VIVID_LOG_SYSTEM("Registering WindowCleanup system...");
+    world.system<WindowContext>("WindowCleanup").kind<ShutdownPhase>().each(windowCleanupImpl);
+    VIVID_LOG_SUCCESS("WindowCleanup system registered");
+
+    VIVID_LOG_SUCCESS("WindowSystems module registration completed!");
+  }
+
+private:
+  // Static member functions for system implementations
+  static void windowInitImpl([[maybe_unused]] flecs::entity entity, WindowContext& window_context);
+  static void processWindowEventsImpl(vivid::app::EventQueues& event_queues,
+                                      WindowContext& window_context);
+  static void windowUpdateImpl([[maybe_unused]] flecs::entity entity,
+                               WindowContext& window_context);
+  static void cleanEventsImpl(vivid::app::EventQueues& event_queues);
+  static void windowCleanupImpl([[maybe_unused]] flecs::entity entity,
+                                WindowContext& window_context);
+};
+
+}  // namespace vivid::window

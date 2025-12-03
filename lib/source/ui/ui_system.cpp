@@ -3,8 +3,20 @@
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
+#include <imgui_internal.h>
+#include <vivid/log/log.h>
+#include <vivid/render/render_component.h>
 #include <vivid/render/render_systems.h>
-#include <vivid/window/window_systems.h>
+#include <vivid/window/window_component.h>
+// #include <webgpu/webgpu.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <string>
 
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
@@ -12,205 +24,209 @@
 #  if defined(IMGUI_IMPL_WEBGPU_BACKEND_WGPU)
 #    include <emscripten/html5_webgpu.h>
 #  endif
-
-// #  include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
-#include <webgpu/webgpu.h>
-#if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-#  include <webgpu/webgpu_cpp.h>
-#endif
-#include <vivid/log/log.h>
-
-// This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
-#ifdef __EMSCRIPTEN__
-#endif
-#include <vivid/app/SDL3App.h>
-
-// bool ImGui_ImplWGPU_CheckSurfaceTextureOptimalStatus_Helper(
-//     WGPUSurfaceGetCurrentTextureStatus status) {
-//   switch (status) {
-// #if defined(__EMSCRIPTEN__) && !defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-//     case WGPUSurfaceGetCurrentTextureStatus_Success:
-//       return true;
-// #else
-//     case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal:
-//       return true;
-//     case WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
-// #endif
-//     case WGPUSurfaceGetCurrentTextureStatus_Timeout:
-//     case WGPUSurfaceGetCurrentTextureStatus_Outdated:
-//     case WGPUSurfaceGetCurrentTextureStatus_Lost:
-//       // if the status is NOT Optimal it's necessary try to reconfigure the surface
-//       return false;
-//       // Unrecoverable errors
 // #if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-//     case WGPUSurfaceGetCurrentTextureStatus_Error:
-// #else  // IMGUI_IMPL_WEBGPU_BACKEND_WGPU
-//     case WGPUSurfaceGetCurrentTextureStatus_OutOfMemory:
-//     case WGPUSurfaceGetCurrentTextureStatus_DeviceLost:
+// // #  include <webgpu/webgpu_cpp.h>
 // #endif
-//     case WGPUSurfaceGetCurrentTextureStatus_Force32:
-//       // Fatal error
-//       fprintf(stderr, "Unrecoverable Error Check Surface Texture status=%#.8x\n", status);
-//       abort();
 
-//     default:  // should never be reached
-//       fprintf(stderr, "Unexpected Error Check Surface Texture status=%#.8x\n", status);
-//       abort();
-//   }
-// }
+namespace vivid::ui {
 
-namespace VIVID::UI {
-  // 如何在SDL3窗口中显示imgui: 2.初始化
-  void initImGui(Resources& res, entt::registry& world) {
-    auto webgpuRes = res.get<WebGPUResources>();
-    if (!webgpuRes) {
-      VividLogger::app_error("Could not get WebGPU resources!");
-      return;
-    }
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // IF using Docking Branch
-#ifdef __EMSCRIPTEN__
-    io.IniFilename = nullptr;
-#endif
+void UISystems::initImGuiImpl(const vivid::window::WindowContext& window_context,
+                              const vivid::render::WebGPUContext& webgpu_res) {
+  VividLogger::app_debug("=== InitImGui system called ===");
 
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
-
-    // Setup scaling
-    ImGuiStyle& style = ImGui::GetStyle();
-    // style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a
-    // solution for dynamic style scaling, changing this requires resetting Style + calling this
-    // again) style.FontScaleDpi = main_scale;        // Set initial font scale. (using
-    // io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation
-    // purpose) Setup Platform/Renderer backends
-    auto view = world.view<VIVID::Window::WindowGpuComponent>();
-
-    view.each([&](auto entity, auto& gpu_comp) {
-      ImGui_ImplSDL3_InitForOther(gpu_comp.window_handle);
-      ImGui_ImplWGPU_InitInfo init_info;
-      init_info.Device = webgpuRes->device;
-      init_info.NumFramesInFlight = 3;
-      init_info.RenderTargetFormat = webgpuRes->surfaceFormat;
-      init_info.DepthStencilFormat = webgpuRes->depthFormat;
-      ImGui_ImplWGPU_Init(&init_info);
-      return;  // TODO: 目前只处理第一个窗口
-    });
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
-    // fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the
-    // font among multiple.
-    // - If the file cannot be loaded, the function will return a nullptr. Please handle those
-    // errors in your application (e.g. use an assertion, or display an error and quit).
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher
-    // quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details. If you like the default font but
-    // want it to scale better, consider using the 'ProggyVector' from the same author!
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to
-    // write a double backslash \\ !
-    // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the
-    // "fonts/" folder. See Makefile.emscripten for details.
-    // style.FontSizeBase = 20.0f;
-    // io.Fonts->AddFontDefault();
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf");
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf");
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf");
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf");
-    // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
-    // IM_ASSERT(font != nullptr);
+  // Check if ImGui context already exists (runs in PreUpdate, so runs every frame)
+  if (ImGui::GetCurrentContext() != nullptr) {
+    VividLogger::app_warn("ImGui already initialized, skipping...");
+    return;  // Already initialized, skip
   }
 
-  // 如何在SDL3窗口中显示imgui: 3.处理事件
-
-  void ProcessImGuiEvent(Resources& res, entt::registry& world) {
-    auto eventQueues = res.get<EventQueues>();
-
-    if (eventQueues) {
-      ImGui_ImplSDL3_ProcessEvent(&eventQueues->raw_sdl_events.front());
-      eventQueues->raw_sdl_events.pop();
-    }
+  // Check if WebGPU is initialized
+  if (webgpu_res.device_ == nullptr) {
+    VividLogger::app_error("WebGPU not yet initialized, import RenderSystems first!");
+    return;
   }
 
-// 如何在SDL3窗口中显示imgui: 4.显示imgui Demo
+  // Setup Dear ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // IF using Docking Branch
 #ifdef __EMSCRIPTEN__
-  // For an Emscripten build we are disabling file-system access, so let's not attempt to do a
-  // fopen() of the imgui.ini file. You may manually call LoadIniSettingsFromMemory() to load
-  // settings from your own storage.
-  // io.IniFilename = nullptr;
-#else
-//   while (!canCloseWindow)
+  io.IniFilename = nullptr;
 #endif
-  void ShowImGuiDemo(Resources& res, entt::registry& world) {
-    // Build ImGui frame only; actual rendering happens in Render::Draw
-    ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
 
-    static bool show_demo_window = true;
-    static bool show_another_window = false;
-    static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+  // ImGui::StyleColorsLight();
 
-    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named
-    // window.
+  // Setup scaling
+  [[maybe_unused]] const ImGuiStyle& style = ImGui::GetStyle();
+  // style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a
+  // solution for dynamic style scaling, changing this requires resetting Style + calling this
+  // again) style.FontScaleDpi = main_scale;        // Set initial font scale. (using
+  // io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation
+  // purpose) Setup Platform/Renderer backends
 
-    // Our state
+  // Setup Platform/Renderer backends
+  ImGui_ImplSDL3_InitForOther(window_context.window_handle_);
+  ImGui_ImplWGPU_InitInfo init_info;
+  init_info.Device = webgpu_res.device_;
+  init_info.NumFramesInFlight = 3;
+  init_info.RenderTargetFormat = webgpu_res.surface_format_;
+  init_info.DepthStencilFormat = webgpu_res.depth_format_;
+  ImGui_ImplWGPU_Init(&init_info);
+  VividLogger::app_info("ImGui initialized successfully");
 
-    static float f = 0.0f;
-    static int counter = 0;
+  // Load Fonts
+  // Try multiple possible paths for the font file
+  const float kFontSize = 28.0F;  // Set larger font size
+  const std::array<const char*, 4> kFontPaths = {{
+      "res/fonts/NotoSans-Regular.ttf",            // Relative to executable (most common)
+      "lib/res/fonts/NotoSans-Regular.ttf",        // Relative to project root
+      "../lib/res/fonts/NotoSans-Regular.ttf",     // From build directory
+      "../../lib/res/fonts/NotoSans-Regular.ttf",  // From deeper build directory
+  }};
 
-    ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
+  const ImFont* font = nullptr;
 
-    ImGui::Text(
-        "This is some useful text.");  // Display some text (you can use a format strings too)
-    ImGui::Checkbox("Demo Window",
-                    &show_demo_window);  // Edit bools storing our window open/close state
-    ImGui::Checkbox("Another Window", &show_another_window);
+  for (const char* font_path : kFontPaths) {
+    // Check if file exists
+    std::ifstream file(font_path);
+    if (file.good()) {
+      file.close();
+      font = io.Fonts->AddFontFromFileTTF(font_path, kFontSize);
+      if (font != nullptr) {
+        VividLogger::app_info("Successfully loaded font from: %s (size: %.1f)", font_path,
+                              kFontSize);
+        break;
+      }
+      VividLogger::app_warn("Failed to load font from: %s (file exists but loading failed)",
+                            font_path);
+    } else {
+      VividLogger::app_warn("Font file not found: %s", font_path);
+    }
+  }
+}
 
-    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);  // Edit 1 float using a slider from 0.0f to 1.0f
-    ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
+// Process ImGui events system
+void UISystems::processImGuiEventImpl(vivid::app::EventQueues& event_queues) {
+  for (auto& event : event_queues.raw_sdl_events_) {
+    ImGui_ImplSDL3_ProcessEvent(&event);
+  }
+}
 
-    if (ImGui::Button("Button"))  // Buttons return true when clicked (most widgets return true
-                                  // when edited/activated)
-      counter++;
-    ImGui::SameLine();
-    ImGui::Text("counter = %d", counter);
+void UISystems::newFrameImpl([[maybe_unused]] const flecs::iter& it) {
+  ImGui_ImplWGPU_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
 
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
-                ImGui::GetIO().Framerate);
+  // Create a full-screen dock space for organizing viewports
+  ImGuiViewport const* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->Pos);
+  ImGui::SetNextWindowSize(viewport->Size);
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  const ImGuiWindowFlags kWindowFlags
+      = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+        | ImGuiWindowFlags_NoBackground;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
+
+  ImGui::Begin("DockSpace", nullptr, kWindowFlags);
+  ImGui::PopStyleVar(3);
+
+  // Create the dock space
+  const ImGuiID kDockspaceId = ImGui::GetID("MyDockSpace");
+  ImGui::DockSpace(kDockspaceId, ImVec2(0.0F, 0.0F), ImGuiDockNodeFlags_PassthruCentralNode);
+
+  ImGui::End();
+}
+
+// Render ImGui draw data inside active render pass
+void UISystems::renderUIImpl(vivid::render::WebGPUContext& webgpu_res) {
+  if (webgpu_res.render_pass_ != nullptr) {
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), webgpu_res.render_pass_);
+  }
+}
+
+void UISystems::endFrameImpl([[maybe_unused]] const flecs::iter& it) {
+  ImGui::Render();  // Render() will call EndFrame() internally
+}
+
+// Shutdown ImGui system
+void UISystems::shutDownUIImpl([[maybe_unused]] const flecs::iter& it) {
+  std::cout << "Shutting down ImGui...\n";
+
+  ImGui::DestroyPlatformWindows();
+  ImGui_ImplWGPU_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
+
+  std::cout << "ImGui shutdown complete\n";
+}
+
+// Display viewport windows in ImGui
+void UISystems::displayViewportWindowsImpl([[maybe_unused]] const flecs::iter& it) {
+  auto world = it.world();
+  const auto kViewportQuery
+      = world.query<vivid::render::CameraComponent, vivid::render::ViewportComponent>();
+
+  kViewportQuery.each([&](flecs::entity entity,
+                          [[maybe_unused]] const vivid::render::CameraComponent& camera,
+                          vivid::render::ViewportComponent& viewport) {
+    // Get window title
+    std::string window_title = "Viewport";
+    if (const char* name = entity.name(); name && strlen(name) > 0) {
+      window_title = name;
+    }
+
+    // Create dockable viewport window
+    // By default, ImGui only allows dragging windows by their title bar
+    // The content area does not respond to drag events
+    ImGui::Begin(window_title.c_str());
+    // Get content region start position in absolute coordinates (recommended API)
+    const ImVec2 kContentStartPos = ImGui::GetCursorScreenPos();
+    viewport.content_start_pos_x_ = kContentStartPos.x;
+    viewport.content_start_pos_y_ = kContentStartPos.y;
+    viewport.is_focused_ = ImGui::IsWindowFocused();
+    viewport.is_hovered_ = ImGui::IsWindowHovered();
+
+    // // DEBUG TEXT
+    // ImGui::Text("Viewport: %s", window_title.c_str());
+    // ImGui::Text("IsFocused: %s", viewport.IsFocused ? "Yes" : "No");
+    // ImGui::Text("IsHovered: %s", viewport.IsHovered ? "Yes" : "No");
+
+    // Update viewport size if window size changed
+    const ImVec2 kContentSize = ImGui::GetContentRegionAvail();
+    const float kNewWidth = std::max(1.0F, std::min(kContentSize.x, 4096.0F));
+    const float kNewHeight = std::max(1.0F, std::min(kContentSize.y, 4096.0F));
+
+    if (kNewWidth > 0 && kNewHeight > 0
+        && (std::abs(viewport.width_ - kNewWidth) > 1.0F
+            || std::abs(viewport.height_ - kNewHeight) > 1.0F)) {
+      viewport.width_ = kNewWidth;
+      viewport.height_ = kNewHeight;
+      viewport.initialized_ = false;
+    }
+
+    // Display texture
+    if (viewport.render_texture_view_ && viewport.texture_id_ != 0) {
+      ImGui::Image(reinterpret_cast<ImTextureID>(viewport.render_texture_view_),
+                   ImVec2(viewport.width_, viewport.height_));
+    } else {
+      ImGui::Text("Rendering...");
+    }
+
     ImGui::End();
+  });
+}
 
-    if (show_demo_window) {
-      ImGui::ShowDemoWindow();
-    }
-
-    // 3. Show another simple window.
-    if (show_another_window) {
-      ImGui::Begin(
-          "Another Window",
-          &show_another_window);  // Pass a pointer to our bool variable (the window will have a
-                                  // closing button that will clear the bool when clicked)
-      ImGui::Text("Hello from another window!");
-      if (ImGui::Button("Close Me")) show_another_window = false;
-      ImGui::End();
-    }
-
-    // Do not call ImGui::Render() here; it will be invoked in Render::Draw
-  }
-
-  void ShutDownImGui(Resources& res, entt::registry& world) {
-    ImGui::DestroyPlatformWindows();
-    ImGui_ImplWGPU_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-
-    ImGui::DestroyContext();
-  }
-}  // namespace VIVID::UI
+}  // namespace vivid::ui

@@ -1,29 +1,28 @@
 #pragma once
 
-// #include <GLFW/glfw3.h>
-#include <entt/entt.hpp>
-#include <glm/glm.hpp>
+#include <flecs.h>
 
-#include "../rendering/render_component.h"
 #include "camera_controller.h"
+#include "input_component.h"
+#include "vivid/render/render_component.h"
 
-class InputSystem {
-  // public:
-  //     static void Initialize(GLFWwindow* window);
-  //     static void Update(entt::registry& registry);
-  //     static void Shutdown();
+struct KeyboardInputResource;
 
-  //     static void SetWindow(GLFWwindow* window) { s_Window = window; }
+namespace vivid::input {
 
-  // private:
-  //     static void MousePositionCallback(GLFWwindow* window, double xpos, double ypos);
-  //     static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-  //     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-  //     static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+// Input Systems Module - manages input processing and camera control
+struct InputSystems {
+  explicit InputSystems(flecs::world& world);
 
-  //     static GLFWwindow* s_Window;
-  //     static glm::vec2 s_MousePosition;
-  //     static glm::vec2 s_LastMousePosition;
-  //     static bool s_MousePressed;
-  //     static bool s_FirstMouse;
+private:
+  // Static member functions for system implementations
+  static void handleMouseInputImpl(MouseInputResource& mouse_input);
+  static void handleKeyboardInputImpl(KeyboardInputResource& keyboard_input);
+  static void controlCameraImpl(CameraControllerComponent& camera_controller,
+                                const vivid::render::ViewportComponent& viewport,
+                                vivid::render::TransformComponent& transform,
+                                MouseInputResource& mouse_input,
+                                KeyboardInputResource& keyboard_input);
 };
+
+}  // namespace vivid::input

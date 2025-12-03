@@ -105,24 +105,6 @@ else()
   message(WARNING "✗ glm package failed to add")
 endif()
 
-message(STATUS "Adding EnTT...")
-CPMAddPackage(
-  NAME EnTT
-  GIT_TAG master
-  GITHUB_REPOSITORY skypjack/entt
-  OPTIONS
-    "ENTT_INSTALL ON"
-)
-
-# Check if EnTT was added successfully
-if(TARGET EnTT::EnTT)
-  message(STATUS "✓ EnTT package added successfully")
-  message(STATUS "  EnTT source dir: ${EnTT_SOURCE_DIR}")
-  message(STATUS "  EnTT binary dir: ${EnTT_BINARY_DIR}")
-else()
-  message(WARNING "✗ EnTT package failed to add")
-endif()
-
 # ImGui for editor UI - using local vendor copy
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/imgui-docking)
 # ImGui headers
@@ -142,6 +124,9 @@ set(IMGUI_SOURCES
   ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
   ${IMGUI_DIR}/backends/imgui_impl_wgpu.cpp
 )    
+
+# flecs
+find_package(flecs CONFIG REQUIRED)
 
 # DAWN and SDL3 SETUP
 set(VIVID_DAWN_VERSION "20250927.170548")
@@ -256,47 +241,92 @@ else()# Native build
   else()
     set(VIVID_DAWN_PLATFORM_LIBS)
   endif()
-
-  # if(NOT TARGET webgpu_dawn OR NOT TARGET webgpu_cpp)
-  #   message(FATAL_ERROR "Dawn integration failed: expected targets 'webgpu_dawn' and 'webgpu_cpp' not found.")
-  # endif()
-
-  # add_library(vivid_webgpu INTERFACE)
-  # # target_link_libraries(vivid_webgpu INTERFACE webgpu_dawn webgpu_cpp ${VIVID_DAWN_PLATFORM_LIBS})
-  # if(VIVID_USE_SYSTEM_DAWN)
-  #   target_link_libraries(vivid_webgpu INTERFACE dawn::dawn_public_config)
-  # else()
-  #   target_include_directories(vivid_webgpu INTERFACE
-  #     $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include>
-  #     $<BUILD_INTERFACE:${VIVID_DAWN_ROOT}/include/webgpu>
-  #     $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/webgpu>
-  #   )
-  # endif()
 endif() # end NOT EMSCRIPTEN
 
 
 # Create an interface target to expose ImGui include dirs to consumers
-add_library(vivid_imgui INTERFACE)
-target_include_directories(vivid_imgui INTERFACE
-  $<BUILD_INTERFACE:${IMGUI_DIR}>
-  $<BUILD_INTERFACE:${IMGUI_DIR}/backends>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
-)
-target_compile_definitions(vivid_imgui INTERFACE IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+# add_library(vivid_imgui INTERFACE)
+# target_include_directories(vivid_imgui INTERFACE
+#   $<BUILD_INTERFACE:${IMGUI_DIR}>
+#   $<BUILD_INTERFACE:${IMGUI_DIR}/backends>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
+# )
+
 
 # ---- Add source files ----
 
-# Note: globbing sources is considered bad practice as CMake's generators may not detect new files
-# automatically. Keep that in mind when changing files, or explicitly mention them here.
-file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
-file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp")
+# Note: Explicitly listing source files is best practice for CMake dependency tracking
+# Add new files here when created
+
+# Header files
+set(headers
+  # App headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/app/App.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/app/SDL3App.h
+
+  # Render headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/render/render_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/render/render_systems.h
+
+  # UI headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/ui/ui_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/ui/ui_system.h
+
+  # Window headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/window/window_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/window/window_systems.h
+
+  # Input headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_system.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/input/input_visual_debug_systems.h
+
+  # Physics headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/physics/physics_component.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/physics/physics_system.h
+
+  # Mesh headers
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/vivid/mesh/mesh_generator.h
+)
+
+# Source files
+set(sources
+  # App sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/app/SDL3App.cpp
+  
+  # Log sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/log/log.cpp
+  
+  # Input sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/input/input_system.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/input/input_visual_debug_systems.cpp
+  
+  # Physics sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/physics/physics_system.cpp
+  
+  # Render sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/render/render_systems.cpp
+  
+  # Mesh sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/mesh_generator.cpp
+  
+  # UI sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/ui/ui_system.cpp
+  
+  # Window sources
+  ${CMAKE_CURRENT_SOURCE_DIR}/source/window/window_systems.cpp
+)
+
+
+
 
 # ---- Create library ----
 
 # Note: for header-only libraries change all PUBLIC flags to INTERFACE and create an interface
 # target: add_library(${PROJECT_NAME} INTERFACE)
 add_library(${PROJECT_NAME} ${headers} ${sources} ${IMGUI_SOURCES} ${IMGUI_HEADERS})
+target_compile_definitions(${PROJECT_NAME} PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
@@ -308,7 +338,11 @@ target_include_directories(
   ${PROJECT_NAME} 
   PUBLIC 
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${IMGUI_DIR}>
+    $<BUILD_INTERFACE:${IMGUI_DIR}/backends>
     $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}/imgui/backends>
   PRIVATE
 )
 
@@ -321,11 +355,12 @@ if(NOT EMSCRIPTEN)
   target_link_libraries(${PROJECT_NAME}      
     PUBLIC
       glm::glm
-      vivid_imgui
-      EnTT::EnTT
+      # vivid_imgui
+      # EnTT::EnTT
       dawn::webgpu_dawn
       ${VIVID_DAWN_PLATFORM_LIBS}
       SDL3::SDL3
+      flecs::flecs
     PRIVATE
   )
 
@@ -378,6 +413,42 @@ if(NOT EMSCRIPTEN)
     endfunction()
   endif()
 
+  # ---- Define helper function for copying VIVID resources to executable targets ----
+  # Users can call vivid_copy_resources_to_target(target_name) to automatically
+  # copy VIVID library resources (fonts, shaders, etc.) to their executable's output directory.
+  # This ensures that resources are available at runtime relative to the executable.
+  
+  set(VIVID_RES_DIR "${PROJECT_SOURCE_DIR}/res" CACHE INTERNAL "VIVID resources directory")
+  
+  function(vivid_copy_resources_to_target TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+      message(WARNING "VIVID: Target '${TARGET_NAME}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    get_target_property(_TARGET_TYPE ${TARGET_NAME} TYPE)
+    if(NOT _TARGET_TYPE STREQUAL "EXECUTABLE")
+      message(WARNING "VIVID: Target '${TARGET_NAME}' is not an executable. Resources are only needed for executables.")
+      return()
+    endif()
+    
+    if(NOT EXISTS "${VIVID_RES_DIR}")
+      message(WARNING "VIVID: Resources directory '${VIVID_RES_DIR}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    message(STATUS "VIVID: Setting up resource copy for target '${TARGET_NAME}'")
+    message(STATUS "VIVID: Resources directory: ${VIVID_RES_DIR}")
+    
+    # Copy the entire res directory to the executable's output directory
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${VIVID_RES_DIR}"
+        "$<TARGET_FILE_DIR:${TARGET_NAME}>/res"
+      COMMENT "VIVID: Copying resources to executable directory"
+    )
+  endfunction()
+
   # ---- Create an installable target ----
   # this allows users to install and find the library via `find_package()`.
 
@@ -386,7 +457,7 @@ if(NOT EMSCRIPTEN)
   string(TOLOWER ${PROJECT_NAME}/version.h VERSION_HEADER_LOCATION)
 
   # Install vivid_imgui interface target along with VIVID
-  install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
+  # install(TARGETS vivid_imgui EXPORT ${PROJECT_NAME}Targets)
 
 
   # Install ImGui headers so consumers can use the exported include paths
@@ -406,7 +477,7 @@ if(NOT EMSCRIPTEN)
     INCLUDE_DESTINATION include/${PROJECT_NAME}-${PROJECT_VERSION}
     VERSION_HEADER "${VERSION_HEADER_LOCATION}"
     COMPATIBILITY SameMajorVersion
-    DEPENDENCIES "EnTT master" "glm 1.0.1"
+    DEPENDENCIES "flecs 4.1.1" "glm 1.0.1"
   )
 # EMSCRIPTEN build
 else()
@@ -435,10 +506,51 @@ else()
   target_link_libraries(${PROJECT_NAME} 
     PUBLIC
       glm::glm
-      vivid_imgui
-      EnTT::EnTT
+      # vivid_imgui
+      # EnTT::EnTT
+      flecs::flecs
     PRIVATE
     
   )
   add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
+  # ---- Define helper function for copying VIVID resources to executable targets ----
+  # For Emscripten, we use --preload-file to package resources into the virtual file system
+  # This creates a .data file that is automatically loaded at runtime
+  
+  set(VIVID_RES_DIR "${PROJECT_SOURCE_DIR}/res" CACHE INTERNAL "VIVID resources directory")
+  
+  function(vivid_copy_resources_to_target TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+      message(WARNING "VIVID: Target '${TARGET_NAME}' does not exist. Cannot copy resources.")
+      return()
+    endif()
+    
+    get_target_property(_TARGET_TYPE ${TARGET_NAME} TYPE)
+    if(NOT _TARGET_TYPE STREQUAL "EXECUTABLE")
+      message(WARNING "VIVID: Target '${TARGET_NAME}' is not an executable. Resources are only needed for executables.")
+      return()
+    endif()
+    
+    if(NOT EXISTS "${VIVID_RES_DIR}")
+      message(WARNING "VIVID: Resources directory '${VIVID_RES_DIR}' does not exist. Cannot preload resources.")
+      return()
+    endif()
+    
+    message(STATUS "VIVID: Setting up resource preload for Emscripten target '${TARGET_NAME}'")
+    message(STATUS "VIVID: Resources directory: ${VIVID_RES_DIR}")
+    
+    # Convert Windows backslashes to forward slashes for Emscripten
+    # Emscripten requires forward slashes even on Windows
+    file(TO_CMAKE_PATH "${VIVID_RES_DIR}" _VIVID_RES_DIR_NORMALIZED)
+    
+    # Use --preload-file to package resources into virtual file system
+    # Syntax: --preload-file=<source_path>@<virtual_path>
+    # IMPORTANT: Must be a single argument (--preload-file=path), not two separate arguments
+    # The resources will be packaged into a .data file and loaded into VFS at /res
+    message(STATUS "VIVID: Normalized path for Emscripten: ${_VIVID_RES_DIR_NORMALIZED}")
+    target_link_options(${TARGET_NAME} PRIVATE
+      "--preload-file=${_VIVID_RES_DIR_NORMALIZED}@/res"
+    )
+  endfunction()
 endif()

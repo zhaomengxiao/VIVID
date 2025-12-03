@@ -101,3 +101,6 @@ documentation/latex/
 *.trace
 optick/
 .claude/settings.local.json
+
+# clangd
+.cache/

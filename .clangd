@@ -1,0 +1,112 @@
+CompileFlags:
+  CompilationDatabase: build/clang
+
+Diagnostics:
+  # Enable clang-tidy checks (will automatically read .clang-tidy file)
+  ClangTidy:
+    Add:
+      [
+        "bugprone-*",
+        "clang-analyzer-*",
+        "cppcoreguidelines-*",
+        "modernize-*",
+        "performance-*",
+        "readability-*",
+        "google-*",
+        "portability-*",
+        "misc-*",
+      ]
+    Remove:
+      [
+        "modernize-use-trailing-return-type",
+        "cppcoreguidelines-avoid-magic-numbers",
+        "readability-magic-numbers",
+        "cppcoreguidelines-pro-bounds-pointer-arithmetic",
+        "cppcoreguidelines-pro-type-reinterpret-cast",
+        "cppcoreguidelines-pro-type-const-cast",
+        "readability-identifier-length",
+        "modernize-use-nodiscard",
+        "cppcoreguidelines-pro-type-vararg",
+        "cppcoreguidelines-pro-type-union-access",
+        "misc-non-private-member-variables-in-classes",
+      ]
+    CheckOptions:
+      # Naming conventions (Google Style)
+
+      # Classes, Structs, Enums: PascalCase
+      readability-identifier-naming.ClassCase: CamelCase
+      readability-identifier-naming.StructCase: CamelCase
+      readability-identifier-naming.EnumCase: CamelCase
+      readability-identifier-naming.UnionCase: CamelCase
+
+      # Functions: PascalCase (Google allows both, but PascalCase is preferred in many Google projects)
+      # Or use snake_case: lower_case
+      readability-identifier-naming.FunctionCase: PascalCase
+      readability-identifier-naming.MethodCase: PascalCase
+
+      # Variables: snake_case
+      readability-identifier-naming.VariableCase: lower_case
+      readability-identifier-naming.ParameterCase: lower_case
+      readability-identifier-naming.LocalVariableCase: lower_case
+
+      # Member variables: snake_case with trailing underscore
+      readability-identifier-naming.MemberCase: lower_case
+      readability-identifier-naming.MemberSuffix: "_"
+
+      # Constants: kConstantName (Google style)
+      readability-identifier-naming.ConstantCase: CamelCase
+      readability-identifier-naming.ConstantPrefix: "k"
+      readability-identifier-naming.ConstexprVariableCase: CamelCase
+      readability-identifier-naming.ConstexprVariablePrefix: "k"
+
+      # Static constants: kConstantName
+      readability-identifier-naming.StaticConstantCase: CamelCase
+      readability-identifier-naming.StaticConstantPrefix: "k"
+
+      # Global constants: kConstantName
+      readability-identifier-naming.GlobalConstantCase: CamelCase
+      readability-identifier-naming.GlobalConstantPrefix: "k"
+
+      # Namespaces: snake_case
+      readability-identifier-naming.NamespaceCase: lower_case
+
+      # Enumerators: kEnumValue (Google style)
+      readability-identifier-naming.EnumConstantCase: CamelCase
+      readability-identifier-naming.EnumConstantPrefix: "k"
+
+      # Template parameters: PascalCase
+      readability-identifier-naming.TemplateParameterCase: CamelCase
+      readability-identifier-naming.TypeTemplateParameterCase: CamelCase
+      readability-identifier-naming.ValueTemplateParameterCase: CamelCase
+
+      # Type aliases: PascalCase
+      readability-identifier-naming.TypedefCase: CamelCase
+      readability-identifier-naming.TypeAliasCase: CamelCase
+
+      # Other settings
+      readability-function-cognitive-complexity.Threshold: "50"
+      readability-function-size.LineThreshold: "200"
+      cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: "1"
+      modernize-loop-convert.MinConfidence: reasonable
+      performance-move-const-arg.CheckTriviallyCopyableMove: "0"
+
+    FastCheckFilter: None
+
+  UnusedIncludes: Strict
+
+Index:
+  # Build index in background for better performance
+  Background: Build
+
+# Enable inlay hints for better code understanding
+InlayHints: # 代码提示设置部分
+  Enabled: true # 启用代码提示
+  ParameterNames: true # 显示参数名称提示
+  DeducedTypes: true # 显示推断类型提示
+  Designators: true # 显示设计器提示
+
+Completion:
+  AllScopes: Yes
+  ArgumentLists: FullPlaceholders
+  HeaderInsertion: IWYU
+  CodePatterns: All

@@ -1,38 +1,55 @@
 #pragma once
 
+#include <flecs.h>
+#include <webgpu/webgpu.h>
+
+#include <flecs/addons/cpp/mixins/units/decl.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <string>
-#include <memory>
 #include <vector>
+
+namespace vivid::render {
+
+// typedef glm::vec3 Color3f;
+typedef glm::vec3 Vector3f;
+
+struct Color3f {
+  float r_;
+  float g_;
+  float b_;
+
+  // Default constructor with default values
+  Color3f() : r_(1.0F), g_(1.0F), b_(1.0F) {}
+
+  // Constructor with three float parameters
+  Color3f(float r_val, float g_val, float b_val) : r_(r_val), g_(g_val), b_(b_val) {}
+};
 
 //
 // 基础组件
 //
 
 // 变换组件，存储物体的位置、旋转、缩放
-struct TransformComponent
-{
-    glm::vec3 Position{0.0f, 0.0f, 0.0f};
-    glm::vec3 Rotation{0.0f, 0.0f, 0.0f}; // 欧拉角
-    glm::vec3 Scale{1.0f, 1.0f, 1.0f};
+struct TransformComponent {
+  glm::vec3 position_{0.0F, 0.0F, 0.0F};
+  glm::vec3 rotation_{0.0F, 0.0F, 0.0F};  // 欧拉角
+  glm::vec3 scale_{1.0F, 1.0F, 1.0F};
 
-    // 辅助函数，用于计算模型矩阵
-    glm::mat4 GetTransform() const
-    {
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), Position);
-        transform = glm::rotate(transform, Rotation.x, {1, 0, 0});
-        transform = glm::rotate(transform, Rotation.y, {0, 1, 0});
-        transform = glm::rotate(transform, Rotation.z, {0, 0, 1});
-        transform = glm::scale(transform, Scale);
-        return transform;
-    }
+  // 辅助函数，用于计算模型矩阵
+  glm::mat4 GetTransform() const {
+    glm::mat4 transform = glm::translate(glm::mat4(1.0F), position_);
+    transform = glm::rotate(transform, rotation_.x, {1, 0, 0});
+    transform = glm::rotate(transform, rotation_.y, {0, 1, 0});
+    transform = glm::rotate(transform, rotation_.z, {0, 0, 1});
+    transform = glm::scale(transform, scale_);
+    return transform;
+  }
 };
 
 // 标签组件，用于给实体一个可读的名称
-struct TagComponent
-{
-    std::string Tag;
+struct TagComponent {
+  std::string tag_;
 };
 
 //
@@ -40,65 +57,160 @@ struct TagComponent
 //
 
 // 网格组件，持有渲染所需的顶点数据
-struct MeshComponent
-{
-    std::vector<float> m_Vertices; // Combined positions and normals
-    std::vector<unsigned int> m_Indices;
-    size_t m_IndexCount;
-};
-
-// GPU资源组件 - 只存储OpenGL ID
-struct GpuMeshComponent
-{
-    unsigned int VAO_ID = 0;
-    unsigned int VBO_ID = 0;
-    unsigned int IBO_ID = 0;
-    unsigned int IndexCount = 0; // 必须存储，因为绘制时需要
-};
-
-struct GpuMaterialComponent
-{
-    unsigned int ShaderProgram_ID = 0;
-
-    // 如果有纹理，也只存储ID
-    // unsigned int DiffuseTexture_ID = 0;
-    // unsigned int SpecularTexture_ID = 0;
+struct MeshComponent {
+  std::vector<float> vertices_;  // Combined positions and normals
+  std::vector<unsigned int> indices_;
+  size_t index_count_;
 };
 
 // 材质组件，定义物体的外观和着色器
-struct MaterialComponent
-{
-    std::string ShaderPath = "res/shaders/BlinnPhong.shader"; // 默认着色器
-    glm::vec3 ObjectColor{0.8f, 0.8f, 0.8f};                  // 默认颜色为灰色
-    glm::vec3 SpecularColor{0.5f, 0.5f, 0.5f};
-    float Shininess = 32.0f;
+struct MaterialComponent {
+  std::string shader_path_ = "res/shaders/BlinnPhong.shader";  // 默认着色器
+  Color3f object_color_{0.8F, 0.8F, 0.8F};                     // 默认颜色为灰色
+  Color3f specular_color_{0.5F, 0.5F, 0.5F};
+  float shininess_ = 32.0F;
 };
 
 // 光源组件
-struct LightComponent
-{
-    glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
-    glm::vec3 AmbientColor{0.2f, 0.2f, 0.2f};
-    // 衰减系数
-    float Constant = 1.0f;
-    float Linear = 0.09f;
-    float Quadratic = 0.032f;
+struct LightComponent {
+  Color3f light_color_{1.0F, 1.0F, 1.0F};
+  Color3f ambient_color_{0.2F, 0.2F, 0.2F};
+  // 衰减系数
+  float constant_ = 1.0F;
+  float linear_ = 0.09F;
+  float quadratic_ = 0.032F;
 };
 
 // 相机组件
-struct CameraComponent
-{
-    glm::mat4 ProjectionMatrix{1.0f};
-    bool IsPrimary = true; // 标记为主相机
-    // 视图矩阵由相机位置（TransformComponent）计算而来
+struct CameraComponent {
+  glm::mat4 projection_matrix_{1.0F};
+  bool is_primary_ = true;  // 标记为主相机
+                            // 视图矩阵由相机位置（TransformComponent）计算而来
 };
 
-struct ViewportComponent
-{
-    float Width = 1280.0f;
-    float Height = 720.0f;
-    uint32_t TextureID = 0;
+struct ViewportComponent {
+  float width_ = 1280.0F;
+  float height_ = 720.0F;
+  uintptr_t texture_id_ = 0;
 
-    bool IsFocused = false;
-    bool IsHovered = false;
+  bool is_focused_ = false;
+  bool is_hovered_ = false;
+
+  float content_start_pos_x_ = 0.0F;
+  float content_start_pos_y_ = 0.0F;
+
+  // Offscreen rendering resources for ImGui viewport windows
+  WGPUTexture render_texture_ = nullptr;           // Offscreen render target texture
+  WGPUTextureView render_texture_view_ = nullptr;  // Texture view for ImGui
+  WGPUTexture depth_texture_ = nullptr;            // Depth texture for offscreen rendering
+  WGPUTextureView depth_view_ = nullptr;           // Depth texture view
+  uint32_t configured_width_ = 0;                  // Track configured texture width
+  uint32_t configured_height_ = 0;                 // Track configured texture height
+  bool initialized_ = false;                       // Flag to ensure one-time initialization
 };
+
+template <typename Elem, typename Vector = std::vector<Elem>>
+flecs::opaque<Vector, Elem> StdVectorSupport(flecs::world& world) {
+  return flecs::opaque<Vector, Elem>()
+      .as_type(world.vector<Elem>())
+
+      // Forward elements of std::vector value to serializer
+      .serialize([](const flecs::serializer* s, const Vector* data) {
+        for (const auto& el : *data) {
+          s->value(el);
+        }
+        return 0;
+      })
+
+      // Return vector count
+      .count([](const Vector* data) { return data->size(); })
+
+      // Resize contents of vector
+      .resize([](Vector* data, size_t size) { data->resize(size); })
+
+      // Ensure element exists, return pointer
+      .ensure_element([](Vector* data, size_t elem) {
+        if (data->size() <= elem) {
+          data->resize(elem + 1);
+        }
+
+        return &data->data()[elem];
+      });
+}
+
+// Render Components Module
+struct RenderComponents {
+  explicit RenderComponents(flecs::world& world) {
+    // Register module
+    world.module<RenderComponents>();
+
+    world.import <flecs::units>();
+
+    // register type
+    // world.component<glm::vec3>()
+    //     .member<float, flecs::units::color::Rgb>("x")
+    //     .range(0.0, 1.0f)
+    //     .member<float, flecs::units::color::Rgb>("y")
+    //     .range(0.0, 1.0f)
+    //     .member<float, flecs::units::color::Rgb>("z")
+    //     .range(0.0, 1.0f);
+
+    world.component<Color3f>()
+        .member<float, flecs::units::color::Rgb>("r_")
+        .range(0.0F, 1.0F)
+        .member<float, flecs::units::color::Rgb>("g_")
+        .range(0.0F, 1.0F)
+        .member<float, flecs::units::color::Rgb>("b_")
+        .range(0.0F, 1.0F);
+
+    // world.component<Vector3f>()
+    //     .member<float>("x")
+    //     .range(-1.0f, 1.0f)
+    //     .member<float>("y")
+    //     .range(-1.0f, 1.0f)
+    //     .member<float>("z")
+    //     .range(-1.0f, 1.0f);
+
+    world.component<std::string>()
+        .opaque(flecs::String)  // Opaque type that maps to string
+        .serialize([](const flecs::serializer* s, const std::string* data) {
+          const char* str = data->c_str();
+          return s->value(flecs::String, static_cast<const void*>(&str));  // Forward to serializer
+        })
+        .assign_string([](std::string* data, const char* value) {
+          *data = value;  // Assign new value to std::string
+        });
+
+    // Register reflection for std::vector<int>
+    world.component<std::vector<int>>().opaque(StdVectorSupport<int>);
+
+    // Register reflection for std::vector<std::string>
+    world.component<std::vector<std::string>>().opaque(StdVectorSupport<std::string>);
+
+    // Register components
+    world.component<TransformComponent>();
+    world.component<TagComponent>();
+    world.component<MeshComponent>();
+    world.component<MaterialComponent>()
+        .member<std::string>("shader_path_")
+        .member<Color3f>("object_color_")
+        .member<Color3f>("specular_color_")
+        .member<float>("shininess_")
+        .range(0.0, 100.0);
+
+    world.component<LightComponent>()
+        .member<Color3f>("light_color_")
+        .member<Color3f>("ambient_color_")
+        .member<float>("constant_")
+        .range(0.0, 1.0)
+        .member<float>("linear_")
+        .range(0.0, 1.0)
+        .member<float>("quadratic_")
+        .range(0.0, 1.0);
+
+    world.component<CameraComponent>();
+    world.component<ViewportComponent>();
+  }
+};
+
+}  // namespace vivid::render
